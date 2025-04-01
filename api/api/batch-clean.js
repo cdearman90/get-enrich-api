@@ -1,4 +1,4 @@
-// 📦 /api/batch-clean.js (Vercel API route)
+// 📦 /api/batch-clean.js (Vercel API route with timeout-safe and retry-on-failure)
 
 export default async function handler(req, res) {
   const leads = req.body || [];
@@ -11,6 +11,9 @@ export default async function handler(req, res) {
 
   const callOpenAI = async (prompt, model) => {
     try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -22,10 +25,12 @@ export default async function handler(req, res) {
           messages: [{ role: "user", content: prompt }],
           temperature: 0.3
         }),
-        timeout: 15000
+        signal: controller.signal
       });
 
+      clearTimeout(timeout);
       const json = await response.json();
+
       if (!json.choices || !json.choices[0]?.message?.content) {
         throw new Error("GPT response incomplete");
       }
