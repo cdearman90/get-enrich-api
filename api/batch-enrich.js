@@ -27,7 +27,7 @@ export default async function handler(req, res) {
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-  const callOpenAI = async (prompt, model) => {
+  const callOpenAI = async (prompt, model = "gpt-4") => {
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -72,9 +72,10 @@ export default async function handler(req, res) {
     return str.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   }
 
-  const enrichLead = async (lead) => {
+  // Clean Company Name (for batchCleanCompanyNames)
+  const cleanCompanyName = async (lead) => {
     const { domain } = lead;
-    if (!domain) return { domain, name: "", error: "Missing domain" };
+    if (!domain) return { name: "", error: "Missing domain" };
 
     const prompt = `
 Given the dealership domain ${domain}, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach.
@@ -88,45 +89,77 @@ Formatting Rules:
 - Trim unnecessary suffixes unless part of branding (e.g., keep “Team Ford”).
 - Speak it aloud — should sound like how dealers refer to the store.
 
-Only return the cleaned name.
+Return: {"name": "Cleaned Name"}
 `.trim();
 
-    const domainRoot = domain.replace("www.", "").split(".")[0].toLowerCase();
-    let modelUsed = "gpt-4";
-    let name;
-
     try {
-      name = await callOpenAI(prompt, modelUsed);
-      const isWeak = !name || name.toLowerCase().includes(domainRoot) || name.split(" ").length < 2;
-
-      if (isWeak) {
-        modelUsed = "gpt-3.5-turbo";
-        name = await callOpenAI(prompt, modelUsed);
-      }
+      const response = await callOpenAI(prompt);
+      const cleaned = JSON.parse(response);
+      return { name: humanizeName(cleaned.name), modelUsed: "gpt-4" };
     } catch (err) {
-      return { domain, name: "", error: err.message };
+      return { name: "", error: err.message, modelUsed: "gpt-4" };
+    }
+  };
+
+  // Full Enrichment (for batchEnrichWithVercel, retryFailedEnrichments)
+  const enrichLead = async (lead) => {
+    const { email, firstName, lastName, jobTitle, domain, mobilePhone, leadLinkedIn, engagedContact } = lead;
+    if (!email || !domain) {
+      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: "Missing email or domain" };
     }
 
-    return {
-      domain,
-      name: humanizeName(name)
-    };
+    const prompt = `
+Given the lead data:
+- Email: ${email}
+- First Name: ${firstName || "N/A"}
+- Last Name: ${lastName || "N/A"}
+- Job Title: ${jobTitle || "N/A"}
+- Domain: ${domain}
+- Mobile Phone: ${mobilePhone || "N/A"}
+- Lead LinkedIn: ${leadLinkedIn || "N/A"}
+- Engaged Contact: ${engagedContact || "N/A"}
+
+Enrich the lead:
+- Franchise Group: Identify if the domain belongs to a known auto franchise (e.g., "duvalford.com" → "Duval Ford"). Use "Independent" if unknown.
+- Buyer Score: Calculate a score (0-100):
+  - Base: 50
+  - +20 if Mobile Phone present
+  - +15 if Lead LinkedIn present
+  - +10 if Email present (always true here)
+  - +5 if Engaged Contact present
+- Reference Client: If Engaged Contact is provided, return "${firstName || "Lead"} ${lastName || ""}"; otherwise, "".
+
+Return: {"franchiseGroup": "Group Name", "buyerScore": Number, "referenceClient": "Name"}
+`.trim();
+
+    try {
+      const response = await callOpenAI(prompt);
+      const enriched = JSON.parse(response);
+      return {
+        franchiseGroup: enriched.franchiseGroup,
+        buyerScore: enriched.buyerScore,
+        referenceClient: enriched.referenceClient,
+        modelUsed: "gpt-4"
+      };
+    } catch (err) {
+      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: err.message, modelUsed: "gpt-4" };
+    }
   };
 
   try {
     const results = [];
 
     for (const lead of leads) {
-      const enriched = await enrichLead(lead);
-      results.push(enriched);
+      if (lead.domain && !lead.email) { // Company name cleaning
+        const cleaned = await cleanCompanyName(lead);
+        results.push(cleaned);
+      } else { // Full enrichment
+        const enriched = await enrichLead(lead);
+        results.push(enriched);
+      }
     }
 
-    return res.status(200).json({
-      results: results.map(r => ({
-        domain: r.domain,
-        name: r.name || ""
-      }))
-    });
+    return res.status(200).json({ results });
   } catch (err) {
     return res.status(500).json({ error: "Enrichment failed", details: err.message });
   }
