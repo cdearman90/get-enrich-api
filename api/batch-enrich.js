@@ -87,13 +87,13 @@ Return exactly these 12 pipe-separated fields:
 12. Already Enriched ("YES")
 
 Instructions:
-- Use the homepage title or logo for reference.
-- Expand abbreviations (e.g., EH → East Hills).
-- Capitalize known brands (e.g., Ford, Chevy, Toyota).
-- DO NOT include slogans, taglines, or marketing fluff.
-- DO NOT add location-based filler or full sentences in dealership name.
-- Trim unnecessary suffixes like “Motors”, “Automotive Group”, “Dealership”, or “LLC” unless essential to brand.
-- If the name ends with a brand and is already clear, it's OK to return just the core name (e.g., "Pat Milliken" is fine instead of "Pat Milliken Ford").
+- Derive the human-friendly dealership name from homepage title, logo, or domain.
+- Expand abbreviations and capitalize known brands (e.g., Ford, Chevy, Toyota).
+- Remove suffixes like “Motors”, “Auto”, “Automotive Group”, “LLC”, or “Dealership” unless essential to brand.
+- If the dealership name ends in a brand and is 3 words or fewer, it’s OK to remove the brand (e.g., "Pat Milliken Ford" → "Pat Milliken").
+- Keep full brand if the name would be ambiguous without it (e.g., "Team Ford" should stay as "Team Ford").
+- NEVER include marketing fluff, slogans, or location-based filler (no city names, taglines, or extras).
+- Always return clean, human-sounding names as if you were speaking them aloud.
 `;
 
     const domainRoot = domain.replace("www.", "").split(".")[0].toLowerCase();
