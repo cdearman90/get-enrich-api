@@ -1,11 +1,25 @@
 export const config = {
   api: {
-    bodyParser: true
+    bodyParser: false // required to support binary uploads
   }
 };
 
 export default async function handler(req, res) {
-  const leads = req.body.leads || req.body || [];
+  let leads;
+
+  try {
+    if (req.headers["content-type"]?.includes("application/json")) {
+      const buffers = [];
+      for await (const chunk of req) buffers.push(chunk);
+      const raw = Buffer.concat(buffers).toString("utf-8");
+      const parsed = JSON.parse(raw);
+      leads = parsed.leads || parsed || [];
+    } else {
+      return res.status(400).json({ error: "Unsupported content-type" });
+    }
+  } catch (err) {
+    return res.status(400).json({ error: "Invalid JSON body", details: err.message });
+  }
 
   if (!Array.isArray(leads) || leads.length === 0) {
     return res.status(400).json({ error: "Missing or invalid lead list" });
@@ -14,7 +28,7 @@ export default async function handler(req, res) {
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
   const callOpenAI = async (prompt, model) => {
-    const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -26,7 +40,8 @@ export default async function handler(req, res) {
         temperature: 0.3
       })
     });
-    const json = await res.json();
+
+    const json = await response.json();
     return json.choices?.[0]?.message?.content?.trim();
   };
 
@@ -82,9 +97,7 @@ Only return the cleaned name.
 
     try {
       name = await callOpenAI(prompt, modelUsed);
-      const isWeak = !name ||
-        name.toLowerCase().includes(domainRoot) ||
-        name.split(" ").length < 2;
+      const isWeak = !name || name.toLowerCase().includes(domainRoot) || name.split(" ").length < 2;
 
       if (isWeak) {
         modelUsed = "gpt-3.5-turbo";
