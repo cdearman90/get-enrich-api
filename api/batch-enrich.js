@@ -94,9 +94,8 @@ Only return the cleaned name.
       results.push(enriched);
     }
 
-   return res.status(200).json({
-  results: results.map(r => ({
-    domain: r.domain,
-    name: r.parts?.[0] || "" // Send only the cleaned dealership name
-  }))
-});
+    return res.status(200).json({ results });
+  } catch (err) {
+    return res.status(500).json({ error: "Enrichment failed", details: err.message });
+  }
+}
