@@ -93,8 +93,6 @@ export default async function handler(req, res) {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
- –
-
   // Function to safely extract JSON from OpenAI response
   const extractJsonSafely = (raw, fields = []) => {
     try {
