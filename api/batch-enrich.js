@@ -1,3 +1,9 @@
+export const config = {
+  api: {
+    bodyParser: true
+  }
+};
+
 export default async function handler(req, res) {
   const leads = req.body || [];
 
@@ -28,15 +34,22 @@ export default async function handler(req, res) {
     if (!name || typeof name !== "string") return "";
     const keepAsIs = ["pat milliken", "union park", "don hinds"];
     const addFordIf = ["duval", "team"];
-    const removeWords = ["automotive group", "auto group", "motor group", "group", "motors", "dealership", "llc", "inc", "co", "enterprise", "sales", "unlimited"];
+    const removeWords = [
+      "automotive group", "auto group", "motor group", "group",
+      "motors", "dealership", "llc", "inc", "co", "enterprise", "sales", "unlimited"
+    ];
+
     let cleaned = name.trim().toLowerCase();
     if (keepAsIs.includes(cleaned)) return titleCase(cleaned);
-    removeWords.forEach(suffix => {
-      const regex = new RegExp(`\\b${suffix}\\b`, "gi");
+
+    removeWords.forEach(word => {
+      const regex = new RegExp(`\\b${word}\\b`, "gi");
       cleaned = cleaned.replace(regex, "");
     });
+
     cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
     if (addFordIf.includes(cleaned)) cleaned += " Ford";
+
     return titleCase(cleaned);
   }
 
@@ -89,12 +102,18 @@ Only return the cleaned name.
 
   try {
     const results = [];
+
     for (const lead of leads) {
       const enriched = await enrichLead(lead);
       results.push(enriched);
     }
 
-    return res.status(200).json({ results });
+    return res.status(200).json({
+      results: results.map(r => ({
+        domain: r.domain,
+        name: r.name || ""
+      }))
+    });
   } catch (err) {
     return res.status(500).json({ error: "Enrichment failed", details: err.message });
   }
