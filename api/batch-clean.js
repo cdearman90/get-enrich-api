@@ -43,7 +43,17 @@ export default async function handler(req, res) {
   };
 
   const getCleanName = async (domain) => {
-    const prompt = `Given the dealership domain ${domain}, return a clean, human-friendly dealership name for use in a cold email.\n- Use the homepage title or logo as reference.\n- Expand abbreviations.\n- Capitalize known brands.\n- Never return the raw domain.\n- Never return just \"Auto\".\n- Only return the final cleaned dealership name.`;
+    const prompt = `Given the dealership domain ${domain}, return a clean, human-friendly dealership name that would be used in natural conversation or cold outreach.
+
+- Use the homepage title or logo as reference.
+- Expand abbreviations (e.g., EH → East Hills).
+- Capitalize known brands (e.g., Ford, Chevy, Toyota).
+- DO NOT include slogans, taglines, or location-based marketing.
+- DO NOT return the raw domain name or add fluff like "Your Ultimate Destination..."
+- Avoid unnecessary words like "Group", "Motors", "Dealership", or "Automotive" unless essential to the brand.
+- If the brand is obvious, you may trim it (e.g., return "Pat Milliken" instead of "Pat Milliken Ford").
+
+Only return the final cleaned dealership name, like: "Pat Milliken", "Town & Country", or "Don Hinds".`;
 
     const domainRoot = domain.replace("www.", "").split(".")[0].toLowerCase();
     let modelUsed = "gpt-3.5-turbo";
