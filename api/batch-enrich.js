@@ -72,22 +72,46 @@ export default async function handler(req, res) {
     return str.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
   }
 
-  // Clean Company Name (for batchCleanCompanyNames)
   const cleanCompanyName = async (lead) => {
     const { domain } = lead;
     if (!domain) return { name: "", error: "Missing domain" };
 
     const prompt = `
-Given the dealership domain ${domain}, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach.
+Given the dealership domain "${domain}", return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach.
+
+The name must fit seamlessly in cold email copy like:
+- "{{CompanyName}}’s CRM isn’t broken — it’s bleeding."
+- "Want me to run {{CompanyName}}’s CRM numbers?"
+- "$450K may be hiding in {{CompanyName}}’s CRM."
+
+Examples to guide your inference:
+- Domain: "duvalford.com"
+  - Likely Meta Title: "Duval Ford | Ford Dealership in Jacksonville"
+  - Likely Logo Alt Text: "Duval Ford Logo"
+  - Human-Friendly Name: "Duval Ford"
+- Domain: "patmillikenford.com"
+  - Likely Meta Title: "Pat Milliken Ford | New & Used Ford Dealer in Detroit"
+  - Likely Logo Alt Text: "Pat Milliken Ford Logo"
+  - Human-Friendly Name: "Pat Milliken"
+- Domain: "rossihonda.com"
+  - Likely Meta Title: "Rossi Honda | Honda Dealer in Vineland, NJ"
+  - Likely Logo Alt Text: "Rossi Honda Logo"
+  - Human-Friendly Name: "Rossi Honda"
+
+Inference Rules:
+- Break down the domain into components (e.g., "duvalford.com" likely indicates "Duval Ford", where "duval" is the dealership name and "ford" indicates the brand).
+- Infer the dealership name by considering typical website meta titles (e.g., "[Dealership Name] | [Brand] Dealer in [Location]") and logo alt texts (e.g., "[Dealership Name] Logo").
+- Use your knowledge of dealership naming conventions, branding patterns, and website structures to make an educated guess.
+- If the domain includes a known brand (e.g., "ford", "honda"), include it in the name unless the name is short (3 words or fewer) and the brand can be dropped without confusion (e.g., "Pat Milliken Ford" → "Pat Milliken", but "Team Ford" should stay "Team Ford").
 
 Formatting Rules:
-- Must sound natural in: "{{CompanyName}}'s CRM isn’t broken — it’s bleeding."
-- Derive from homepage title/logo if possible. No raw domains.
-- Expand abbreviations (e.g., eh → East Hills).
-- Capitalize known brands.
-- Do NOT include slogans, taglines, city names, or "Inc", "Motors", "LLC", etc.
-- Trim unnecessary suffixes unless part of branding (e.g., keep “Team Ford”).
-- Speak it aloud — should sound like how dealers refer to the store.
+- Expand abbreviations (e.g., "eh" → "East Hills").
+- Capitalize known brands (e.g., Ford, Chevy, Toyota).
+- DO NOT include slogans, taglines, city names, or marketing phrases.
+- Avoid filler like “Auto”, “Motors”, “LLC”, “Inc”, “Enterprise”, “Group”, or “Dealership” unless essential to identity.
+- If the name ends in a known brand and is 3 words or fewer, it’s OK to remove the brand (e.g., “Pat Milliken Ford” → “Pat Milliken”).
+- If dropping the brand causes confusion (e.g., “Team Ford”), keep it.
+- The final name must sound 100% natural when spoken aloud — like something you’d say to a dealer over the phone.
 
 Return: {"name": "Cleaned Name"}
 `.trim();
@@ -101,7 +125,6 @@ Return: {"name": "Cleaned Name"}
     }
   };
 
-  // Full Enrichment (for batchEnrichWithVercel, retryFailedEnrichments)
   const enrichLead = async (lead) => {
     const { email, firstName, lastName, jobTitle, domain, mobilePhone, leadLinkedIn, engagedContact } = lead;
     if (!email || !domain) {
