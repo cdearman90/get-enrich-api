@@ -17,6 +17,7 @@ export default async function handler(req, res) {
     const buffers = [];
     for await (const chunk of req) buffers.push(chunk);
     const raw = Buffer.concat(buffers).toString("utf-8");
+    console.log(`Received raw body: ${raw}`);
     body = JSON.parse(raw);
   } catch (err) {
     console.error(`Invalid JSON body: ${err.message}`);
@@ -39,8 +40,8 @@ export default async function handler(req, res) {
 
   try {
     console.log(`Saving batch ${batchId} with ${leads.length} leads to blob`);
-    await saveToBlob(`jobs/${batchId}.json`, { leads });
-    console.log(`Successfully queued batch ${batchId}`);
+    const result = await saveToBlob(`jobs/${batchId}.json`, { leads });
+    console.log(`Successfully queued batch ${batchId}, blob URL: ${result.url}`);
     return res.status(200).json({ status: "queued", batchId, count: leads.length });
   } catch (err) {
     console.error(`Failed to save batch ${batchId} to blob: ${err.message}`);
