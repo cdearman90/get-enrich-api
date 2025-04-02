@@ -7,11 +7,13 @@ export const config = {
 export default async function handler(req, res) {
   let leads;
 
+  // Parse incoming request body safely
   try {
     if (req.headers["content-type"]?.includes("application/json")) {
       const buffers = [];
       for await (const chunk of req) buffers.push(chunk);
       const raw = Buffer.concat(buffers).toString("utf-8");
+
       try {
         const parsed = JSON.parse(raw);
         leads = parsed.leads || parsed || [];
@@ -34,6 +36,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Missing OPENAI_API_KEY in environment variables" });
   }
 
+  // Call GPT-4 via OpenAI API
   const callOpenAI = async (prompt) => {
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
@@ -51,44 +54,114 @@ export default async function handler(req, res) {
 
       const text = await response.text();
       if (!response.ok) throw new Error(text);
-
       return text;
     } catch (err) {
       return JSON.stringify({ name: "", error: `OpenAI error: ${err.message}` });
     }
   };
 
+  // Humanization logic fallback
+  const humanizeName = (name) => {
+    if (!name || typeof name !== "string") return "";
+    return name
+      .toLowerCase()
+      .replace(/\b(automotive group|auto group|group|motors|llc|inc|co|dealership|enterprise|sales|unlimited)\b/g, "")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+
+  // PATCHED COMPANY NAME CLEANING
   const cleanCompanyName = async (lead) => {
     const { domain } = lead;
     if (!domain) return { name: "", error: "Missing domain" };
 
     const prompt = `
-Given the dealership domain "${domain}", return a JSON object like {"name": "Duval Ford"} that fits naturally in cold email copy.
-Do NOT include extra text, explanations, or line breaks — just the JSON.
-    `.trim();
+Given the domain "${domain}", return only a JSON object like {"name": "Cleaned Name"}.
+Do NOT include any explanation or extra formatting.
+`.trim();
 
-    const rawResponse = await callOpenAI(prompt);
+    const raw = await callOpenAI(prompt);
 
+    // Try direct parse
     try {
-      const parsed = JSON.parse(rawResponse);
-      return { name: parsed.name || "", modelUsed: "gpt-4" };
+      const parsed = JSON.parse(raw);
+      if (parsed && typeof parsed.name === "string") {
+        return { name: humanizeName(parsed.name), modelUsed: "gpt-4" };
+      }
     } catch (err) {
-      return { name: "", error: `Invalid JSON from GPT: ${rawResponse}` };
+      // Try regex fallback
+      const match = raw.match(/\{[^}]+\}/);
+      if (match) {
+        try {
+          const parsed = JSON.parse(match[0]);
+          return {
+            name: humanizeName(parsed.name || ""),
+            modelUsed: "gpt-4",
+            recovered: true
+          };
+        } catch (e2) {
+          return { name: "", error: `Recovery parse failed: ${match[0]}` };
+        }
+      }
     }
+
+    return { name: "", error: `Invalid GPT output: ${raw}` };
   };
 
+  // ENRICHMENT (if you need more than company names)
+  const enrichLead = async (lead) => {
+    const { email, firstName, lastName, jobTitle, domain, mobilePhone, leadLinkedIn, engagedContact } = lead;
+    if (!email || !domain) return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: "Missing email or domain" };
+
+    const prompt = `
+Given:
+- Email: ${email}
+- Name: ${firstName || "N/A"} ${lastName || ""}
+- Title: ${jobTitle || "N/A"}
+- Domain: ${domain}
+- Mobile: ${mobilePhone || "N/A"}
+- LinkedIn: ${leadLinkedIn || "N/A"}
+- Engaged: ${engagedContact || "N/A"}
+
+Return JSON: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Name"}
+`.trim();
+
+    const raw = await callOpenAI(prompt);
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.franchiseGroup && typeof parsed.buyerScore === "number") {
+        return {
+          franchiseGroup: parsed.franchiseGroup,
+          buyerScore: parsed.buyerScore,
+          referenceClient: parsed.referenceClient || "",
+          modelUsed: "gpt-4"
+        };
+      }
+    } catch (err) {
+      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Invalid JSON: ${raw}` };
+    }
+
+    return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Malformed GPT output: ${raw}` };
+  };
+
+  // === MAIN LOOP ===
   const results = [];
 
   for (const lead of leads) {
     try {
       if (lead.domain && !lead.email) {
+        // Company Name Only
         const cleaned = await cleanCompanyName(lead);
         results.push(cleaned);
       } else {
-        results.push({ name: "", error: "Unexpected input structure" });
+        // Full Enrichment (if applicable)
+        const enriched = await enrichLead(lead);
+        results.push(enriched);
       }
     } catch (err) {
-      results.push({ name: "", error: `Unexpected error: ${err.message}` });
+      results.push({ name: "", error: `Unhandled server error: ${err.message}` });
     }
   }
 
