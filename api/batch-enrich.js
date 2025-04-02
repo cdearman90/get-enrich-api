@@ -5,7 +5,7 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  const leads = req.body || [];
+  const leads = req.body.leads || req.body || [];
 
   if (!Array.isArray(leads) || leads.length === 0) {
     return res.status(400).json({ error: "Missing or invalid lead list" });
