@@ -22,8 +22,8 @@ export default async function handler(req, res) {
   };
 
   const getCityTier = (city) => {
-    const major = [/* ... list of major cities ... */];
-    const mid = [/* ... list of mid cities ... */];
+    const major = [/* ... */];
+    const mid = [/* ... */];
     if (!city) return "Unknown";
     if (major.includes(city)) return "Major";
     if (mid.includes(city)) return "Mid";
@@ -49,24 +49,17 @@ export default async function handler(req, res) {
 
   function humanizeName(name) {
     if (!name || typeof name !== "string") return "";
-
     const keepAsIs = ["pat milliken", "union park", "don hinds"];
     const addFordIf = ["duval", "team"];
     const removeWords = ["automotive group", "auto group", "motor group", "group", "motors", "dealership", "llc", "inc", "co", "enterprise", "sales", "unlimited"];
-
     let cleaned = name.trim().toLowerCase();
-
     if (keepAsIs.includes(cleaned)) return titleCase(cleaned);
-
     removeWords.forEach(suffix => {
       const regex = new RegExp(`\\b${suffix}\\b`, "gi");
       cleaned = cleaned.replace(regex, "");
     });
-
     cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
-
     if (addFordIf.includes(cleaned)) cleaned += " Ford";
-
     return titleCase(cleaned);
   }
 
@@ -81,7 +74,7 @@ export default async function handler(req, res) {
     }
 
     const prompt = `
-You're generating detailed enrichment for a cold outreach campaign targeting automotive franchise dealership General Sales Managers (GSMs).
+You're generating enrichment for a cold outreach campaign targeting automotive General Sales Managers.
 
 Given:
 - Name: ${firstName}
@@ -105,21 +98,19 @@ Return exactly these 12 pipe-separated fields:
 12. Already Enriched ("YES")
 
 Instructions:
-- Derive the human-friendly dealership name from homepage title, logo, or domain.
-- Expand abbreviations and capitalize known brands (e.g., Ford, Chevy, Toyota).
-- Remove suffixes like “Motors”, “Auto”, “Automotive Group”, “LLC”, or “Dealership” unless essential to brand.
-- If the dealership name ends in a brand and is 3 words or fewer, it’s OK to remove the brand (e.g., "Pat Milliken Ford" → "Pat Milliken").
-- Keep full brand if the name would be ambiguous without it (e.g., "Team Ford" should stay as "Team Ford").
-- NEVER include marketing fluff, slogans, or location-based filler (no city names, taglines, or extras).
-- Always return clean, human-sounding names as if you were speaking them aloud.
+- Return a human-sounding dealership name that fits naturally in cold email sentences like:
+  • “{{CompanyName}}’s CRM isn’t broken — it’s bleeding.”
+  • “Want me to run {{CompanyName}}’s CRM numbers?”
+  • “$450K may be hiding in {{CompanyName}}’s CRM.”
+- Do NOT include domain names, slogans, city names, taglines, or filler like "Auto", "Motors", "LLC", "Group" unless it's essential to branding.
+- If the name ends in a brand and is 3 words or fewer, it’s OK to drop the brand (e.g., "Pat Milliken Ford" → "Pat Milliken").
+- If dropping the brand causes ambiguity, keep it (e.g., “Team Ford” should stay “Team Ford”).
+- Always prioritize natural, spoken-language output that works in business conversations with dealers.
     `.trim();
 
     const domainRoot = domain.replace("www.", "").split(".")[0].toLowerCase();
-
-    // ✅ Primary GPT-4 call
     let output = await callOpenAI(prompt, "gpt-4");
 
-    // Optional fallback to GPT-3.5 if GPT-4 fails
     if (!output || output.toLowerCase().includes(domainRoot) || output.split("|").length < 5) {
       output = await callOpenAI(prompt, "gpt-3.5-turbo");
     }
