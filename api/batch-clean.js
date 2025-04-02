@@ -1,5 +1,3 @@
-// 📦 /api/batch-clean.js (Vercel API route with timeout-safe and retry-on-failure)
-
 export default async function handler(req, res) {
   const leads = req.body || [];
 
@@ -56,33 +54,28 @@ Formatting Rules:
 - If removing the brand would make the name ambiguous, keep it (e.g., "Team Ford" → "Team Ford", not "Team").
 - The name must sound natural when spoken aloud, as if you're referencing a real dealership on a call.
 
-Only return the final cleaned dealership name. Examples: 
-- "Duval Ford"
-- "Pat Milliken"
-- "Town & Country"
-- "Team Ford"
-- "Don Hinds"
-- "Union Park"
-`;
+Only return the final cleaned dealership name.`;
 
     const domainRoot = domain.replace("www.", "").split(".")[0].toLowerCase();
-    let modelUsed = "gpt-3.5-turbo";
+    let modelUsed = "gpt-4";
     let name;
 
     try {
+      // ✅ Start with GPT-4
       name = await callOpenAI(prompt, modelUsed);
       const isWeak = !name ||
         name.toLowerCase().includes(domainRoot) ||
         name.toLowerCase().includes("auto") ||
         name.split(" ").length < 2;
 
+      // 🔁 Fallback to GPT-3.5 only if GPT-4 is weak
       if (isWeak) {
-        modelUsed = "gpt-4";
+        modelUsed = "gpt-3.5-turbo";
         name = await callOpenAI(prompt, modelUsed);
       }
     } catch (err) {
-      console.warn(`⚠️ First attempt failed, retrying once with GPT-4 for domain: ${domain}`);
-      modelUsed = "gpt-4";
+      console.warn(`⚠️ GPT-4 failed for domain ${domain}, retrying with GPT-3.5...`);
+      modelUsed = "gpt-3.5-turbo";
       try {
         name = await callOpenAI(prompt, modelUsed);
       } catch (retryErr) {
