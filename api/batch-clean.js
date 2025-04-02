@@ -43,17 +43,27 @@ export default async function handler(req, res) {
   };
 
   const getCleanName = async (domain) => {
-    const prompt = `Given the dealership domain ${domain}, return a clean, human-friendly dealership name that would be used in natural conversation or cold outreach.
+    const prompt = `Given the dealership domain ${domain}, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach.
 
-- Use the homepage title or logo as reference.
+Formatting Rules:
+- Use the homepage title or logo as reference (do not use page meta descriptions).
 - Expand abbreviations (e.g., EH → East Hills).
 - Capitalize known brands (e.g., Ford, Chevy, Toyota).
-- DO NOT include slogans, taglines, or location-based marketing.
-- DO NOT return the raw domain name or add fluff like "Your Ultimate Destination..."
-- Avoid unnecessary words like "Group", "Motors", "Dealership", or "Automotive" unless essential to the brand.
-- If the brand is obvious, you may trim it (e.g., return "Pat Milliken" instead of "Pat Milliken Ford").
+- DO NOT include slogans, taglines, or marketing phrases (e.g., no "Your #1 Destination" or "Since 1952").
+- DO NOT return the raw domain or URL. Only return a name.
+- Avoid filler words like "Group", "Motors", "LLC", "Inc", "Enterprise", "Automotive", or "Dealership" unless essential to the brand identity.
+- If the name ends in a known brand and it's already clear (3 words or fewer), you may omit the brand (e.g., "Pat Milliken Ford" → "Pat Milliken").
+- If removing the brand would make the name ambiguous, keep it (e.g., "Team Ford" → "Team Ford", not "Team").
+- The name must sound natural when spoken aloud, as if you're referencing a real dealership on a call.
 
-Only return the final cleaned dealership name, like: "Pat Milliken", "Town & Country", or "Don Hinds".`;
+Only return the final cleaned dealership name. Examples: 
+- "Duval Ford"
+- "Pat Milliken"
+- "Town & Country"
+- "Team Ford"
+- "Don Hinds"
+- "Union Park"
+`;
 
     const domainRoot = domain.replace("www.", "").split(".")[0].toLowerCase();
     let modelUsed = "gpt-3.5-turbo";
