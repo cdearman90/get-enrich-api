@@ -26,6 +26,7 @@ export default async function handler(req, res) {
 
   const callOpenAI = async (prompt) => {
     try {
+      console.log(`Calling OpenAI API with prompt: ${prompt.slice(0, 100)}...`);
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -49,7 +50,9 @@ export default async function handler(req, res) {
         throw new Error("Invalid OpenAI response: No choices or content found");
       }
 
-      return json.choices[0].message.content.trim();
+      const result = json.choices[0].message.content.trim();
+      console.log(`OpenAI API response: ${result.slice(0, 100)}...`);
+      return result;
     } catch (err) {
       console.error(`OpenAI API error: ${err.message}`);
       throw new Error(`OpenAI API error: ${err.message}`);
