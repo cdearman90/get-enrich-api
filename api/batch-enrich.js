@@ -56,6 +56,37 @@ export default async function handler(req, res) {
     return json.choices?.[0]?.message?.content?.trim();
   };
 
+  function humanizeName(name) {
+    if (!name || typeof name !== "string") return "";
+
+    const keepAsIs = ["pat milliken", "union park", "don hinds"];
+    const addFordIf = ["duval", "team"];
+    const removeWords = ["automotive group", "auto group", "motor group", "group", "motors", "dealership", "llc", "inc", "co", "enterprise", "sales", "unlimited"];
+
+    let cleaned = name.trim().toLowerCase();
+
+    if (keepAsIs.includes(cleaned)) {
+      return titleCase(cleaned);
+    }
+
+    removeWords.forEach(suffix => {
+      const regex = new RegExp(`\\b${suffix}\\b`, "gi");
+      cleaned = cleaned.replace(regex, "");
+    });
+
+    cleaned = cleaned.replace(/\s{2,}/g, " ").trim();
+
+    if (addFordIf.includes(cleaned)) {
+      cleaned += " Ford";
+    }
+
+    return titleCase(cleaned);
+  }
+
+  function titleCase(str) {
+    return str.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ");
+  }
+
   const enrichLead = async (lead) => {
     const { firstName, title, city, state, company, domain } = lead;
     if (!domain || !title || !company) {
@@ -107,10 +138,16 @@ Instructions:
     const parts = output.split("|").map(p => p.trim());
     while (parts.length < 12) parts.push("");
 
+    // Apply region + tier + fallback logic
     parts[6] = getRegionFromState(state);
     parts[7] = getCityTier(city);
     parts[10] = parseInt(parts[2]) >= 4 ? "YES" : "NO";
     parts[11] = "YES";
+
+    // Clean up dealership name (part 0)
+    if (parts[0]) {
+      parts[0] = humanizeName(parts[0]);
+    }
 
     return { domain, parts };
   };
