@@ -15,7 +15,7 @@ export default async function handler(req, res) {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${OPENAI_API_KEY}`,
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
@@ -43,32 +43,38 @@ export default async function handler(req, res) {
   const getCleanName = async (domain) => {
     const prompt = `Given the dealership domain ${domain}, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach.
 
+The name must fit seamlessly in cold email copy like:
+- "{{CompanyName}}’s CRM isn’t broken — it’s bleeding."
+- "Want me to run {{CompanyName}}’s CRM numbers?"
+- "$450K may be hiding in {{CompanyName}}’s CRM."
+
 Formatting Rules:
-- Use the homepage title or logo as reference (do not use page meta descriptions).
+- Use homepage title or logo as reference (avoid meta descriptions).
 - Expand abbreviations (e.g., EH → East Hills).
 - Capitalize known brands (e.g., Ford, Chevy, Toyota).
-- DO NOT include slogans, taglines, or marketing phrases (e.g., no "Your #1 Destination" or "Since 1952").
-- DO NOT return the raw domain or URL. Only return a name.
-- Avoid filler words like "Group", "Motors", "LLC", "Inc", "Enterprise", "Automotive", or "Dealership" unless essential to the brand identity.
-- If the name ends in a known brand and it's already clear (3 words or fewer), you may omit the brand (e.g., "Pat Milliken Ford" → "Pat Milliken").
-- If removing the brand would make the name ambiguous, keep it (e.g., "Team Ford" → "Team Ford", not "Team").
-- The name must sound natural when spoken aloud, as if you're referencing a real dealership on a call.
+- DO NOT include slogans, taglines, city names, or marketing phrases.
+- Avoid filler like “Auto”, “Motors”, “LLC”, “Inc”, “Enterprise”, “Group”, or “Dealership” unless essential to identity.
+- If the name ends in a known brand and is 3 words or fewer, it’s OK to remove the brand (e.g., “Pat Milliken Ford” → “Pat Milliken”).
+- If dropping the brand causes confusion (e.g., “Team Ford”), keep it.
+- The final name must sound 100% natural when spoken aloud — like something you’d say to a dealer over the phone.
 
-Only return the final cleaned dealership name.`;
+Only return the final dealership name with no quotes or punctuation.`;
 
     const domainRoot = domain.replace("www.", "").split(".")[0].toLowerCase();
     let modelUsed = "gpt-4";
     let name;
 
     try {
-      // ✅ Start with GPT-4
+      // ✅ GPT-4 primary call
       name = await callOpenAI(prompt, modelUsed);
-      const isWeak = !name ||
+
+      const isWeak =
+        !name ||
         name.toLowerCase().includes(domainRoot) ||
         name.toLowerCase().includes("auto") ||
         name.split(" ").length < 2;
 
-      // 🔁 Fallback to GPT-3.5 only if GPT-4 is weak
+      // 🔁 Fallback to GPT-3.5 if GPT-4 fails or returns a weak name
       if (isWeak) {
         modelUsed = "gpt-3.5-turbo";
         name = await callOpenAI(prompt, modelUsed);
