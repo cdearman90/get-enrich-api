@@ -12,13 +12,17 @@ export default async function handler(req, res) {
       const buffers = [];
       for await (const chunk of req) buffers.push(chunk);
       const raw = Buffer.concat(buffers).toString("utf-8");
-      const parsed = JSON.parse(raw);
-      leads = parsed.leads || parsed || [];
+      try {
+        const parsed = JSON.parse(raw);
+        leads = parsed.leads || parsed || [];
+      } catch (err) {
+        return res.status(400).json({ error: "Invalid JSON body", details: err.message });
+      }
     } else {
       return res.status(400).json({ error: "Unsupported content-type" });
     }
   } catch (err) {
-    return res.status(400).json({ error: "Invalid JSON body", details: err.message });
+    return res.status(400).json({ error: "Failed to parse request body", details: err.message });
   }
 
   if (!Array.isArray(leads) || leads.length === 0) {
@@ -26,23 +30,39 @@ export default async function handler(req, res) {
   }
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  if (!OPENAI_API_KEY) {
+    return res.status(500).json({ error: "Missing OPENAI_API_KEY in environment variables" });
+  }
 
   const callOpenAI = async (prompt, model = "gpt-4") => {
-    const response = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        model,
-        messages: [{ role: "user", content: prompt }],
-        temperature: 0.3
-      })
-    });
+    try {
+      const response = await fetch("https://api.openai.com/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          model,
+          messages: [{ role: "user", content: prompt }],
+          temperature: 0.3
+        })
+      });
 
-    const json = await response.json();
-    return json.choices?.[0]?.message?.content?.trim();
+      if (!response.ok) {
+        const errorText = await response.text();
+        throw new Error(`OpenAI API request failed: ${response.status} ${response.statusText} - ${errorText}`);
+      }
+
+      const json = await response.json();
+      if (!json.choices || !json.choices[0]?.message?.content) {
+        throw new Error("Invalid OpenAI response: No choices or content found");
+      }
+
+      return json.choices[0].message.content.trim();
+    } catch (err) {
+      throw new Error(`OpenAI API error: ${err.message}`);
+    }
   };
 
   function humanizeName(name) {
@@ -118,7 +138,15 @@ Return: {"name": "Cleaned Name"}
 
     try {
       const response = await callOpenAI(prompt);
-      const cleaned = JSON.parse(response);
+      let cleaned;
+      try {
+        cleaned = JSON.parse(response);
+      } catch (err) {
+        return { name: "", error: `Invalid JSON response from OpenAI: ${response}` };
+      }
+      if (!cleaned.name || typeof cleaned.name !== "string") {
+        return { name: "", error: `Invalid response format from OpenAI: ${JSON.stringify(cleaned)}` };
+      }
       return { name: humanizeName(cleaned.name), modelUsed: "gpt-4" };
     } catch (err) {
       return { name: "", error: err.message, modelUsed: "gpt-4" };
@@ -157,7 +185,15 @@ Return: {"franchiseGroup": "Group Name", "buyerScore": Number, "referenceClient"
 
     try {
       const response = await callOpenAI(prompt);
-      const enriched = JSON.parse(response);
+      let enriched;
+      try {
+        enriched = JSON.parse(response);
+      } catch (err) {
+        return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Invalid JSON response from OpenAI: ${response}` };
+      }
+      if (!enriched.franchiseGroup || typeof enriched.buyerScore !== "number" || !enriched.referenceClient) {
+        return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Invalid response format from OpenAI: ${JSON.stringify(enriched)}` };
+      }
       return {
         franchiseGroup: enriched.franchiseGroup,
         buyerScore: enriched.buyerScore,
