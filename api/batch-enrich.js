@@ -85,6 +85,15 @@ Return exactly these 12 pipe-separated fields:
 10. Validation Flag ("OK" or "Needs Check")
 11. Safe to Send ("YES" if Buyer Score ≥4, else "NO")
 12. Already Enriched ("YES")
+
+Instructions:
+- Use the homepage title or logo for reference.
+- Expand abbreviations (e.g., EH → East Hills).
+- Capitalize known brands (e.g., Ford, Chevy, Toyota).
+- DO NOT include slogans, taglines, or marketing fluff.
+- DO NOT add location-based filler or full sentences in dealership name.
+- Trim unnecessary suffixes like “Motors”, “Automotive Group”, “Dealership”, or “LLC” unless essential to brand.
+- If the name ends with a brand and is already clear, it's OK to return just the core name (e.g., "Pat Milliken" is fine instead of "Pat Milliken Ford").
 `;
 
     const domainRoot = domain.replace("www.", "").split(".")[0].toLowerCase();
