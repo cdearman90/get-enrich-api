@@ -7,29 +7,6 @@ export default async function handler(req, res) {
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 
-  const getRegionFromState = (state) => {
-    const regions = {
-      "Northeast": ["NY", "NJ", "PA", "MA", "CT", "RI", "VT", "NH", "ME"],
-      "Midwest": ["OH", "MI", "IN", "IL", "WI", "MN", "IA", "MO", "ND", "SD", "NE", "KS"],
-      "South": ["DE", "MD", "DC", "VA", "WV", "KY", "NC", "SC", "GA", "FL", "AL", "MS", "TN", "AR", "LA", "TX"],
-      "West": ["MT", "WY", "CO", "NM", "ID", "UT", "AZ", "NV"],
-      "Pacific": ["CA", "OR", "WA", "AK", "HI"]
-    };
-    for (const region in regions) {
-      if (regions[region].includes(state)) return region;
-    }
-    return "Unknown";
-  };
-
-  const getCityTier = (city) => {
-    const major = [/* ... */];
-    const mid = [/* ... */];
-    if (!city) return "Unknown";
-    if (major.includes(city)) return "Major";
-    if (mid.includes(city)) return "Mid";
-    return "Unknown";
-  };
-
   const callOpenAI = async (prompt, model) => {
     const res = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
@@ -68,74 +45,55 @@ export default async function handler(req, res) {
   }
 
   const enrichLead = async (lead) => {
-    const { firstName, title, city, state, company, domain } = lead;
-    if (!domain || !title || !company) {
-      return { parts: [], domain, error: "Missing required fields" };
-    }
+    const { domain } = lead;
+    if (!domain) return { domain, name: "", error: "Missing domain" };
 
     const prompt = `
-You're generating enrichment for a cold outreach campaign targeting automotive General Sales Managers.
+Given the dealership domain ${domain}, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach.
 
-Given:
-- Name: ${firstName}
-- Title: ${title}
-- Dealership: ${company}
-- Location: ${city}, ${state}
-- Domain: ${domain}
+Formatting Rules:
+- Must sound natural in: "{{CompanyName}}'s CRM isn’t broken — it’s bleeding."
+- Derive from homepage title/logo if possible. No raw domains.
+- Expand abbreviations (e.g., eh → East Hills).
+- Capitalize known brands.
+- Do NOT include slogans, taglines, city names, or "Inc", "Motors", "LLC", etc.
+- Trim unnecessary suffixes unless part of branding (e.g., keep “Team Ford”).
+- Speak it aloud — should sound like how dealers refer to the store.
 
-Return exactly these 12 pipe-separated fields:
-1. Franchise Group name ("Independent" if unsure)
-2. Brands sold (comma-separated)
-3. Buyer Score (1–5; higher for franchise, mobile, and complete data)
-4. Top relevant pain points (comma-separated)
-5. Personalized Hook (dealership-specific opener)
-6. One-Sentence Value Prop
-7. Region (Northeast, Midwest, South, West, Pacific)
-8. City Tier (Major, Mid, Unknown)
-9. Ideal Reference Client (real dealership or "Peer Dealer")
-10. Validation Flag ("OK" or "Needs Check")
-11. Safe to Send ("YES" if Buyer Score ≥4, else "NO")
-12. Already Enriched ("YES")
-
-Instructions:
-- Return a human-sounding dealership name that fits naturally in cold email sentences like:
-  • “{{CompanyName}}’s CRM isn’t broken — it’s bleeding.”
-  • “Want me to run {{CompanyName}}’s CRM numbers?”
-  • “$450K may be hiding in {{CompanyName}}’s CRM.”
-- Do NOT include domain names, slogans, city names, taglines, or filler like "Auto", "Motors", "LLC", "Group" unless it's essential to branding.
-- If the name ends in a brand and is 3 words or fewer, it’s OK to drop the brand (e.g., "Pat Milliken Ford" → "Pat Milliken").
-- If dropping the brand causes ambiguity, keep it (e.g., “Team Ford” should stay “Team Ford”).
-- Always prioritize natural, spoken-language output that works in business conversations with dealers.
-    `.trim();
+Only return the cleaned name.
+`.trim();
 
     const domainRoot = domain.replace("www.", "").split(".")[0].toLowerCase();
-    let output = await callOpenAI(prompt, "gpt-4");
+    let modelUsed = "gpt-4";
+    let name;
 
-    if (!output || output.toLowerCase().includes(domainRoot) || output.split("|").length < 5) {
-      output = await callOpenAI(prompt, "gpt-3.5-turbo");
+    try {
+      name = await callOpenAI(prompt, modelUsed);
+      const isWeak = !name ||
+        name.toLowerCase().includes(domainRoot) ||
+        name.split(" ").length < 2;
+
+      if (isWeak) {
+        modelUsed = "gpt-3.5-turbo";
+        name = await callOpenAI(prompt, modelUsed);
+      }
+    } catch (err) {
+      return { domain, name: "", error: err.message };
     }
 
-    const parts = output.split("|").map(p => p.trim());
-    while (parts.length < 12) parts.push("");
-
-    parts[6] = getRegionFromState(state);
-    parts[7] = getCityTier(city);
-    parts[10] = parseInt(parts[2]) >= 4 ? "YES" : "NO";
-    parts[11] = "YES";
-
-    if (parts[0]) {
-      parts[0] = humanizeName(parts[0]);
-    }
-
-    return { domain, parts };
+    return {
+      domain,
+      name: humanizeName(name)
+    };
   };
 
   try {
     const results = [];
-    for (let lead of leads) {
-      const result = await enrichLead(lead);
-      results.push(result);
+    for (const lead of leads) {
+      const enriched = await enrichLead(lead);
+      results.push(enriched);
     }
+
     return res.status(200).json({ results });
   } catch (err) {
     return res.status(500).json({ error: "Batch GPT failed", details: err.message });
