@@ -642,7 +642,9 @@ export const config = {
   api: { bodyParser: false }
 };
 
-// Unit tests (unchanged)
+// To manually run unit tests, uncomment the line below:
+// runUnitTests();
+
 function runUnitTests() {
   const tests = [
     {
