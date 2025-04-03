@@ -74,11 +74,38 @@ export default async function handler(req, res) {
         console.error("OpenAI request failed:", text);
         throw new Error(text);
       }
-      console.log("OpenAI response:", text);
-      return text;
+
+      // Parse the OpenAI response as JSON
+      let openAiResponse;
+      try {
+        openAiResponse = JSON.parse(text);
+      } catch (err) {
+        console.error("Failed to parse OpenAI response as JSON:", err.message);
+        throw new Error(`Invalid JSON response from OpenAI: ${text}`);
+      }
+
+      // Extract the content from choices[0].message.content
+      if (!openAiResponse.choices || !openAiResponse.choices[0] || !openAiResponse.choices[0].message || !openAiResponse.choices[0].message.content) {
+        console.error("Invalid OpenAI response structure:", openAiResponse);
+        throw new Error("Invalid OpenAI response structure: missing choices[0].message.content");
+      }
+
+      const content = openAiResponse.choices[0].message.content;
+
+      // Parse the content as JSON (since it's a stringified JSON object)
+      let contentParsed;
+      try {
+        contentParsed = JSON.parse(content);
+      } catch (err) {
+        console.error("Failed to parse OpenAI content as JSON:", err.message);
+        throw new Error(`Invalid JSON in OpenAI content: ${content}`);
+      }
+
+      console.log("Parsed OpenAI content:", contentParsed);
+      return contentParsed;
     } catch (err) {
       console.error("OpenAI error:", err.message);
-      return JSON.stringify({ error: `OpenAI error: ${err.message}` });
+      return { error: `OpenAI error: ${err.message}` };
     }
   };
 
@@ -93,22 +120,29 @@ export default async function handler(req, res) {
       .replace(/\b\w/g, (char) => char.toUpperCase());
   };
 
-  // Function to safely extract JSON from OpenAI response
-  const extractJsonSafely = (raw, fields = []) => {
-    try {
-      const parsed = JSON.parse(raw);
-      const missing = fields.filter(f => !(f in parsed));
-      return missing.length === 0 ? parsed : null;
-    } catch {
-      const match = raw.match(/\{[^}]+\}/);
-      if (match) {
-        try {
-          const parsed = JSON.parse(match[0]);
-          const missing = fields.filter(f => !(f in parsed));
-          return missing.length === 0 ? parsed : null;
-        } catch {}
+  // Function to safely extract JSON (updated to handle parsed objects)
+  const extractJsonSafely = (data, fields = []) => {
+    // If data is a string, try to parse it as JSON
+    let parsed = data;
+    if (typeof data === "string") {
+      try {
+        parsed = JSON.parse(data);
+      } catch {
+        const match = data.match(/\{[^}]+\}/);
+        if (match) {
+          try {
+            parsed = JSON.parse(match[0]);
+          } catch {}
+        }
       }
     }
+
+    // If parsed is an object and has all required fields, return it
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+      const missing = fields.filter(f => !(f in parsed));
+      return missing.length === 0 ? parsed : null;
+    }
+
     return null;
   };
 
@@ -125,8 +159,15 @@ Return only a JSON object like {"name": "Duval Ford"} for this domain: "${domain
 No explanation, markdown, or quotes — just raw JSON.
     `.trim();
 
-    const raw = await callOpenAI(prompt);
-    const parsed = extractJsonSafely(raw, ["name"]);
+    const result = await callOpenAI(prompt);
+
+    // Check if result is an error object
+    if (result && result.error) {
+      console.error(`Failed to process domain ${domain}: ${result.error}`);
+      return { name: "", error: result.error };
+    }
+
+    const parsed = extractJsonSafely(result, ["name"]);
 
     if (parsed && parsed.name) {
       const cleanedName = humanizeName(parsed.name);
@@ -134,8 +175,8 @@ No explanation, markdown, or quotes — just raw JSON.
       return { name: cleanedName, modelUsed: "gpt-4" };
     }
 
-    console.error(`Invalid GPT output for domain ${domain}: ${raw}`);
-    return { name: "", error: `Invalid GPT output: ${raw}` };
+    console.error(`Invalid GPT output for domain ${domain}:`, result);
+    return { name: "", error: `Invalid GPT output: ${JSON.stringify(result)}` };
   };
 
   // Function to enrich leads using OpenAI
@@ -160,8 +201,15 @@ Enrich this lead based on:
 Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Name"}
     `.trim();
 
-    const raw = await callOpenAI(prompt);
-    const parsed = extractJsonSafely(raw, ["franchiseGroup", "buyerScore", "referenceClient"]);
+    const result = await callOpenAI(prompt);
+
+    // Check if result is an error object
+    if (result && result.error) {
+      console.error(`Failed to process email ${email}: ${result.error}`);
+      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: result.error };
+    }
+
+    const parsed = extractJsonSafely(result, ["franchiseGroup", "buyerScore", "referenceClient"]);
 
     if (parsed) {
       console.log(`Enriched lead for email ${email}:`, parsed);
@@ -173,8 +221,8 @@ Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Na
       };
     }
 
-    console.error(`Invalid GPT response for email ${email}: ${raw}`);
-    return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Invalid GPT response: ${raw}` };
+    console.error(`Invalid GPT response for email ${email}:`, result);
+    return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Invalid GPT response: ${JSON.stringify(result)}` };
   };
 
   // Process each lead
