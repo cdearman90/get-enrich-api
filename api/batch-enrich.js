@@ -2,7 +2,6 @@
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
-
   const next = () => {
     if (active >= concurrency || queue.length === 0) return;
     active++;
@@ -12,7 +11,6 @@ const pLimit = (concurrency) => {
       next();
     });
   };
-
   return (fn) => new Promise((resolve, reject) => {
     queue.push({ fn, resolve, reject });
     next();
@@ -157,7 +155,7 @@ const cityDisplayNames = {
   "huntington": "Huntington", "morgantown": "Morgantown", "milwaukee": "Milwaukee",
   "madison": "Madison", "greenbay": "Green Bay", "cheyenne": "Cheyenne",
   "casper": "Casper", "laramie": "Laramie"
-};
+];
 
 // Global states for abbreviation detection
 const states = [
@@ -279,7 +277,6 @@ const correctTypos = (words) => {
     }, { city: null, distance: Infinity });
 
     if (closestMatch.city) {
-      // Compute a temporary confidence score for the correction
       const tempWords = [...words];
       const index = tempWords.indexOf(word);
       tempWords[index] = cityDisplayNames[closestMatch.city];
@@ -463,7 +460,7 @@ const humanizeName = (name, domain) => {
 
 export default async function handler(req, res) {
   const startTime = Date.now();
-  console.log("Received request to /api/batch-enrich at", new Date().toISOString());
+  console.log("Received request to /api/batch-enrich at", new Date(startTime).toISOString());
 
   let leads;
   try {
@@ -472,56 +469,45 @@ export default async function handler(req, res) {
       for await (const chunk of req) buffers.push(chunk);
       const raw = Buffer.concat(buffers).toString("utf-8");
       console.log("Raw request body:", raw);
-      try {
-        leads = JSON.parse(raw);
-      } catch (err) {
-        console.error("Failed to parse JSON:", err.message);
-        return res.status(400).json({ error: "Invalid JSON body", details: err.message });
-      }
+      leads = JSON.parse(raw);
     } else {
-      console.error("Unsupported content-type:", req.headers["content-type"]);
-      return res.status(400).json({ error: "Unsupported content-type", details: req.headers["content-type"] });
+      return res.status(400).json({ error: "Unsupported content-type" });
     }
   } catch (err) {
-    console.error("Failed to parse request body:", err.message);
+    console.error("Failed to parse request body:", err.message, "Raw:", raw?.slice(0, 100));
     return res.status(400).json({ error: "Failed to parse request body", details: err.message });
   }
 
   if (!Array.isArray(leads) || leads.length === 0) {
-    console.error("Invalid lead list:", leads);
     return res.status(400).json({ error: "Missing or invalid lead list" });
   }
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   if (!OPENAI_API_KEY) {
-    console.error("Missing OPENAI_API_KEY in environment variables");
-    return res.status(500).json({ error: "Missing OPENAI_API_KEY in environment variables" });
+    return res.status(500).json({ error: "Missing OPENAI_API_KEY" });
   }
 
-  const limit = pLimit(2);
+  const limit = pLimit(1);
   const manualReviewQueue = [];
   const results = [];
   let totalTokens = 0;
 
-  const callOpenAI = async (prompt, retries = 3, delay = 2000) => {
+  const callOpenAI = async (prompt, retries = 3) => {
     const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
-    console.log("Calling OpenAI with prompt:", prompt);
+    console.log("Calling OpenAI with prompt:", prompt.slice(0, 100) + "...");
     const estimatedTokens = Math.ceil(prompt.length / 4);
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
+        const timeoutId = setTimeout(() => controller.abort(), 8000);
 
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: {
-            Authorization: `Bearer ${OPENAI_API_KEY}`,
-            "Content-Type": "application/json"
-          },
+          headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
           body: JSON.stringify({
-            model: model,
+            model,
             messages: [
-              { role: "system", content: "You are a dealership naming expert with extensive knowledge of U.S. automotive dealerships, their branding, and naming conventions. Your task is to generate clean, human-friendly dealership names that are natural for use in cold email campaigns." },
+              { role: "system", content: "You are a dealership naming expert with knowledge of U.S. automotive dealerships as of April 2025." },
               { role: "user", content: prompt }
             ],
             temperature: 0.3
@@ -530,253 +516,93 @@ export default async function handler(req, res) {
         });
 
         clearTimeout(timeoutId);
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`OpenAI request failed with status ${response.status}: ${errorText}`);
+          throw new Error(errorText);
+        }
 
         const text = await response.text();
-        if (!response.ok) {
-          if (response.status === 429 && attempt < retries) {
-            console.warn(`Rate limit exceeded, retrying (${attempt}/${retries}) after ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            continue;
-          }
-          console.error("OpenAI request failed with status", response.status, ":", text);
-          throw new Error(text);
-        }
-
-        console.log("Raw OpenAI response:", text);
-        if (!text.trim().startsWith("{")) {
-          throw new Error("Non-JSON response from OpenAI: " + text);
-        }
-
-        let openAiResponse;
-        try {
-          openAiResponse = JSON.parse(text);
-        } catch (err) {
-          console.error("Failed to parse OpenAI response as JSON:", err.message);
-          throw new Error(`Invalid JSON response from OpenAI: ${text}`);
-        }
-
-        if (!openAiResponse.choices || !openAiResponse.choices[0] || !openAiResponse.choices[0].message || !openAiResponse.choices[0].message.content) {
-          console.error("Invalid OpenAI response structure:", openAiResponse);
-          throw new Error("Invalid OpenAI response structure: missing choices[0].message.content");
-        }
-
+        const openAiResponse = JSON.parse(text);
         const content = openAiResponse.choices[0].message.content;
-        console.log("Extracted OpenAI content:", content);
         const match = content.match(/##Name:\s*([^\n\r]+)/);
-        if (!match || !match[1]) {
-          console.error("Failed to extract name from OpenAI response:", content);
-          throw new Error("Invalid OpenAI response format: missing or malformed ##Name: delimiter");
-        }
+        if (!match) throw new Error("No valid ##Name: format in response");
         return { result: match[1].trim(), tokens: estimatedTokens };
       } catch (err) {
         if (err.name === "AbortError") {
-          console.error("OpenAI request timed out after 10 seconds");
-          if (attempt < retries) {
-            console.warn(`Retrying (${attempt}/${retries}) after ${delay}ms...`);
-            await new Promise(resolve => setTimeout(resolve, delay));
-            continue;
-          }
-          return { result: null, error: "OpenAI request timed out after 10 seconds", tokens: estimatedTokens };
+          console.error("OpenAI request timed out after 8s");
+          return { result: null, error: "OpenAI request timed out", tokens: estimatedTokens };
         }
+        const backoffDelay = 2000 * attempt; // Exponential backoff
         if (attempt < retries) {
-          console.warn(`OpenAI request failed, retrying (${attempt}/${retries}) after ${delay}ms...`, err.message);
-          await new Promise(resolve => setTimeout(resolve, delay));
+          console.warn(`Retrying (${attempt}/${retries}) after ${backoffDelay}ms due to: ${err.message}`);
+          await new Promise(resolve => setTimeout(resolve, backoffDelay));
           continue;
         }
-        console.error("OpenAI error after retries:", err.message);
-        return { result: null, error: `OpenAI error: ${err.message}`, tokens: estimatedTokens };
+        console.error(`OpenAI error after ${retries} retries: ${err.message}`);
+        return { result: null, error: err.message, tokens: estimatedTokens };
       }
     }
   };
 
   const cleanCompanyName = async (lead) => {
-    const { domain } = lead;
-    if (!domain) {
-      console.error("Missing domain for lead:", lead);
-      return { name: "", confidenceScore: 0, error: "Missing domain" };
-    }
+    const { domain, rowNum } = lead;
+    if (!domain) return { name: "", confidenceScore: 0, error: "Missing domain", rowNum };
 
     if (domainCache.has(domain)) {
-      const cached = domainCache.get(domain);
-      console.log(`Cache hit for domain ${domain}: ${cached.name}`);
-      return cached;
+      console.log({ domain, message: "Cache hit" });
+      return { ...domainCache.get(domain), rowNum };
     }
 
-    const prompt = `
-Given the dealership domain "${domain}" sourced from an email list, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach, based on your knowledge of the dealership's domain, logo, and homepage meta title as of April 2025. 
-
-Return it in this format only:
-##Name: [Clean Dealership Name]
-    `.trim();
-
+    const prompt = `Given the dealership domain "${domain}" sourced from an email list, return a clean, human-friendly dealership name as of April 2025. Return: ##Name: [Clean Dealership Name]`;
     const { result: gptNameRaw, error, tokens } = await limit(() => callOpenAI(prompt));
     totalTokens += tokens;
 
     if (error) {
-      console.error(`❌ OpenAI error for ${domain}: ${error}`);
-      return { name: "", confidenceScore: 0, error };
+      console.error({ domain, error, rowNum });
+      return { name: "", confidenceScore: 0, error, rowNum };
     }
 
-    const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
-    const domainKey = domain.replace(".com", "").toLowerCase();
-    const cleanedGPT = gptNameRaw?.trim() || "";
-    const cleanedNameKey = cleanedGPT.replace(/\s+/g, "").toLowerCase();
-
-    // Early validation of GPT name
-    const wordCount = cleanedGPT.split(" ").length;
-    if (wordCount > 4) {
-      console.log(`📛 GPT name "${cleanedGPT}" has too many words (${wordCount}) — fallback triggered`);
-      const fallback = humanizeName(cleanedGPT, domain);
-      const fallbackResult = {
-        name: fallback.name,
-        confidenceScore: fallback.confidenceScore,
-        flags: fallback.flags,
-        modelUsed: model,
-        reason: "GPT name has too many words, used fallback"
-      };
-
-      domainCache.set(domain, fallbackResult);
-      if (fallbackResult.confidenceScore < 80 || fallbackResult.flags.length > 0) {
-        manualReviewQueue.push({
-          domain,
-          name: fallbackResult.name,
-          confidenceScore: fallbackResult.confidenceScore,
-          reason: fallbackResult.flags.join(", ") || "Low confidence"
-        });
-      }
-      return fallbackResult;
-    }
-
-    // Check for multiple cities
-    const gptWords = cleanedGPT.toLowerCase().split(" ");
-    const cityCount = gptWords.filter(word => topCitiesNormalized.includes(word)).length;
-    if (cityCount >= 3) {
-      console.log(`📛 GPT name "${cleanedGPT}" has too many cities (${cityCount}) — fallback triggered`);
-      const fallback = humanizeName(cleanedGPT, domain);
-      const fallbackResult = {
-        name: fallback.name,
-        confidenceScore: fallback.confidenceScore,
-        flags: [...fallback.flags, "MultipleCities"],
-        modelUsed: model,
-        reason: "GPT name has too many cities, used fallback"
-      };
-
-      domainCache.set(domain, fallbackResult);
-      manualReviewQueue.push({
-        domain,
-        name: fallbackResult.name,
-        confidenceScore: fallbackResult.confidenceScore,
-        reason: fallbackResult.flags.join(", ") || "Low confidence"
-      });
-      return fallbackResult;
-    }
-
-    // Check for brand mismatch
-    const domainWords = splitDomainIntoWords(domain).map(word => word.toLowerCase());
-    const expectedBrand = domainWords.find(word => [
-      "chevrolet", "gmc", "cadillac", "buick", "ford", "lincoln", "chrysler",
-      "dodge", "jeep", "ram", "tesla", "rivian", "lucid", "honda", "nissan",
-      "hyundai", "kia", "bmw", "mercedes", "benz", "subaru", "toyota", "vw",
-      "lexus", "infiniti"
-    ].includes(word));
-    if (expectedBrand && !gptWords.includes(expectedBrand)) {
-      console.log(`📛 GPT name "${cleanedGPT}" missing expected brand "${expectedBrand}" — fallback triggered`);
-      const fallback = humanizeName(cleanedGPT, domain);
-      const fallbackResult = {
-        name: fallback.name,
-        confidenceScore: fallback.confidenceScore,
-        flags: [...fallback.flags, "BrandMismatch"],
-        modelUsed: model,
-        reason: "GPT name missing expected brand, used fallback"
-      };
-
-      domainCache.set(domain, fallbackResult);
-      manualReviewQueue.push({
-        domain,
-        name: fallbackResult.name,
-        confidenceScore: fallbackResult.confidenceScore,
-        reason: fallbackResult.flags.join(", ") || "Low confidence"
-      });
-      return fallbackResult;
-    }
-
-    // If GPT name passes initial checks, humanize it to compute confidence and flags
-    const cleaned = humanizeName(cleanedGPT, domain);
+    const cleaned = humanizeName(gptNameRaw || domain, domain);
     const finalResult = {
       name: cleaned.name,
       confidenceScore: cleaned.confidenceScore,
       flags: cleaned.flags,
-      modelUsed: model,
-      reason: cleaned.confidenceScore < 80 ? "Low confidence (GPT name + humanization)" : null
+      reason: cleaned.confidenceScore < 80 ? "Low confidence" : null,
+      rowNum
     };
-
-    // If the GPT name is valid (high confidence, no flags), use it directly
-    if (finalResult.confidenceScore >= 80 && finalResult.flags.length === 0) {
-      finalResult.name = applyMinimalFormatting(cleanedGPT);
-      finalResult.reason = "GPT name used directly (high confidence)";
-    }
-
-    if (finalResult.name && finalResult.name.toLowerCase().replace(/\s+/g, "") !== domainKey) {
-      domainCache.set(domain, finalResult);
-    }
 
     if (finalResult.confidenceScore < 80 || finalResult.flags.length > 0) {
       manualReviewQueue.push({
         domain,
         name: finalResult.name,
         confidenceScore: finalResult.confidenceScore,
-        reason: finalResult.flags.join(", ") || "Low confidence"
+        reason: finalResult.flags.join(", ") || "Low confidence",
+        rowNum
       });
     }
 
-    console.log(`✅ Processed domain ${domain}: "${cleanedGPT}" → "${finalResult.name}" (Score: ${finalResult.confidenceScore})`);
+    domainCache.set(domain, { name: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags });
+    console.log({ domain, name: finalResult.name, score: finalResult.confidenceScore, flags: finalResult.flags, error: null });
     return finalResult;
   };
 
   const enrichFranchiseGroup = async (lead) => {
-    const { email, domain } = lead;
-    if (!email || !domain) {
-      console.error("Missing email or domain for lead:", lead);
-      return { franchiseGroup: "", confidenceScore: 0, buyerScore: 0, referenceClient: "", error: "Missing email or domain" };
-    }
+    const { email, domain, rowNum } = lead;
+    if (!email || !domain) return { franchiseGroup: "", confidenceScore: 0, error: "Missing email or domain", rowNum };
 
-    const prompt = `
-Enrich this lead based on:
-- Email: ${email}
-- Domain: ${domain}
-Identify the primary brand (e.g., "Toyota", "Ford") associated with the dealership, which should be the first brand mentioned in the dealership's name, tagline, brand story, or marketing materials as of April 2025.
-Return only: {"franchiseGroup": "X", "confidenceScore": 0-100, "buyerScore": 0-100, "referenceClient": "Name"}
-    `.trim();
-
+    const prompt = `Enrich lead: Email: ${email}, Domain: ${domain}. Identify the primary brand as of April 2025. Return: {"franchiseGroup": "X", "confidenceScore": 0-100}`;
     const { result, error, tokens } = await limit(() => callOpenAI(prompt));
     totalTokens += tokens;
 
-    if (error) {
-      console.error(`❌ OpenAI error for ${email}: ${error}`);
-      return { franchiseGroup: "", confidenceScore: 0, buyerScore: 0, referenceClient: "", error };
-    }
-
-    const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
-    const parsed = extractJsonSafely(result, ["franchiseGroup", "confidenceScore", "buyerScore", "referenceClient"]);
-    if (!parsed) {
-      console.error(`Invalid GPT response for email ${email}: ${result}`);
-      return { franchiseGroup: "", confidenceScore: 0, buyerScore: 0, referenceClient: "", error: `Invalid GPT response: ${result}` };
-    }
-
-    // Validate that franchiseGroup contains only a single brand
-    let finalFranchiseGroup = parsed.franchiseGroup || "";
-    if (finalFranchiseGroup && finalFranchiseGroup.includes(",")) {
-      console.log(`📛 Multiple brands detected in "${finalFranchiseGroup}" — selecting first brand`);
-      finalFranchiseGroup = finalFranchiseGroup.split(",")[0].trim();
-    }
-
+    if (error) return { franchiseGroup: "", confidenceScore: 0, error, rowNum };
+    const parsed = extractJsonSafely(result, ["franchiseGroup", "confidenceScore"]) || {};
+    const finalFranchiseGroup = parsed.franchiseGroup?.split(",")[0]?.trim() || "";
     const finalResult = {
       franchiseGroup: applyMinimalFormatting(finalFranchiseGroup),
       confidenceScore: parsed.confidenceScore || 0,
-      buyerScore: parsed.buyerScore || 0,
-      referenceClient: parsed.referenceClient || "",
-      modelUsed: model,
-      reason: parsed.confidenceScore < 80 ? "Low confidence" : null
+      reason: parsed.confidenceScore < 80 ? "Low confidence" : null,
+      rowNum
     };
 
     if (finalResult.confidenceScore < 80) {
@@ -784,45 +610,34 @@ Return only: {"franchiseGroup": "X", "confidenceScore": 0-100, "buyerScore": 0-1
         domain,
         franchiseGroup: finalResult.franchiseGroup,
         confidenceScore: finalResult.confidenceScore,
-        reason: "Low confidence"
+        reason: "Low confidence",
+        rowNum
       });
     }
 
-    console.log(`✅ Processed email ${email}: Franchise Group: "${finalResult.franchiseGroup}" (Score: ${finalResult.confidenceScore})`);
+    console.log({ domain, email, franchiseGroup: finalResult.franchiseGroup, score: finalResult.confidenceScore, error: null });
     return finalResult;
   };
 
-  const extractJsonSafely = (data, fields = []) => {
-    let parsed = data;
-    if (typeof data === "string") {
-      try {
-        parsed = JSON.parse(data);
-      } catch {
-        const match = data.match(/\{[^}]+\}/);
-        if (match) {
-          try {
-            parsed = JSON.parse(match[0]);
-          } catch {}
-        }
-      }
+  const extractJsonSafely = (data, fields) => {
+    try {
+      const parsed = typeof data === "string" ? JSON.parse(data) : data;
+      return fields.every(f => f in parsed && parsed[f] !== undefined) ? parsed : null;
+    } catch (e) {
+      console.error("JSON parsing error:", e.message, "Data:", data?.slice(0, 100));
+      return null;
     }
-
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const missing = fields.filter(f => !(f in parsed));
-      return missing.length === 0 ? parsed : null;
-    }
-    return null;
   };
 
-  const BATCH_SIZE = 3; // Align with Google Apps Script menu specification
-  const leadChunks = Array.from(
-    { length: Math.ceil(leads.length / BATCH_SIZE) },
-    (_, i) => leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+  const BATCH_SIZE = 2; // Reduced from 3 to help with timeout issues
+  const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
+    leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
   );
 
   for (const chunk of leadChunks) {
-    if (Date.now() - startTime > 10000) {
-      console.warn("⏳ Timeout guard hit. Returning early to avoid Vercel kill.");
+    const chunkStartTime = Date.now();
+    if (chunkStartTime - startTime > 9000) {
+      console.warn({ message: "Timeout guard hit", duration: chunkStartTime - startTime, partial: true });
       return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
     }
 
@@ -834,28 +649,32 @@ Return only: {"franchiseGroup": "X", "confidenceScore": 0-100, "buyerScore": 0-1
               ? await cleanCompanyName(lead)
               : await enrichFranchiseGroup(lead);
           } catch (err) {
-            console.error("Error processing lead:", lead, err.message);
+            console.error({ domain: lead.domain || lead.email, error: err.message, rowNum: lead.rowNum });
             return lead.domain && !lead.email
-              ? { name: "", confidenceScore: 0, error: err.message }
-              : { franchiseGroup: "", confidenceScore: 0, buyerScore: 0, referenceClient: "", error: err.message };
+              ? { name: "", confidenceScore: 0, error: err.message, rowNum: lead.rowNum }
+              : { franchiseGroup: "", confidenceScore: 0, error: err.message, rowNum: lead.rowNum };
           }
         })
       )
     );
     results.push(...chunkResults);
+
+    if (Date.now() - startTime > 9000) {
+      console.warn({ message: "Chunk processing exceeded 9s", duration: Date.now() - startTime, partial: true });
+      return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
+    }
   }
 
-  console.log("Returning results:", results);
-  console.log(`Request completed in ${Date.now() - startTime}ms at`, new Date().toISOString());
+  console.log({ message: "Returning results", results: results.map(r => ({ domain: r.domain, name: r.name, score: r.confidenceScore, flags: r.flags })) });
+  console.log({ message: "Request completed", duration: Date.now() - startTime, tokens: totalTokens });
   return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: false });
 };
 
 export const config = {
-  api: {
-    bodyParser: false
-  }
+  api: { bodyParser: false }
 };
 
+// Unit tests (unchanged)
 function runUnitTests() {
   const tests = [
     {
@@ -934,6 +753,3 @@ function runUnitTests() {
   });
   console.log(`Unit tests completed: ${passed}/${tests.length} passed`);
 }
-
-// Note: Unit tests are not run automatically in production to prevent crashes.
-// To run tests, execute `runUnitTests()` in a development environment or CI/CD pipeline.
