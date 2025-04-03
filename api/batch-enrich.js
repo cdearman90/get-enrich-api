@@ -128,50 +128,23 @@ export default async function handler(req, res) {
   const humanizeName = (name, domain) => {
     if (!name || typeof name !== "string") return "";
 
-    const originalName = name;
-    let words = name.toLowerCase().trim().split(/\s+/);
+    // Strip any quotation marks from the input
+    let result = name.replace(/^"|"$/g, '');
+
+    let words = result.toLowerCase().trim().split(/\s+/);
     if (words[0] === "the") words.shift();
-
-    const cityNames = ["jacksonville", "birmingham", "greenwich", "atlanta", "chicago", "washington", "madison", "brooklyn", "wakefield", "gwinnett", "caldwell", "lakeland", "henderson", "southtowne", "new york", "usa", "miami", "lakes"];
-    const ofIndex = words.indexOf("of");
-    if (ofIndex !== -1 && ofIndex < words.length - 1) {
-      const nextWord = words[ofIndex + 1];
-      if (cityNames.includes(nextWord)) {
-        words = [nextWord, ...words.slice(0, ofIndex), ...words.slice(ofIndex + 2)];
-      } else {
-        words = [...words.slice(0, ofIndex), ...words.slice(ofIndex + 1)];
-      }
-    }
-
-    words = words.filter(word => !cityNames.includes(word));
 
     const brands = ["ford", "chevy", "toyota", "honda", "nissan", "hyundai", "kia", "bmw", "mercedes", "benz", "subaru", "jeep", "dodge", "ram", "chrysler", "vw", "lexus", "cadillac", "infiniti"];
     const hasBrand = words.some(word => brands.includes(word));
     const brand = hasBrand ? words.find(word => brands.includes(word)) : null;
-    let baseName = hasBrand ? words.filter(word => !brands.includes(word)) : words;
+    let finalName = words;
 
     const fillers = ["motors", "llc", "inc", "enterprise", "group", "dealership", "team"];
-    baseName = baseName.filter(word => !fillers.includes(word));
+    finalName = finalName.filter(word => !fillers.includes(word));
 
-    baseName = baseName.map(word => word.replace(/^-/, ""));
+    finalName = finalName.map(word => word.replace(/^-/, ""));
 
-    const wellKnownNames = ["pat milliken", "tommy nix", "elway", "kossi honda", "sarant cadillac", "penske auto", "tuttle-click", "lifted trucks", "union park", "malouf auto", "tasca auto", "suntrup auto", "jt auto"];
-    let finalName = baseName;
-    if (hasBrand) {
-      if (baseName.length > 0 && !wellKnownNames.some(wn => baseName.join(" ").toLowerCase() === wn)) {
-        finalName = [...baseName, brand];
-      } else if (wellKnownNames.some(wn => baseName.join(" ").toLowerCase() === wn)) {
-        finalName = baseName;
-      }
-    }
-
-    // Specific rule for "Lifted Trucks"
-    if (finalName.join(" ").toLowerCase() === "lifted trucks") {
-      finalName.push("auto");
-    }
-
-    const finalHasBrand = finalName.some(word => brands.includes(word));
-    const isJustBrand = finalHasBrand && finalName.length === 1;
+    const isJustBrand = hasBrand && finalName.length === 1;
     if (isJustBrand) {
       console.warn(`Name is just a brand: ${finalName.join(" ")}`);
       finalName = [brand, "of", domain.split(".")[0]];
@@ -179,10 +152,7 @@ export default async function handler(req, res) {
 
     const commonWords = ["pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto", "hills", "birmingham", "mercedes", "benz", "elway", "kossi", "sarant", "tommy", "nix"];
     const hasAbbreviation = finalName.some(word => (/^[A-Z]{2,4}$/.test(word) || /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) || /^[A-Z][a-z]{1,2}$/.test(word)) && !commonWords.includes(word) && !brands.includes(word));
-    let result = finalName.join(" ").replace(/\s+/g, " ").trim();
-
-    // Strip any quotation marks from the final result
-    result = result.replace(/^"|"$/g, '');
+    result = finalName.join(" ").replace(/\s+/g, " ").trim();
 
     let titleCased = result
       .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1))
@@ -204,113 +174,109 @@ export default async function handler(req, res) {
     }
 
     const prompt = `
-Given the dealership domain "${domain}" sourced from an email list, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach, based on your knowledge of the dealership's domain, logo, and homepage meta title as of April 2025. Consider all factors equally to make the best decision. All names should sound natural like a dealer insider casually speaking to another dealer insider in a casual conversation.
+Given the dealership domain "${domain}" sourced from an email list, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach, based on your knowledge of the dealership's domain, logo, and homepage meta title as of April 2025. Consider the domain, logo, and homepage meta title equally to formulate the most natural name, as if a dealer is casually speaking to another dealer in a conversation.
 
 The name must fit seamlessly in cold email copy like:
 - "{{CompanyName}}’s CRM isn’t broken — it’s bleeding."
 - "Want me to run {{CompanyName}}’s CRM numbers?"
 - "$450K may be hiding in {{CompanyName}}’s CRM."
-Ensure the name is singular to work naturally with the possessive form (e.g., "Duval Ford’s").
+Ensure the name is singular to work naturally with the possessive form (e.g., Duval Ford’s, Pat Milliken’s).
 
 ### Do's:
-- Include a dealership-specific identifier (e.g., a city, state, person’s last name, or unique name) with the brand when possible, like "Duval Ford", "Athens Ford", "Chastang Ford", "Mercedes-Benz Caldwell", "BMW West Springfield".
-- Use well-known dealership names without a brand if they are recognizable, like "Pat Milliken", "Tuttle-Click", "Penske Auto".
-- Include "Auto" if it helps it sound more natural or if no strong brand is present
+- Generate a name that sounds natural and conversational, as if one dealer is speaking to another.
+- Decompress the domain name by separating compressed words using common US first and last names, known car brand names (e.g., Ford, Chevy, Toyota, GMC, Kia), and US city names or geographic regions.
+- Include a dealership-specific identifier (e.g., a city, state, person’s last name, or unique name) when it makes sense and sounds natural, like Duval Ford, Athens Ford, Chastang Ford, Mercedes-Benz Caldwell, BMW West Springfield.
+- Use well-known dealership names if they are recognizable, like Pat Milliken, Tuttle-Click, Penske Auto, Union Park, Malouf Auto, Tasca Auto, Suntrup Auto, JT Auto.
+- Include "Auto" if it makes the name sound more natural and the name lacks a brand, e.g., Fletcher Auto, or if it’s part of the dealership’s identity, e.g., Lifted Trucks Auto.
 - Always use "auto" instead of "automotive", only where applicable.
-- Ensure proper spacing and capitalization, like "San Leandro Ford" instead of "sanleandroford".
+- Ensure proper spacing and capitalization, like San Leandro Ford instead of sanleandroford.
 
 ### Don'ts:
-- Do not return just the car brand, like "Ford", "Chevrolet", "Toyota".
-- Do not return a car brand name like "Toyota" or "Lexus" with only 1 generic term like "Team", "Dealership", "Auto", or "Group", such as "Team Ford", "Ford Dealership", "Chevrolet Auto". 
-- Do not start the name with "Of", like "Of Greenwich" (should be "Greenwich Toyota").
-- Never capitalize the first letter of transition words like "Of" or "To".
-- Never capitalize an S after an apostrophe (e.g. Jane'S Auto Group).
-- Avoid using all capital letters in a word, unless it's initials like "JT" or "MB", or car brands like "BMW" or "RAM." Use your best judgement to identify the exceptions.
-- Avoid using one word names or names with more than 4 more words, unless you think it is appropriate for the use case. 
-- Never use 5 words in one name under any circumstances
+- Do not return just the car brand, like Ford, Chevrolet, Toyota.
+- Do not start the name with "of", like of Greenwich (should be Greenwich Toyota).
+- Never capitalize the first letter of transition words like "of" or "to".
+- Never capitalize an S after an apostrophe, e.g., Jane'S Auto Group.
+- Avoid using all capital letters in a word, unless it's initials like JT or MB, or car brands like BMW or RAM. Use your best judgment to identify the exceptions.
+- Avoid using one-word names or names with more than 4 words, unless you think it is appropriate for the use case.
+- Never use 5 words in one name under any circumstances.
+- Do not include city names, person names, or marketing phrases, e.g., Jacksonville’s Best Dealership, Stuart, unless they are essential to the dealership’s identity, e.g., Miami Lakes Auto Mall.
+- Do not include .com, www, dealer, autos, group, inc, llc, hyphens, URLs, symbols, or words like Website, Home, Welcome.
+
+### Example Inputs and Outputs:
+Input: Domain: duvalford.com
+Output: Duval Ford
+
+Input: Domain: patmillikenford.com
+Output: Pat Milliken
+
+Input: Domain: sanleandroford.com
+Output: San Leandro Ford
+
+Input: Domain: miamilakesautomall.com
+Output: Miami Lakes Auto Mall
 
 ### Examples of Acceptable Names:
-- "Duval Ford"
-- "Athens Ford"
-- "Pat Milliken"
-- "Mercedes-Benz Henderson"
-- "Suntrip Lexus"
-- "Chastang Ford"
-- "Bentley Auto Group"
-- "Malouf Auto"
-- "Union Park"
-- "Lifted Trucks Auto's"
-- "Huntsville BMW"
-- "Lucky Chevrolet"
-- "Petrus Ford"
-- "Hawthorne RAM"
-- "Davis Chevrolet"
-- "Tasca Auto"
-- "Bulldog Kia"
-- "BMW West Springfield"
-- "Capital Honda"
-- "Penske Auto"
-- "Bentley Auto"
-- "Ventura Toyota"
-- "Mercedes-Benz Brooklyn"
-- "Lexus Chattanooga"
-- "Suntrup Auto"
-- "Ford Dalton"
-- "Russell Barnett Auto"
-- "Aiken Honda"
-- "American Chevrolet"
-- "Andy Mohr Auto"
-- "Piazza Nissan"
-- "Al Hendrickson"
-- "Champion Ford"
-- "Gerald Auto"
-- "Haley Auto"
-- "Mercedes-Benz Stockton"
-- "Doug Reh Chevrolet"
-- "Chuck Fairbanks"
-- "The Premier Collection"
-- "Pinehurst Kia"
-- "Northpoint Lincoln"
-- "Route 128 Honda"
-- "MB USA"
-- "JT Auto"
-- "Mercedes-Benz Caldwell"
-- "Lakeland Toyota"
-- "Karl Chevrolet"
-- "Camino Real Chevrolet"
+- Duval Ford
+- Athens Ford
+- Pat Milliken
+- Town And Country Ford
+- Team Ford
+- San Leandro Ford
+- Gus Machado Ford
+- Don Hinds Ford
+- Union Park Auto
+- Jack Powell Auto
+- Malouf Auto
+- Preston Motor
+- Bill Dube Auto
+- Golf Mill Ford
+- Demontond Chevrolet
+- Carl Black Auto
+- Richmond Ford
+- Tasca Auto
+- Bentley Auto
+- Avis Ford
+- Rod Baker Ford
+- Karl Chevrolet
+- Davis Chevrolet
+- GY Chevrolet
+- Miami Lakes Auto Mall
+- Potamkin Hyundai
+- McCarthy Auto Group
+- Dyer Auto
+- Ted Britt Auto
+- Anderson Auto
+- Smith Auto
+- Johnson Chevrolet
+- Brown Toyota
 
 ### Examples of Unacceptable Names (and Fixes):
-- "Ford" → Ford Atlanta
-- "Gy" → GY Chevrolet
-- "Ford of Teamford → "Team Ford"
-- "Sanleandroford" → San Leandro Ford
-- "Kia of Auburn" → Auburn Kia
-- "Pat Milliken Of Patmillikenford" → Pat Milliken
-- "Nissan of Athens" → Athens Nissan
-- "Mazda of South Charolotte" → Mazda SC
-- "Mercedes-Benz of Mbbhm" → Mercedes-Benz Birmingham
-- "Mercedes-Benz of Mb Usa" → MB USA
-- "Cadillac of Las Vegas" → Vegas Cadillac 
+- Ford → Ford Atlanta
+- Gy → GY Chevrolet
+- Sanleandroford → San Leandro Ford
+- Kia of Auburn → Auburn Kia
+- Pat Milliken of Patmillikenford → Pat Milliken
+- Nissan of Athens → Athens Nissan
+- Mazda of South Charolotte → Mazda SC
+- Mercedes-Benz of Mbbhm → Mercedes-Benz Birmingham
+- Mercedes-Benz of Mb Usa → MB USA
+- Cadillac of Las Vegas → Vegas Cadillac
+- Karl Chevrolet Stuart → Karl Chevrolet
 
 ### Formatting Guidelines:
-- Include a dealership-specific identifier (e.g., a city, state, person’s last name, or unique name) with the brand when possible, like "Duval Ford", "Athens Ford", "Chastang Ford", "Mercedes-Benz Caldwell", "BMW West Springfield". Never try to force it if it doesn't sound natural.
-- Expand all abbreviations to their full form (e.g., "EH" → "East Hills", "CHMB" → "Chapman Mercedes-Benz", "G Y" → "GY Chevy", "Np" → "North Point", "Rt" → "Route"). If an abbreviation cannot be expanded with certainty, append a known brand associated with the dealership (e.g., "CZAG" → "CZAG Ford" if it’s a Ford dealership) or "Auto" (e.g., "CZAG" → "CZAG Auto") to ensure clarity. Do not return a name with unexpanded abbreviations like "CZAG" without a brand or "Auto".
-- Use well-known dealership names without a brand if they are recognizable, like "Pat Milliken", "Tuttle-Click", "Penske Auto".
-- Avoid including slogans, taglines, city names, or marketing phrases (e.g., "Jacksonville’s Best Dealership") unless essential to the dealership’s identity (e.g., "Metro of Madison"). 
-- Include "Auto" if it makes the name sound more natural and the name lacks a brand (e.g., "Fletcher Auto") or something else relevant that flows smooth like a dealer would say to another dealer
-- Avoid other filler words like, "LLC", "Inc", "Enterprise", "Group", or "Team" unless essential to the dealership’s identity. 
-- Ensure proper spacing and capitalization, like "San Leandro Ford" instead of "sanleandroford".
-- If the first two words end with an s  (e.g., "Crossroads Cars"), either change the second word to Auto or something similar that would flow smooth in a cold email in a possessive format. For example, “Crossroads Cars” could be changed to “Crossroad Cars” or “Crossroads Auto” so it works better in a possessive form in a cold email (e.g. Crossroad Cars CRM isn’t broken—it’s bleeding). If it doesn’t make sense like this, use your best judgement to alter it or flag it and move to the next row if you’re extremely unsure.
-- The final name must sound 100% natural when spoken aloud, like something you’d say to a dealer over the phone. Avoid formatting errors (e.g., no "-benz" or starting with "Of" or dashes unless it’s separating two words).
-- Only use letters/words in a name. The only exception is when your using a dash to separate two words (e.g.mercedes-benz) 
-- Ensure proper spacing and capitalization, like "San Leandro Ford" instead of "sanleandroford”.
-- Always use all capital letters for car brand names like “BMW” or “RAM”. 
+- Expand all abbreviations to their full form, e.g., EH → East Hills, CHMB → Chapman Mercedes-Benz, G Y → GY Chevy, Np → North Point, Rt → Route. If an abbreviation cannot be expanded with certainty, append a known brand associated with the dealership, e.g., CZAG → CZAG Ford if it’s a Ford dealership, or Auto, e.g., CZAG → CZAG Auto, to ensure clarity. Do not return a name with unexpanded abbreviations like CZAG without a brand or Auto.
+- Avoid including slogans, taglines, or marketing phrases, e.g., Jacksonville’s Best Dealership, unless essential to the dealership’s identity, e.g., Metro of Madison.
+- Avoid filler words like LLC, Inc, Enterprise, Group, or Team unless essential to the dealership’s identity.
+- Ensure proper spacing and capitalization, like San Leandro Ford instead of sanleandroford.
+- If the first two words end with an s, e.g., Crossroads Cars, either change the second word to Auto or something similar that would flow smoothly in a cold email in a possessive format. For example, Crossroads Cars could be changed to Crossroad Cars or Crossroads Auto so it works better in a possessive form in a cold email, e.g., Crossroad Cars CRM isn’t broken—it’s bleeding. If it doesn’t make sense like this, use your best judgment to alter it or flag it and move to the next row if you’re extremely unsure.
+- The final name must sound 100% natural when spoken aloud, like something you’d say to a dealer over the phone. Avoid formatting errors, e.g., no "-benz" or starting with "of" or dashes unless it’s separating two words like mercedes-benz.
+- Only use letters/words in a name. The only exception is when using a dash to separate two words, e.g., mercedes-benz.
+- Always use all capital letters for car brand names like BMW or RAM.
 
 Only return the final dealership name with no quotes or punctuation.
 
-Use your best judgement to choose the most natural name to flow in our cold email examples. Don't hesitiate to flag something and skip it if you are extremely unsure.
-
-   `.trim();
+Use your best judgment to choose the most natural name to flow in our cold email examples. Don’t hesitate to flag something and skip it if you are extremely unsure.
+    `.trim();
 
     const result = await callOpenAI(prompt);
 
