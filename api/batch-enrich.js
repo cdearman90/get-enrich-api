@@ -778,4 +778,5 @@ function runUnitTests() {
   console.log(`Unit tests completed: ${passed}/${tests.length} passed`);
 }
 
-runUnitTests();
+// Note: Unit tests are not run automatically in production to prevent crashes.
+// To run tests, execute `runUnitTests()` in a development environment or CI/CD pipeline.
