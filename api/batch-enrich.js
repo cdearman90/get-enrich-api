@@ -5,7 +5,8 @@ export const config = {
 };
 
 export default async function handler(req, res) {
-  console.log("Received request to /api/batch-enrich");
+  const startTime = Date.now();
+  console.log("Received request to /api/batch-enrich at", new Date().toISOString());
 
   let leads;
 
@@ -256,5 +257,6 @@ Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Na
   }
 
   console.log("Returning results:", results);
+  console.log(`Request completed in ${Date.now() - startTime}ms at`, new Date().toISOString());
   return res.status(200).json({ results });
 }
