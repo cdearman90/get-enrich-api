@@ -119,14 +119,22 @@ export default async function handler(req, res) {
     // Step 1: Normalize and split
     let words = name.toLowerCase().trim().split(/\s+/);
 
-    // Step 2: Remove unwanted elements (e.g., city names)
+    // Step 2: Rephrase "Of" constructions
     const cityNames = ["jacksonville", "birmingham", "greenwich", "atlanta", "chicago", "washington", "madison", "brooklyn", "wakefield", "gwinnett"];
-    words = words.filter(word => !cityNames.includes(word));
-
-    // Step 3: Rephrase "Of" constructions
-    if (words[0] === "of" && words.length > 1) {
-      words = [...words.slice(1), words[0]]; // Move "Of" to end, will be filtered later if unnecessary
+    const ofIndex = words.indexOf("of");
+    if (ofIndex !== -1 && ofIndex < words.length - 1) {
+      const nextWord = words[ofIndex + 1];
+      if (cityNames.includes(nextWord)) {
+        // Rephrase: "Mercedes-Benz of Birmingham" → "Birmingham Mercedes-Benz"
+        words = [nextWord, ...words.slice(0, ofIndex), ...words.slice(ofIndex + 2)];
+      } else {
+        // Remove "Of" if not followed by a city name
+        words = [...words.slice(0, ofIndex), ...words.slice(ofIndex + 1)];
+      }
     }
+
+    // Step 3: Remove unwanted elements (e.g., city names)
+    words = words.filter(word => !cityNames.includes(word));
 
     // Step 4: Handle known brands
     const brands = ["ford", "chevy", "toyota", "honda", "nissan", "hyundai", "kia", "bmw", "mercedes", "benz", "subaru", "jeep", "dodge", "ram", "chrysler"];
@@ -165,7 +173,8 @@ export default async function handler(req, res) {
     finalName = finalName.slice(0, maxWords);
 
     // Step 10: Flag unexpanded abbreviations
-    const hasAbbreviation = finalName.some(word => /^[a-z]{1,4}$/.test(word) && !brands.includes(word));
+    const commonWords = ["pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto", "hills", "birmingham", "mercedes", "benz"];
+    const hasAbbreviation = finalName.some(word => /^[A-Z]{2,4}$/.test(word) || /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) && !commonWords.includes(word) && !brands.includes(word));
     const result = finalName.join(" ");
 
     // Step 11: Apply title case with specific fixes
@@ -220,7 +229,7 @@ Ensure the name is singular to work naturally with the possessive form (e.g., "F
 
 Formatting Guidelines:
 - Use the dealership's domain, logo text, and homepage meta title as references (based on your knowledge up to April 2025), considering all factors equally.
-- Expand all abbreviations to their full form (e.g., "EH" → "East Hills", "CHMB" → "Chapman Mercedes-Benz", "G Y" → "GY Chevy"). If an abbreviation cannot be expanded, include a brand or "Auto" to ensure clarity (e.g., "CHMB" → "CHMB Auto").
+- Expand all abbreviations to their full form (e.g., "EH" → "East Hills", "CHMB" → "Chapman Mercedes-Benz", "G Y" → " GY Chevy"). If an abbreviation cannot be expanded with certainty, append a known brand associated with the dealership (e.g., "CZAG" → "CZAG Ford" if it’s a Ford dealership) or "Auto" (e.g., "CZAG" → "CZAG Auto") to ensure clarity. Do not return a name with unexpanded abbreviations like "CZAG" without a brand or "Auto".
 - Avoid including slogans, taglines, city names, or marketing phrases (e.g., "Jacksonville’s Best Dealership") unless they are essential to the dealership’s identity (e.g., "Metro Of Madison" can keep "Of Madison" if part of the official name). Do not start the name with "Of" (e.g., "Of Greenwich" should be "Greenwich Toyota").
 - Include filler words like "Auto" if they make the name sound more natural in a cold email (e.g., "Fletcher Auto" instead of "Fletcher"), but avoid other filler words like "Motors", "LLC", "Inc", "Enterprise", "Group", or "Dealership" unless essential to the dealership’s identity (e.g., "Team Dealership" can keep "Dealership" if "Team" alone is too vague).
 - Keep a known brand (e.g., "Ford", "Chevy", "Toyota") in the name unless the dealership is well-known without it (e.g., "Pat Milliken Ford" can be "Pat Milliken", but "Duval Ford" should stay "Duval Ford"). If the name ends in a plural form (e.g., "Crossroads Cars"), use a singular form with "Auto" (e.g., "Crossroads Auto").
@@ -236,13 +245,23 @@ Only return the final dealership name with no quotes or punctuation.
       return { name: "", error: result.error };
     }
 
+    // Validate OpenAI result for unexpanded abbreviations
+    const commonWords = ["pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto", "hills", "birmingham", "mercedes", "benz"];
+    const brands = ["ford", "chevy", "toyota", "honda", "nissan", "hyundai", "kia", "bmw", "mercedes", "benz", "subaru", "jeep", "dodge", "ram", "chrysler"];
+    const words = result.toLowerCase().trim().split(/\s+/);
+    const hasUnexpanded = words.some(word => /^[A-Z]{2,4}$/.test(word) || /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) && !commonWords.includes(word) && !brands.includes(word));
+    if (hasUnexpanded) {
+      console.warn(`OpenAI failed to expand abbreviations for domain ${domain}: ${result}`);
+      return { name: `${result} Auto`, error: "OpenAI failed to expand abbreviations" };
+    }
+
     const cleanedName = humanizeName(result);
     if (!cleanedName) {
       console.error(`Failed to humanize name for domain ${domain}: ${result}`);
       return { name: "", error: `Failed to humanize name: ${result}` };
     }
 
-    console.log(`Original name: ${result} -> Cleaned name for domainIt ${domain}: ${cleanedName}`);
+    console.log(`Original name: ${result} -> Cleaned name for domain ${domain}: ${cleanedName}`);
     return { name: cleanedName, modelUsed: "gpt-4" };
   };
 
