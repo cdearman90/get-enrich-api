@@ -434,7 +434,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Missing OPENAI_API_KEY in environment variables" });
   }
 
-  const limit = pLimit(2); // Allow 2 concurrent OpenAI calls
+  const limit = pLimit(2);
   const manualReviewQueue = [];
   const results = [];
   let totalTokens = 0;
@@ -558,51 +558,21 @@ Return it in this format only:
     const cleanedGPT = gptNameRaw?.trim() || "";
     const cleanedNameKey = cleanedGPT.replace(/\s+/g, "").toLowerCase();
 
-    if (!cleanedGPT || cleanedNameKey === domainKey) {
-      console.log(`🧠 GPT name "${cleanedGPT}" matches domain "${domain}", falling back`);
-      const fallback = humanizeName(cleanedGPT, domain);
-      const fallbackResult = {
-        name: fallback.name,
-        confidenceScore: fallback.confidenceScore,
-        flags: fallback.flags,
-        modelUsed: model,
-        reason: "GPT name matches domain, used fallback humanization"
-      };
-
-      if (fallbackResult.name && fallbackResult.name.toLowerCase().replace(/\s+/g, "") !== domainKey) {
-        domainCache.set(domain, fallbackResult);
-      }
-
-      if (fallbackResult.confidenceScore < 70 || fallbackResult.flags.length > 0) {
-        manualReviewQueue.push({
-          domain,
-          name: fallbackResult.name,
-          confidenceScore: fallbackResult.confidenceScore,
-          reason: fallbackResult.flags.join(", ") || "Low confidence"
-        });
-      }
-
-      return fallbackResult;
-    }
-
+    // Early validation of GPT name
     const wordCount = cleanedGPT.split(" ").length;
-    if (
-      wordCount > 4 ||
-      cleanedGPT.toLowerCase().includes("group") ||
-      cleanedGPT.toLowerCase().startsWith("of ")
-    ) {
-      console.log(`📛 GPT name "${cleanedGPT}" is structurally invalid — fallback triggered`);
+    if (wordCount > 4) {
+      console.log(`📛 GPT name "${cleanedGPT}" has too many words (${wordCount}) — fallback triggered`);
       const fallback = humanizeName(cleanedGPT, domain);
       const fallbackResult = {
         name: fallback.name,
         confidenceScore: fallback.confidenceScore,
         flags: fallback.flags,
         modelUsed: model,
-        reason: "GPT name structurally invalid, used fallback"
+        reason: "GPT name has too many words, used fallback"
       };
 
       domainCache.set(domain, fallbackResult);
-      if (fallbackResult.confidenceScore < 70 || fallbackResult.flags.length > 0) {
+      if (fallbackResult.confidenceScore < 80 || fallbackResult.flags.length > 0) {
         manualReviewQueue.push({
           domain,
           name: fallbackResult.name,
@@ -610,24 +580,84 @@ Return it in this format only:
           reason: fallbackResult.flags.join(", ") || "Low confidence"
         });
       }
-
       return fallbackResult;
     }
 
+    // Check for multiple cities
+    const knownCities = topCitiesNormalized;
+    const gptWords = cleanedGPT.toLowerCase().split(" ");
+    const cityCount = gptWords.filter(word => knownCities.includes(word)).length;
+    if (cityCount >= 3) {
+      console.log(`📛 GPT name "${cleanedGPT}" has too many cities (${cityCount}) — fallback triggered`);
+      const fallback = humanizeName(cleanedGPT, domain);
+      const fallbackResult = {
+        name: fallback.name,
+        confidenceScore: fallback.confidenceScore,
+        flags: [...fallback.flags, "MultipleCities"],
+        modelUsed: model,
+        reason: "GPT name has too many cities, used fallback"
+      };
+
+      domainCache.set(domain, fallbackResult);
+      manualReviewQueue.push({
+        domain,
+        name: fallbackResult.name,
+        confidenceScore: fallbackResult.confidenceScore,
+        reason: fallbackResult.flags.join(", ") || "Low confidence"
+      });
+      return fallbackResult;
+    }
+
+    // Check for brand mismatch
+    const domainWords = splitDomainIntoWords(domain).map(word => word.toLowerCase());
+    const expectedBrand = domainWords.find(word => [
+      "chevrolet", "gmc", "cadillac", "buick", "ford", "lincoln", "chrysler",
+      "dodge", "jeep", "ram", "tesla", "rivian", "lucid", "honda", "nissan",
+      "hyundai", "kia", "bmw", "mercedes", "benz", "subaru", "toyota", "vw",
+      "lexus", "infiniti"
+    ].includes(word));
+    if (expectedBrand && !gptWords.includes(expectedBrand)) {
+      console.log(`📛 GPT name "${cleanedGPT}" missing expected brand "${expectedBrand}" — fallback triggered`);
+      const fallback = humanizeName(cleanedGPT, domain);
+      const fallbackResult = {
+        name: fallback.name,
+        confidenceScore: fallback.confidenceScore,
+        flags: [...fallback.flags, "BrandMismatch"],
+        modelUsed: model,
+        reason: "GPT name missing expected brand, used fallback"
+      };
+
+      domainCache.set(domain, fallbackResult);
+      manualReviewQueue.push({
+        domain,
+        name: fallbackResult.name,
+        confidenceScore: fallbackResult.confidenceScore,
+        reason: fallbackResult.flags.join(", ") || "Low confidence"
+      });
+      return fallbackResult;
+    }
+
+    // If GPT name passes initial checks, humanize it to compute confidence and flags
     const cleaned = humanizeName(cleanedGPT, domain);
     const finalResult = {
       name: cleaned.name,
       confidenceScore: cleaned.confidenceScore,
       flags: cleaned.flags,
       modelUsed: model,
-      reason: cleaned.confidenceScore < 70 ? "Low confidence (GPT name + humanization)" : null
+      reason: cleaned.confidenceScore < 80 ? "Low confidence (GPT name + humanization)" : null
     };
+
+    // If the GPT name is valid (high confidence, no flags), use it directly
+    if (finalResult.confidenceScore >= 80 && finalResult.flags.length === 0) {
+      finalResult.name = applyMinimalFormatting(cleanedGPT);
+      finalResult.reason = "GPT name used directly (high confidence)";
+    }
 
     if (finalResult.name && finalResult.name.toLowerCase().replace(/\s+/g, "") !== domainKey) {
       domainCache.set(domain, finalResult);
     }
 
-    if (finalResult.confidenceScore < 70 || finalResult.flags.length > 0) {
+    if (finalResult.confidenceScore < 80 || finalResult.flags.length > 0) {
       manualReviewQueue.push({
         domain,
         name: finalResult.name,
