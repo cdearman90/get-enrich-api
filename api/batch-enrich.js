@@ -240,21 +240,25 @@ const decompressDomain = (words, domain) => {
 };
 
 const correctTypos = (words) => {
-  const cache = new Map(); // Per-call cache for this function
+  const cache = new Map();
+  const brands = [
+    "chevrolet", "gmc", "cadillac", "buick", "ford", "lincoln", "chrysler", "dodge",
+    "jeep", "ram", "tesla", "rivian", "lucid", "honda", "nissan", "hyundai", "kia",
+    "bmw", "mercedes", "benz", "subaru", "toyota", "vw", "lexus", "infiniti"
+  ];
+
   return words.map(word => {
-    const normalizedWord = word.toLowerCase().replace(/\s+/g, '');
+    const normalized = word.toLowerCase().replace(/\s+/g, '');
+    if (brands.includes(normalized)) return word;
+
     const closestMatch = topCitiesNormalized.reduce((best, city) => {
-      const distance = levenshteinDistance(normalizedWord, city, cache);
-      if (distance < best.distance && distance <= 3) {
-        return { city, distance };
-      }
-      return best;
+      const dist = levenshteinDistance(normalized, city, cache);
+      return (dist < best.distance && dist <= 2)
+        ? { city, distance: dist }
+        : best;
     }, { city: null, distance: Infinity });
 
-    if (closestMatch.city) {
-      return cityDisplayNames[closestMatch.city];
-    }
-    return word;
+    return closestMatch.city ? cityDisplayNames[closestMatch.city] : word;
   });
 };
 
@@ -329,18 +333,36 @@ const removeUnnecessaryAuto = (words) => {
 
 const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation) => {
   let score = 0;
-  const domainWords = splitDomainIntoWords(domain).map(word => word.toLowerCase());
-  const nameWords = words.map(word => word.toLowerCase());
-  const hasDomainMatch = nameWords.some(word => domainWords.includes(word) && word.length > 3);
-  score += hasDomainMatch ? 40 : 0;
+  const domainWords = splitDomainIntoWords(domain).map(w => w.toLowerCase());
+  const nameWords = words.map(w => w.toLowerCase());
+
+  let hasDomainMatch = false;
+  let partialMatchScore = 0;
+
+  for (const nameWord of nameWords) {
+    for (const domainWord of domainWords) {
+      if (nameWord === domainWord && nameWord.length > 3) {
+        hasDomainMatch = true;
+        break;
+      }
+      if (domainWord.includes(nameWord) && nameWord.length > 3) {
+        partialMatchScore = Math.max(partialMatchScore, 20); // Partial match
+      }
+    }
+    if (hasDomainMatch) break;
+  }
+
+  score += hasDomainMatch ? 40 : partialMatchScore;
   score += hasBrand ? 30 : 0;
   score += hasAbbreviation ? 0 : 20;
+
   const wellKnownNames = [
-    "pat milliken", "tuttle click", "penske auto", "union park", "malouf auto",
-    "tasca auto", "suntrup auto", "jt auto"
+    "pat milliken", "tuttle click", "penske auto", "union park",
+    "malouf auto", "tasca auto", "suntrup auto", "jt auto"
   ];
-  const nameStr = words.join(" ").toLowerCase();
+  const nameStr = nameWords.join(" ");
   score += wellKnownNames.includes(nameStr) ? 10 : 0;
+
   return score;
 };
 
