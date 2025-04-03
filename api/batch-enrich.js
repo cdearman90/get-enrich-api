@@ -115,7 +115,7 @@ const cityDisplayNames = {
   "spokane": "Spokane", "tacoma": "Tacoma", "charleston": "Charleston", "huntington": "Huntington", "morgantown": "Morgantown",
   "milwaukee": "Milwaukee", "madison": "Madison", "greenbay": "Green Bay", "cheyenne": "Cheyenne", "casper": "Casper",
   "laramie": "Laramie"
-};
+];
 
 // Global states for abbreviation detection
 const states = [
@@ -431,7 +431,8 @@ export default async function handler(req, res) {
       console.log("Raw request body:", raw);
       leads = JSON.parse(raw);
     } else {
-      return res.status(400).json({ error: "Unsupported content-type" });
+      console.error("Unsupported content-type:", req.headers["content-type"]);
+      return res.status(400).json({ error: "Unsupported content-type", details: req.headers["content-type"] });
     }
   } catch (err) {
     console.error("Failed to parse request body:", err.message, "Raw:", raw?.slice(0, 100));
@@ -439,12 +440,14 @@ export default async function handler(req, res) {
   }
 
   if (!Array.isArray(leads) || leads.length === 0) {
+    console.error("Invalid lead list:", leads);
     return res.status(400).json({ error: "Missing or invalid lead list" });
   }
 
   const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
   if (!OPENAI_API_KEY) {
-    return res.status(500).json({ error: "Missing OPENAI_API_KEY" });
+    console.error("Missing OPENAI_API_KEY in environment variables");
+    return res.status(500).json({ error: "Missing OPENAI_API_KEY in environment variables" });
   }
 
   const limit = pLimit(1);
@@ -463,7 +466,10 @@ export default async function handler(req, res) {
 
         const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
-          headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
           body: JSON.stringify({
             model,
             messages: [
@@ -582,21 +588,23 @@ export default async function handler(req, res) {
   const extractJsonSafely = (data, fields) => {
     try {
       const parsed = typeof data === "string" ? JSON.parse(data) : data;
-      return fields.every(f => f in parsed && parsed[f] !== undefined) ? parsed : null;
+      if (fields.every(f => f in parsed && parsed[f] !== undefined)) return parsed;
+      console.error("Invalid JSON structure:", data?.slice(0, 100));
+      return null;
     } catch (e) {
-      console.error("JSON parsing error:", e.message, "Data:", data?.slice(0, 100));
+      console.error("Non-JSON response from API:", e.message, "Raw:", data?.slice(0, 100));
       return null;
     }
   };
 
-  const BATCH_SIZE = 2; // Reduced from 3 to help with timeout issues
+  const BATCH_SIZE = 2;
   const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
     leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
   );
 
   for (const chunk of leadChunks) {
     const chunkStartTime = Date.now();
-    if (chunkStartTime - startTime > 9000) {
+    if (chunkStartTime - startTime > 9500) { // Increased to 9.5 seconds
       console.warn({ message: "Timeout guard hit", duration: chunkStartTime - startTime, partial: true });
       return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
     }
@@ -619,8 +627,8 @@ export default async function handler(req, res) {
     );
     results.push(...chunkResults);
 
-    if (Date.now() - startTime > 9000) {
-      console.warn({ message: "Chunk processing exceeded 9s", duration: Date.now() - startTime, partial: true });
+    if (Date.now() - startTime > 9500) {
+      console.warn({ message: "Chunk processing exceeded 9.5s", duration: Date.now() - startTime, partial: true });
       return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
     }
   }
