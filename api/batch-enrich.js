@@ -22,6 +22,121 @@ const pLimit = (concurrency) => {
 // In-memory cache for domain-to-name mappings
 const domainCache = new Map();
 
+// Global arrays for city normalization (moved to top-level scope to fix "topCitiesNormalized is not defined")
+const topCitiesNormalized = [
+  "losangeles", "sandiego", "sanjose", "sanfrancisco", "fresno", "sacramento",
+  "longbeach", "oakland", "bakersfield", "anaheim", "stockton", "riverside",
+  "santaana", "irvine", "chulavista", "fremont", "santaclarita", "sanbernardino",
+  "modesto", "morenovalley", "jacksonville", "miami", "tampa", "orlando",
+  "stpetersburg", "hialeah", "portstlucie", "capecoral", "tallahassee",
+  "fortlauderdale", "pembrokepines", "hollywood", "gainesville", "miramar",
+  "coralsprings", "palmbay", "westpalmbeach", "clearwater", "lakeland",
+  "pompanobeach", "newyorkcity", "buffalo", "rochester", "yonkers", "syracuse",
+  "albany", "newrochelle", "mountvernon", "schenectady", "utica", "whiteplains",
+  "hempstead", "troy", "niagarafalls", "binghamton", "freeport", "valleystream",
+  "longbeach", "springvalley", "rome", "houston", "sanantonio", "dallas",
+  "austin", "fortworth", "elpaso", "arlington", "corpuschristi", "plano",
+  "laredo", "lubbock", "garland", "irving", "frisco", "amarillo", "mckinney",
+  "grandprairie", "brownsville", "killeen", "pasadena", "birmingham",
+  "montgomery", "huntsville", "mobile", "tuscaloosa", "anchorage", "juneau",
+  "fairbanks", "phoenix", "tucson", "mesa", "littlerock", "fortsmith",
+  "fayetteville", "denver", "coloradosprings", "aurora", "bridgeport",
+  "newhaven", "stamford", "wilmington", "dover", "newark", "washingtondc",
+  "atlanta", "columbus", "augusta", "honolulu", "eastonolulu", "pearlcity",
+  "boise", "meridian", "nampa", "chicago", "aurora", "joliet", "indianapolis",
+  "fortwayne", "evansville", "desmoines", "cedarrapids", "davenport", "wichita",
+  "overlandpark", "kansascity", "louisville", "lexington", "bowlinggreen",
+  "neworleans", "batonrouge", "shreveport", "portland", "lewiston", "bangor",
+  "baltimore", "columbia", "germantown", "boston", "worcester", "springfield",
+  "detroit", "grandrapids", "warren", "minneapolis", "stpaul", "rochester",
+  "jackson", "gulfport", "southaven", "kansascity", "stlouis", "springfield",
+  "billings", "missoula", "greatfalls", "omaha", "lincoln", "bellevue",
+  "lasvegas", "henderson", "reno", "manchester", "nashua", "concord", "newark",
+  "jerseycity", "paterson", "albuquerque", "lascruces", "riorancho", "charlotte",
+  "raleigh", "greensboro", "fargo", "bismarck", "grandforks", "columbus",
+  "cleveland", "cincinnati", "oklahomacity", "tulsa", "norman", "portland",
+  "eugene", "salem", "philadelphia", "pittsburgh", "allentown", "providence",
+  "cranston", "warwick", "charleston", "columbia", "northcharleston",
+  "siouxfalls", "rapidcity", "aberdeen", "nashville", "memphis", "knoxville",
+  "saltlakecity", "westvalleycity", "westjordan", "burlington",
+  "southburlington", "rutland", "virginiabeach", "chesapeake", "norfolk",
+  "seattle", "spokane", "tacoma", "charleston", "huntington", "morgantown",
+  "milwaukee", "madison", "greenbay", "cheyenne", "casper", "laramie"
+];
+
+const cityDisplayNames = {
+  "losangeles": "Los Angeles", "sandiego": "San Diego", "sanjose": "San Jose",
+  "sanfrancisco": "San Francisco", "fresno": "Fresno", "sacramento": "Sacramento",
+  "longbeach": "Long Beach", "oakland": "Oakland", "bakersfield": "Bakersfield",
+  "anaheim": "Anaheim", "stockton": "Stockton", "riverside": "Riverside",
+  "santaana": "Santa Ana", "irvine": "Irvine", "chulavista": "Chula Vista",
+  "fremont": "Fremont", "santaclarita": "Santa Clarita", "sanbernardino": "San Bernardino",
+  "modesto": "Modesto", "morenovalley": "Moreno Valley", "jacksonville": "Jacksonville",
+  "miami": "Miami", "tampa": "Tampa", "orlando": "Orlando", "stpetersburg": "St Petersburg",
+  "hialeah": "Hialeah", "portstlucie": "Port St Lucie", "capecoral": "Cape Coral",
+  "tallahassee": "Tallahassee", "fortlauderdale": "Fort Lauderdale", "pembrokepines": "Pembroke Pines",
+  "hollywood": "Hollywood", "gainesville": "Gainesville", "miramar": "Miramar",
+  "coralsprings": "Coral Springs", "palmbay": "Palm Bay", "westpalmbeach": "West Palm Beach",
+  "clearwater": "Clearwater", "lakeland": "Lakeland", "pompanobeach": "Pompano Beach",
+  "newyorkcity": "New York City", "buffalo": "Buffalo", "rochester": "Rochester",
+  "yonkers": "Yonkers", "syracuse": "Syracuse", "albany": "Albany", "newrochelle": "New Rochelle",
+  "mountvernon": "Mount Vernon", "schenectady": "Schenectady", "utica": "Utica",
+  "whiteplains": "White Plains", "hempstead": "Hempstead", "troy": "Troy",
+  "niagarafalls": "Niagara Falls", "binghamton": "Binghamton", "freeport": "Freeport",
+  "valleystream": "Valley Stream", "longbeach": "Long Beach", "springvalley": "Spring Valley",
+  "rome": "Rome", "houston": "Houston", "sanantonio": "San Antonio", "dallas": "Dallas",
+  "austin": "Austin", "fortworth": "Fort Worth", "elpaso": "El Paso", "arlington": "Arlington",
+  "corpuschristi": "Corpus Christi", "plano": "Plano", "laredo": "Laredo", "lubbock": "Lubbock",
+  "garland": "Garland", "irving": "Irving", "frisco": "Frisco", "amarillo": "Amarillo",
+  "mckinney": "McKinney", "grandprairie": "Grand Prairie", "brownsville": "Brownsville",
+  "killeen": "Killeen", "pasadena": "Pasadena", "birmingham": "Birmingham",
+  "montgomery": "Montgomery", "huntsville": "Huntsville", "mobile": "Mobile",
+  "tuscaloosa": "Tuscaloosa", "anchorage": "Anchorage", "juneau": "Juneau",
+  "fairbanks": "Fairbanks", "phoenix": "Phoenix", "tucson": "Tucson", "mesa": "Mesa",
+  "littlerock": "Little Rock", "fortsmith": "Fort Smith", "fayetteville": "Fayetteville",
+  "denver": "Denver", "coloradosprings": "Colorado Springs", "aurora": "Aurora",
+  "bridgeport": "Bridgeport", "newhaven": "New Haven", "stamford": "Stamford",
+  "wilmington": "Wilmington", "dover": "Dover", "newark": "Newark", "washingtondc": "Washington DC",
+  "atlanta": "Atlanta", "columbus": "Columbus", "augusta": "Augusta", "honolulu": "Honolulu",
+  "eastonolulu": "East Honolulu", "pearlcity": "Pearl City", "boise": "Boise",
+  "meridian": "Meridian", "nampa": "Nampa", "chicago": "Chicago", "aurora": "Aurora",
+  "joliet": "Joliet", "indianapolis": "Indianapolis", "fortwayne": "Fort Wayne",
+  "evansville": "Evansville", "desmoines": "Des Moines", "cedarrapids": "Cedar Rapids",
+  "davenport": "Davenport", "wichita": "Wichita", "overlandpark": "Overland Park",
+  "kansascity": "Kansas City", "louisville": "Louisville", "lexington": "Lexington",
+  "bowlinggreen": "Bowling Green", "neworleans": "New Orleans", "batonrouge": "Baton Rouge",
+  "shreveport": "Shreveport", "portland": "Portland", "lewiston": "Lewiston",
+  "bangor": "Bangor", "baltimore": "Baltimore", "columbia": "Columbia",
+  "germantown": "Germantown", "boston": "Boston", "worcester": "Worcester",
+  "springfield": "Springfield", "detroit": "Detroit", "grandrapids": "Grand Rapids",
+  "warren": "Warren", "minneapolis": "Minneapolis", "stpaul": "St Paul",
+  "rochester": "Rochester", "jackson": "Jackson", "gulfport": "Gulfport",
+  "southaven": "Southaven", "kansascity": "Kansas City", "stlouis": "St Louis",
+  "springfield": "Springfield", "billings": "Billings", "missoula": "Missoula",
+  "greatfalls": "Great Falls", "omaha": "Omaha", "lincoln": "Lincoln",
+  "bellevue": "Bellevue", "lasvegas": "Las Vegas", "henderson": "Henderson",
+  "reno": "Reno", "manchester": "Manchester", "nashua": "Nashua", "concord": "Concord",
+  "newark": "Newark", "jerseycity": "Jersey City", "paterson": "Paterson",
+  "albuquerque": "Albuquerque", "lascruces": "Las Cruces", "riorancho": "Rio Rancho",
+  "charlotte": "Charlotte", "raleigh": "Raleigh", "greensboro": "Greensboro",
+  "fargo": "Fargo", "bismarck": "Bismarck", "grandforks": "Grand Forks",
+  "columbus": "Columbus", "cleveland": "Cleveland", "cincinnati": "Cincinnati",
+  "oklahomacity": "Oklahoma City", "tulsa": "Tulsa", "norman": "Norman",
+  "portland": "Portland", "eugene": "Eugene", "salem": "Salem", "philadelphia": "Philadelphia",
+  "pittsburgh": "Pittsburgh", "allentown": "Allentown", "providence": "Providence",
+  "cranston": "Cranston", "warwick": "Warwick", "charleston": "Charleston",
+  "columbia": "Columbia", "northcharleston": "North Charleston", "siouxfalls": "Sioux Falls",
+  "rapidcity": "Rapid City", "aberdeen": "Aberdeen", "nashville": "Nashville",
+  "memphis": "Memphis", "knoxville": "Knoxville", "saltlakecity": "Salt Lake City",
+  "westvalleycity": "West Valley City", "westjordan": "West Jordan",
+  "burlington": "Burlington", "southburlington": "South Burlington", "rutland": "Rutland",
+  "virginiabeach": "Virginia Beach", "chesapeake": "Chesapeake", "norfolk": "Norfolk",
+  "seattle": "Seattle", "spokane": "Spokane", "tacoma": "Tacoma", "charleston": "Charleston",
+  "huntington": "Huntington", "morgantown": "Morgantown", "milwaukee": "Milwaukee",
+  "madison": "Madison", "greenbay": "Green Bay", "cheyenne": "Cheyenne",
+  "casper": "Casper", "laramie": "Laramie"
+};
+
 export const config = {
   api: {
     bodyParser: false
@@ -86,7 +201,7 @@ export default async function handler(req, res) {
             "Content-Type": "application/json"
           },
           body: JSON.stringify({
-            model: model, // Use GPT-4 Turbo or env-specified model
+            model: model,
             messages: [
               { role: "system", content: "You are a dealership naming expert with extensive knowledge of U.S. automotive dealerships, their branding, and naming conventions. Your task is to generate clean, human-friendly dealership names that are natural for use in cold email campaigns." },
               { role: "user", content: prompt }
@@ -190,9 +305,9 @@ export default async function handler(req, res) {
 
   const detectBrand = (words) => {
     const brands = [
-      "chevrolet", "gmc", "cadillac", "buick", "ford", "lincoln", "chrysler", 
-      "dodge", "jeep", "ram", "tesla", "rivian", "lucid", "honda", "nissan", 
-      "hyundai", "kia", "bmw", "mercedes", "benz", "subaru", "toyota", "vw", 
+      "chevrolet", "gmc", "cadillac", "buick", "ford", "lincoln", "chrysler",
+      "dodge", "jeep", "ram", "tesla", "rivian", "lucid", "honda", "nissan",
+      "hyundai", "kia", "bmw", "mercedes", "benz", "subaru", "toyota", "vw",
       "lexus", "infiniti"
     ];
     const brand = words.find(word => brands.includes(word.toLowerCase()));
@@ -211,116 +326,6 @@ export default async function handler(req, res) {
   };
 
   const correctTypos = (words) => {
-    const topCitiesNormalized = [
-      "losangeles", "sandiego", "sanjose", "sanfrancisco", "fresno", "sacramento", 
-      "longbeach", "oakland", "bakersfield", "anaheim", "stockton", "riverside", 
-      "santaana", "irvine", "chulavista", "fremont", "santaclarita", "sanbernardino", 
-      "modesto", "morenovalley",
-      "jacksonville", "miami", "tampa", "orlando", "stpetersburg", "hialeah", 
-      "portstlucie", "capecoral", "tallahassee", "fortlauderdale", "pembrokepines", 
-      "hollywood", "gainesville", "miramar", "coralsprings", "palmbay", "westpalmbeach", 
-      "clearwater", "lakeland", "pompanobeach",
-      "newyorkcity", "buffalo", "rochester", "yonkers", "syracuse", "albany", 
-      "newrochelle", "mountvernon", "schenectady", "utica", "whiteplains", "hempstead", 
-      "troy", "niagarafalls", "binghamton", "freeport", "valleystream", "longbeach", 
-      "springvalley", "rome",
-      "houston", "sanantonio", "dallas", "austin", "fortworth", "elpaso", "arlington", 
-      "corpuschristi", "plano", "laredo", "lubbock", "garland", "irving", "frisco", 
-      "amarillo", "mckinney", "grandprairie", "brownsville", "killeen", "pasadena",
-      "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "anchorage", 
-      "juneau", "fairbanks", "phoenix", "tucson", "mesa", "littlerock", "fortsmith", 
-      "fayetteville", "denver", "coloradosprings", "aurora", "bridgeport", "newhaven", 
-      "stamford", "wilmington", "dover", "newark", "washingtondc", "atlanta", "columbus", 
-      "augusta", "honolulu", "eastonolulu", "pearlcity", "boise", "meridian", "nampa", 
-      "chicago", "aurora", "joliet", "indianapolis", "fortwayne", "evansville", 
-      "desmoines", "cedarrapids", "davenport", "wichita", "overlandpark", "kansascity", 
-      "louisville", "lexington", "bowlinggreen", "neworleans", "batonrouge", "shreveport", 
-      "portland", "lewiston", "bangor", "baltimore", "columbia", "germantown", "boston", 
-      "worcester", "springfield", "detroit", "grandrapids", "warren", "minneapolis", 
-      "stpaul", "rochester", "jackson", "gulfport", "southaven", "kansascity", "stlouis", 
-      "springfield", "billings", "missoula", "greatfalls", "omaha", "lincoln", "bellevue", 
-      "lasvegas", "henderson", "reno", "manchester", "nashua", "concord", "newark", 
-      "jerseycity", "paterson", "albuquerque", "lascruces", "riorancho", "charlotte", 
-      "raleigh", "greensboro", "fargo", "bismarck", "grandforks", "columbus", "cleveland", 
-      "cincinnati", "oklahomacity", "tulsa", "norman", "portland", "eugene", "salem", 
-      "philadelphia", "pittsburgh", "allentown", "providence", "cranston", "warwick", 
-      "charleston", "columbia", "northcharleston", "siouxfalls", "rapidcity", "aberdeen", 
-      "nashville", "memphis", "knoxville", "saltlakecity", "westvalleycity", "westjordan", 
-      "burlington", "southburlington", "rutland", "virginiabeach", "chesapeake", "norfolk", 
-      "seattle", "spokane", "tacoma", "charleston", "huntington", "morgantown", "milwaukee", 
-      "madison", "greenbay", "cheyenne", "casper", "laramie"
-    ];
-
-    const cityDisplayNames = {
-      "losangeles": "Los Angeles", "sandiego": "San Diego", "sanjose": "San Jose", 
-      "sanfrancisco": "San Francisco", "fresno": "Fresno", "sacramento": "Sacramento", 
-      "longbeach": "Long Beach", "oakland": "Oakland", "bakersfield": "Bakersfield", 
-      "anaheim": "Anaheim", "stockton": "Stockton", "riverside": "Riverside", 
-      "santaana": "Santa Ana", "irvine": "Irvine", "chulavista": "Chula Vista", 
-      "fremont": "Fremont", "santaclarita": "Santa Clarita", "sanbernardino": "San Bernardino", 
-      "modesto": "Modesto", "morenovalley": "Moreno Valley",
-      "jacksonville": "Jacksonville", "miami": "Miami", "tampa": "Tampa", "orlando": "Orlando", 
-      "stpetersburg": "St Petersburg", "hialeah": "Hialeah", "portstlucie": "Port St Lucie", 
-      "capecoral": "Cape Coral", "tallahassee": "Tallahassee", "fortlauderdale": "Fort Lauderdale", 
-      "pembrokepines": "Pembroke Pines", "hollywood": "Hollywood", "gainesville": "Gainesville", 
-      "miramar": "Miramar", "coralsprings": "Coral Springs", "palmbay": "Palm Bay", 
-      "westpalmbeach": "West Palm Beach", "clearwater": "Clearwater", "lakeland": "Lakeland", 
-      "pompanobeach": "Pompano Beach",
-      "newyorkcity": "New York City", "buffalo": "Buffalo", "rochester": "Rochester", 
-      "yonkers": "Yonkers", "syracuse": "Syracuse", "albany": "Albany", "newrochelle": "New Rochelle", 
-      "mountvernon": "Mount Vernon", "schenectady": "Schenectady", "utica": "Utica", 
-      "whiteplains": "White Plains", "hempstead": "Hempstead", "troy": "Troy", 
-      "niagarafalls": "Niagara Falls", "binghamton": "Binghamton", "freeport": "Freeport", 
-      "valleystream": "Valley Stream", "longbeach": "Long Beach", "springvalley": "Spring Valley", 
-      "rome": "Rome",
-      "houston": "Houston", "sanantonio": "San Antonio", "dallas": "Dallas", "austin": "Austin", 
-      "fortworth": "Fort Worth", "elpaso": "El Paso", "arlington": "Arlington", 
-      "corpuschristi": "Corpus Christi", "plano": "Plano", "laredo": "Laredo", "lubbock": "Lubbock", 
-      "garland": "Garland", "irving": "Irving", "frisco": "Frisco", "amarillo": "Amarillo", 
-      "mckinney": "McKinney", "grandprairie": "Grand Prairie", "brownsville": "Brownsville", 
-      "killeen": "Killeen", "pasadena": "Pasadena",
-      "birmingham": "Birmingham", "montgomery": "Montgomery", "huntsville": "Huntsville", 
-      "mobile": "Mobile", "tuscaloosa": "Tuscaloosa", "anchorage": "Anchorage", "juneau": "Juneau", 
-      "fairbanks": "Fairbanks", "phoenix": "Phoenix", "tucson": "Tucson", "mesa": "Mesa", 
-      "littlerock": "Little Rock", "fortsmith": "Fort Smith", "fayetteville": "Fayetteville", 
-      "denver": "Denver", "coloradosprings": "Colorado Springs", "aurora": "Aurora", 
-      "bridgeport": "Bridgeport", "newhaven": "New Haven", "stamford": "Stamford", 
-      "wilmington": "Wilmington", "dover": "Dover", "newark": "Newark", "washingtondc": "Washington DC", 
-      "atlanta": "Atlanta", "columbus": "Columbus", "augusta": "Augusta", "honolulu": "Honolulu", 
-      "eastonolulu": "East Honolulu", "pearlcity": "Pearl City", "boise": "Boise", "meridian": "Meridian", 
-      "nampa": "Nampa", "chicago": "Chicago", "aurora": "Aurora", "joliet": "Joliet", 
-      "indianapolis": "Indianapolis", "fortwayne": "Fort Wayne", "evansville": "Evansville", 
-      "desmoines": "Des Moines", "cedarrapids": "Cedar Rapids", "davenport": "Davenport", 
-      "wichita": "Wichita", "overlandpark": "Overland Park", "kansascity": "Kansas City", 
-      "louisville": "Louisville", "lexington": "Lexington", "bowlinggreen": "Bowling Green", 
-      "neworleans": "New Orleans", "batonrouge": "Baton Rouge", "shreveport": "Shreveport", 
-      "portland": "Portland", "lewiston": "Lewiston", "bangor": "Bangor", "baltimore": "Baltimore", 
-      "columbia": "Columbia", "germantown": "Germantown", "boston": "Boston", "worcester": "Worcester", 
-      "springfield": "Springfield", "detroit": "Detroit", "grandrapids": "Grand Rapids", 
-      "warren": "Warren", "minneapolis": "Minneapolis", "stpaul": "St Paul", "rochester": "Rochester", 
-      "jackson": "Jackson", "gulfport": "Gulfport", "southaven": "Southaven", "kansascity": "Kansas City", 
-      "stlouis": "St Louis", "springfield": "Springfield", "billings": "Billings", "missoula": "Missoula", 
-      "greatfalls": "Great Falls", "omaha": "Omaha", "lincoln": "Lincoln", "bellevue": "Bellevue", 
-      "lasvegas": "Las Vegas", "henderson": "Henderson", "reno": "Reno", "manchester": "Manchester", 
-      "nashua": "Nashua", "concord": "Concord", "newark": "Newark", "jerseycity": "Jersey City", 
-      "paterson": "Paterson", "albuquerque": "Albuquerque", "lascruces": "Las Cruces", 
-      "riorancho": "Rio Rancho", "charlotte": "Charlotte", "raleigh": "Raleigh", "greensboro": "Greensboro", 
-      "fargo": "Fargo", "bismarck": "Bismarck", "grandforks": "Grand Forks", "columbus": "Columbus", 
-      "cleveland": "Cleveland", "cincinnati": "Cincinnati", "oklahomacity": "Oklahoma City", 
-      "tulsa": "Tulsa", "norman": "Norman", "portland": "Portland", "eugene": "Eugene", "salem": "Salem", 
-      "philadelphia": "Philadelphia", "pittsburgh": "Pittsburgh", "allentown": "Allentown", 
-      "providence": "Providence", "cranston": "Cranston", "warwick": "Warwick", "charleston": "Charleston", 
-      "columbia": "Columbia", "northcharleston": "North Charleston", "siouxfalls": "Sioux Falls", 
-      "rapidcity": "Rapid City", "aberdeen": "Aberdeen", "nashville": "Nashville", "memphis": "Memphis", 
-      "knoxville": "Knoxville", "saltlakecity": "Salt Lake City", "westvalleycity": "West Valley City", 
-      "westjordan": "West Jordan", "burlington": "Burlington", "southburlington": "South Burlington", 
-      "rutland": "Rutland", "virginiabeach": "Virginia Beach", "chesapeake": "Chesapeake", 
-      "norfolk": "Norfolk", "seattle": "Seattle", "spokane": "Spokane", "tacoma": "Tacoma", 
-      "charleston": "Charleston", "huntington": "Huntington", "morgantown": "Morgantown", 
-      "milwaukee": "Milwaukee", "madison": "Madison", "greenbay": "Green Bay", "cheyenne": "Cheyenne", 
-      "casper": "Casper", "laramie": "Laramie"
-    };
-
     return words.map(word => {
       const normalizedWord = word.toLowerCase().replace(/\s+/g, '');
       const closestMatch = topCitiesNormalized.reduce((best, city) => {
@@ -358,7 +363,7 @@ export default async function handler(req, res) {
     }
 
     const wellKnownNames = [
-      "pat milliken", "tuttle click", "penske auto", "union park", "malouf auto", 
+      "pat milliken", "tuttle click", "penske auto", "union park", "malouf auto",
       "tasca auto", "suntrup auto", "jt auto"
     ];
     let finalResult = result;
@@ -371,27 +376,27 @@ export default async function handler(req, res) {
 
   const detectAbbreviation = (words) => {
     const states = [
-      "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut", 
-      "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa", 
-      "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan", 
-      "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire", 
-      "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio", 
-      "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota", 
-      "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia", 
+      "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut",
+      "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
+      "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
+      "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire",
+      "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio",
+      "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota",
+      "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia",
       "wisconsin", "wyoming", "district of columbia", "dc"
     ];
 
     const commonWords = [
-      "pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto", 
+      "pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto",
       "hills", "birmingham", "mercedes", "benz", "elway", "kossi", "sarant", "tommy", "nix",
       ...states,
       ...topCitiesNormalized
     ];
 
     const hasAbbreviation = words.some(word => (
-      (/^[A-Z]{2,4}$/.test(word) || 
-       /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) || 
-       /^[A-Z][a-z]{1,2}$/.test(word) || 
+      (/^[A-Z]{2,4}$/.test(word) ||
+       /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) ||
+       /^[A-Z][a-z]{1,2}$/.test(word) ||
        !/^[a-z]+$/i.test(word) && !commonWords.includes(word.toLowerCase()) && word.length > 3 && !/^(mccarthy|mclarty)$/i.test(word))
     ) && !commonWords.includes(word.toLowerCase()));
     return hasAbbreviation;
@@ -446,36 +451,36 @@ export default async function handler(req, res) {
     return hasAbbreviation ? `${result} [Unexpanded]` : result;
   };
 
-  const humanizeName = (name, domain) => {
-    let words = normalizeText(name);
-    const { hasBrand, brand } = detectBrand(words);
-    words = decompressDomain(words, domain);
-    words = correctTypos(words);
-    const hasAbbreviation = detectAbbreviation(words);
-    words = cleanupFillers(words);
-    words = removeUnnecessaryAuto(words);
-    words = adjustForPossessiveFlow(words);
-    let result = enforceColdEmailCompatibility(words, domain);
+const humanizeName = (name, domain) => {
+  let words = normalizeText(name);
+  const { hasBrand, brand } = detectBrand(words);
+  words = decompressDomain(words, domain);
+  words = correctTypos(words);
+  const hasAbbreviation = detectAbbreviation(words);
+  words = cleanupFillers(words);
+  words = removeUnnecessaryAuto(words);
+  words = adjustForPossessiveFlow(words);
+  let result = enforceColdEmailCompatibility(words, domain);
 
-    const confidenceScore = computeConfidenceScore(words, domain, hasBrand, hasAbbreviation);
+  const confidenceScore = computeConfidenceScore(words, domain, hasBrand, hasAbbreviation);
 
-    result = result.name
-      .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1))
-      .replace(/Mccarthy/g, "McCarthy")
-      .replace(/Mclarty/g, "McLarty")
-      .replace(/Bmw/g, "BMW")
-      .replace(/Vw/g, "VW")
-      .replace(/'s\b/gi, "'s")
-      .replace(/([a-z])'S\b/gi, "$1's");
+  result = result.name
+    .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1))
+    .replace(/Mccarthy/g, "McCarthy")
+    .replace(/Mclarty/g, "McLarty")
+    .replace(/Bmw/g, "BMW")
+    .replace(/Vw/g, "VW")
+    .replace(/'s\b/gi, "'s")
+    .replace(/([a-z])'S\b/gi, "$1's");
 
-    Object.keys(cityDisplayNames).forEach(normalized => {
-      const displayName = cityDisplayNames[normalized];
-      const regex = new RegExp(`\\b${normalized}\\b`, "gi");
-      result = result.replace(regex, displayName);
-    });
+  Object.keys(cityDisplayNames).forEach(normalized => {
+    const displayName = cityDisplayNames[normalized];
+    const regex = new RegExp(`\\b${normalized}\\b`, "gi");
+    result = result.replace(regex, displayName);
+  });
 
-    return { name: result, confidenceScore };
-  };
+  return { name: result, confidenceScore };
+};
 
   const cleanCompanyName = async (lead) => {
     const { domain } = lead;
@@ -617,18 +622,19 @@ Use your best judgment to choose the most natural name to flow in our cold email
 
     const result = await callOpenAI(prompt);
 
-    if (result && result.error) {
-      console.error(`Failed to process domain ${domain}: ${result.error}`);
-      return { name: "", confidenceScore: 0, error: result.error };
-    }
+  if (result && result.error) {
+    console.error(`Failed to process domain ${domain}: ${result.error}`);
+    return { name: "", confidenceScore: 0, error: result.error };
+  }
 
+  try {
     const cleaned = humanizeName(result, domain);
     if (!cleaned.name) {
       console.error(`Failed to humanize name for domain ${domain}: ${result}`);
       return { name: "", confidenceScore: 0, error: `Failed to humanize name: ${result}` };
     }
 
-    const model = process.env.OPENAI_MODEL || "gpt-4-turbo"; // Reflect the model used
+    const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
     const finalResult = { name: cleaned.name, confidenceScore: cleaned.confidenceScore, modelUsed: model };
     domainCache.set(domain, finalResult);
     console.log(`Processed domain ${domain}: ${finalResult.name} (Confidence: ${finalResult.confidenceScore})`);
@@ -639,16 +645,20 @@ Use your best judgment to choose the most natural name to flow in our cold email
     }
 
     return finalResult;
-  };
+  } catch (err) {
+    console.error(`Error in humanizeName for domain ${domain}: ${err.message}`);
+    return { name: "", confidenceScore: 0, error: `Error in humanizeName: ${err.message}` };
+  }
+};
 
-  const enrichLead = async (lead) => {
-    const { email, firstName, lastName, jobTitle, domain, mobilePhone, leadLinkedIn, engagedContact } = lead;
-    if (!email || !domain) {
-      console.error("Missing email or domain for lead:", lead);
-      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: "Missing email or domain" };
-    }
+const enrichLead = async (lead) => {
+  const { email, firstName, lastName, jobTitle, domain, mobilePhone, leadLinkedIn, engagedContact } = lead;
+  if (!email || !domain) {
+    console.error("Missing email or domain for lead:", lead);
+    return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: "Missing email or domain" };
+  }
 
-    const prompt = `
+  const prompt = `
 Enrich this lead based on:
 
 - Email: ${email}
@@ -660,76 +670,76 @@ Enrich this lead based on:
 - Engaged: ${engagedContact || "N/A"}
 
 Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Name"}
-    `.trim();
+  `.trim();
 
-    const result = await callOpenAI(prompt);
+  const result = await callOpenAI(prompt);
 
-    if (result && result.error) {
-      console.error(`Failed to process email ${email}: ${result.error}`);
-      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: result.error };
-    }
+  if (result && result.error) {
+    console.error(`Failed to process email ${email}: ${result.error}`);
+    return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: result.error };
+  }
 
-    const parsed = extractJsonSafely(result, ["franchiseGroup", "buyerScore", "referenceClient"]);
+  const parsed = extractJsonSafely(result, ["franchiseGroup", "buyerScore", "referenceClient"]);
 
-    if (parsed) {
-      console.log(`Enriched lead for email ${email}:`, parsed);
-      const model = process.env.OPENAI_MODEL || "gpt-4-turbo"; // Reflect the model used
-      return {
-        franchiseGroup: parsed.franchiseGroup,
-        buyerScore: parsed.buyerScore,
-        referenceClient: parsed.referenceClient,
-        modelUsed: model
-      };
-    }
+  if (parsed) {
+    console.log(`Enriched lead for email ${email}:`, parsed);
+    const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
+    return {
+      franchiseGroup: parsed.franchiseGroup,
+      buyerScore: parsed.buyerScore,
+      referenceClient: parsed.referenceClient,
+      modelUsed: model
+    };
+  }
 
-    console.error(`Invalid GPT response for email ${email}: ${result}`);
-    return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Invalid GPT response: ${JSON.stringify(result)}` };
-  };
+  console.error(`Invalid GPT response for email ${email}: ${result}`);
+  return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Invalid GPT response: ${JSON.stringify(result)}` };
+};
 
-  const extractJsonSafely = (data, fields = []) => {
-    let parsed = data;
-    if (typeof data === "string") {
-      try {
-        parsed = JSON.parse(data);
-      } catch {
-        const match = data.match(/\{[^}]+\}/);
-        if (match) {
-          try {
-            parsed = JSON.parse(match[0]);
-          } catch {}
-        }
-      }
-    }
-
-    if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
-      const missing = fields.filter(f => !(f in parsed));
-      return missing.length === 0 ? parsed : null;
-    }
-
-    return null;
-  };
-
-  const manualReviewQueue = [];
-
-  const results = [];
-  for (const lead of leads) {
+const extractJsonSafely = (data, fields = []) => {
+  let parsed = data;
+  if (typeof data === "string") {
     try {
-      if (lead.domain && !lead.email) {
-        const cleaned = await cleanCompanyName(lead);
-        results.push(cleaned);
-      } else {
-        const enriched = await enrichLead(lead);
-        results.push(enriched);
+      parsed = JSON.parse(data);
+    } catch {
+      const match = data.match(/\{[^}]+\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {}
       }
-    } catch (err) {
-      console.error("Unhandled error processing lead:", lead, err.message);
-      results.push({ name: "", franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Unhandled error: ${err.message}` });
     }
   }
 
-  console.log("Returning results:", results);
-  console.log(`Request completed in ${Date.now() - startTime}ms at`, new Date().toISOString());
-  return res.status(200).json({ results, manualReviewQueue });
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const missing = fields.filter(f => !(f in parsed));
+    return missing.length === 0 ? parsed : null;
+  }
+
+  return null;
+};
+
+const manualReviewQueue = [];
+
+const results = [];
+for (const lead of leads) {
+  try {
+    if (lead.domain && !lead.email) {
+      const cleaned = await cleanCompanyName(lead);
+      results.push(cleaned);
+    } else {
+      const enriched = await enrichLead(lead);
+      results.push(enriched);
+    }
+  } catch (err) {
+    console.error("Unhandled error processing lead:", lead, err.message);
+    results.push({ name: "", franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Unhandled error: ${err.message}` });
+  }
+}
+
+console.log("Returning results:", results);
+console.log(`Request completed in ${Date.now() - startTime}ms at`, new Date().toISOString());
+return res.status(200).json({ results, manualReviewQueue });
 }
 
 function runUnitTests() {
