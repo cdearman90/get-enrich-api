@@ -159,6 +159,26 @@ const cityDisplayNames = {
   "casper": "Casper", "laramie": "Laramie"
 };
 
+// Global states for abbreviation detection
+const states = [
+  "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut",
+  "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
+  "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
+  "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire",
+  "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio",
+  "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota",
+  "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia",
+  "wisconsin", "wyoming", "district of columbia", "dc"
+];
+
+// Global common words for abbreviation detection and auto removal
+const commonWords = [
+  "pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto",
+  "hills", "birmingham", "mercedes", "benz", "elway", "kossi", "sarant", "tommy", "nix",
+  ...states,
+  ...topCitiesNormalized
+];
+
 const splitDomainIntoWords = (domain) => {
   let name = domain.replace(/\.com$/, '');
   name = name.replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -258,7 +278,17 @@ const correctTypos = (words) => {
         : best;
     }, { city: null, distance: Infinity });
 
-    return closestMatch.city ? cityDisplayNames[closestMatch.city] : word;
+    if (closestMatch.city) {
+      // Compute a temporary confidence score for the correction
+      const tempWords = [...words];
+      const index = tempWords.indexOf(word);
+      tempWords[index] = cityDisplayNames[closestMatch.city];
+      const tempConfidence = computeConfidenceScore(tempWords, "", !!detectBrand([word]).hasBrand, false);
+      if (tempConfidence > 80) {
+        return cityDisplayNames[closestMatch.city];
+      }
+    }
+    return word;
   });
 };
 
@@ -295,24 +325,6 @@ const enforceColdEmailCompatibility = (words, domain) => {
 };
 
 const detectAbbreviation = (words) => {
-  const states = [
-    "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut",
-    "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
-    "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
-    "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire",
-    "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio",
-    "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota",
-    "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia",
-    "wisconsin", "wyoming", "district of columbia", "dc"
-  ];
-
-  const commonWords = [
-    "pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto",
-    "hills", "birmingham", "mercedes", "benz", "elway", "kossi", "sarant", "tommy", "nix",
-    ...states,
-    ...topCitiesNormalized
-  ];
-
   return words.some(word => (
     (/^[A-Z]{2,4}$/.test(word) ||
      /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) ||
@@ -324,6 +336,13 @@ const detectAbbreviation = (words) => {
 const removeUnnecessaryAuto = (words) => {
   if (words[words.length - 1] === "auto" && words.length > 1) {
     const nameWithoutAuto = words.slice(0, -1).join(" ").toLowerCase();
+    const wellKnownNames = [
+      "pat milliken", "tuttle click", "penske auto", "union park", "malouf auto",
+      "tasca auto", "suntrup auto", "jt auto"
+    ];
+    if (wellKnownNames.includes(nameWithoutAuto + " auto")) {
+      return words; // Keep "Auto" for well-known names
+    }
     if (words.length > 2 || commonWords.includes(nameWithoutAuto)) {
       words = words.slice(0, -1);
     }
@@ -346,15 +365,22 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation) => {
         break;
       }
       if (domainWord.includes(nameWord) && nameWord.length > 3) {
-        partialMatchScore = Math.max(partialMatchScore, 20); // Partial match
+        partialMatchScore = Math.max(partialMatchScore, 20);
       }
     }
     if (hasDomainMatch) break;
   }
 
-  score += hasDomainMatch ? 40 : partialMatchScore;
+  score += hasDomainMatch ? 50 : partialMatchScore;
   score += hasBrand ? 30 : 0;
   score += hasAbbreviation ? 0 : 20;
+
+  // Boost score if proper nouns match
+  const properNounsInName = nameWords.filter(word => /^[A-Z]/.test(word) || commonWords.includes(word));
+  const properNounsInDomain = domainWords.filter(word => /^[A-Z]/.test(word) || commonWords.includes(word));
+  if (properNounsInName.some(pn => properNounsInDomain.includes(pn))) {
+    score += 20;
+  }
 
   const wellKnownNames = [
     "pat milliken", "tuttle click", "penske auto", "union park",
@@ -363,7 +389,7 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation) => {
   const nameStr = nameWords.join(" ");
   score += wellKnownNames.includes(nameStr) ? 10 : 0;
 
-  return score;
+  return Math.min(score, 100);
 };
 
 const applyMinimalFormatting = (name) => {
@@ -408,9 +434,25 @@ const humanizeName = (name, domain) => {
   words = cleanupFillers(words);
   words = removeUnnecessaryAuto(words);
   words = adjustForPossessiveFlow(words);
-  const { name: finalName, flags } = enforceColdEmailCompatibility(words, domain);
+
+  // Enforce 4-word limit
+  const flags = [];
+  if (words.length > 4) {
+    flags.push("TooLong");
+    const brandIndex = words.findIndex(word => detectBrand([word]).hasBrand);
+    if (brandIndex !== -1) {
+      const brand = words[brandIndex];
+      const otherWords = words.filter((_, i) => i !== brandIndex).slice(0, 3);
+      words = [...otherWords, brand];
+    } else {
+      words = words.slice(0, 4);
+    }
+  }
+
+  const { name: finalName, flags: compatibilityFlags } = enforceColdEmailCompatibility(words, domain);
   const confidenceScore = computeConfidenceScore(words, domain, hasBrand, hasAbbreviation);
   if (hasAbbreviation) flags.push("Unexpanded");
+  flags.push(...compatibilityFlags);
 
   return {
     name: applyMinimalFormatting(finalName),
@@ -833,6 +875,26 @@ function runUnitTests() {
       name: "GPT name matches domain",
       input: { name: "Tedbritt", domain: "tedbritt.com" },
       expected: { name: "Ted Britt", confidenceScore: 80, flags: [] }
+    },
+    {
+      name: "Test case: Edwards Auto Group",
+      input: { name: "Edwards Auto Group", domain: "edwardsautogroup.com" },
+      expected: { name: "Edwards", confidenceScore: 90, flags: [] }
+    },
+    {
+      name: "Test case: Scott Clark",
+      input: { name: "Scott Clark Auto Group", domain: "scottclark.com" },
+      expected: { name: "Scott Clark", confidenceScore: 90, flags: [] }
+    },
+    {
+      name: "Test case: Jack Powell",
+      input: { name: "Jack Powell Chrysler Dodge Jeep Ram", domain: "jackpowell.com" },
+      expected: { name: "Jack Powell Chrysler", confidenceScore: 70, flags: ["TooLong"] }
+    },
+    {
+      name: "Test case: Tasca",
+      input: { name: "Tasca Auto", domain: "tasca.com" },
+      expected: { name: "Tasca Auto", confidenceScore: 90, flags: [] }
     }
   ];
 
