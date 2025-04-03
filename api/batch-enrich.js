@@ -46,66 +46,79 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Missing OPENAI_API_KEY in environment variables" });
   }
 
-  // Function to call OpenAI with a timeout
-  const callOpenAI = async (prompt) => {
+  // Function to call OpenAI with a timeout and retry logic
+  const callOpenAI = async (prompt, retries = 3, delay = 1000) => {
     console.log("Calling OpenAI with prompt:", prompt);
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second timeout
-
-      const response = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          model: "gpt-4",
-          messages: [{ role: "user", content: prompt }],
-          temperature: 0.3
-        }),
-        signal: controller.signal
-      });
-
-      clearTimeout(timeoutId);
-
-      const text = await response.text();
-      if (!response.ok) {
-        console.error("OpenAI request failed:", text);
-        throw new Error(text);
-      }
-
-      // Parse the OpenAI response as JSON
-      let openAiResponse;
+    for (let attempt = 1; attempt <= retries; attempt++) {
       try {
-        openAiResponse = JSON.parse(text);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 30000); // 30-second timeout
+
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            model: "gpt-4",
+            messages: [{ role: "user", content: prompt }],
+            temperature: 0.3
+          }),
+          signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        const text = await response.text();
+        if (!response.ok) {
+          if (response.status === 429 && attempt < retries) {
+            // Rate limit error, wait and retry
+            console.warn(`Rate limit exceeded, retrying (${attempt}/${retries}) after ${delay}ms...`);
+            await new Promise(resolve => setTimeout(resolve, delay));
+            continue;
+          }
+          console.error("OpenAI request failed:", text);
+          throw new Error(text);
+        }
+
+        // Parse the OpenAI response as JSON
+        let openAiResponse;
+        try {
+          openAiResponse = JSON.parse(text);
+        } catch (err) {
+          console.error("Failed to parse OpenAI response as JSON:", err.message);
+          throw new Error(`Invalid JSON response from OpenAI: ${text}`);
+        }
+
+        // Extract the content from choices[0].message.content
+        if (!openAiResponse.choices || !openAiResponse.choices[0] || !openAiResponse.choices[0].message || !openAiResponse.choices[0].message.content) {
+          console.error("Invalid OpenAI response structure:", openAiResponse);
+          throw new Error("Invalid OpenAI response structure: missing choices[0].message.content");
+        }
+
+        const content = openAiResponse.choices[0].message.content;
+
+        // Parse the content as JSON (since it's a stringified JSON object)
+        let contentParsed;
+        try {
+          contentParsed = JSON.parse(content);
+        } catch (err) {
+          console.error("Failed to parse OpenAI content as JSON:", err.message);
+          throw new Error(`Invalid JSON in OpenAI content: ${content}`);
+        }
+
+        console.log("Parsed OpenAI content:", contentParsed);
+        return contentParsed;
       } catch (err) {
-        console.error("Failed to parse OpenAI response as JSON:", err.message);
-        throw new Error(`Invalid JSON response from OpenAI: ${text}`);
+        if (attempt < retries) {
+          console.warn(`OpenAI request failed, retrying (${attempt}/${retries}) after ${delay}ms...`, err.message);
+          await new Promise(resolve => setTimeout(resolve, delay));
+          continue;
+        }
+        console.error("OpenAI error after retries:", err.message);
+        return { error: `OpenAI error: ${err.message}` };
       }
-
-      // Extract the content from choices[0].message.content
-      if (!openAiResponse.choices || !openAiResponse.choices[0] || !openAiResponse.choices[0].message || !openAiResponse.choices[0].message.content) {
-        console.error("Invalid OpenAI response structure:", openAiResponse);
-        throw new Error("Invalid OpenAI response structure: missing choices[0].message.content");
-      }
-
-      const content = openAiResponse.choices[0].message.content;
-
-      // Parse the content as JSON (since it's a stringified JSON object)
-      let contentParsed;
-      try {
-        contentParsed = JSON.parse(content);
-      } catch (err) {
-        console.error("Failed to parse OpenAI content as JSON:", err.message);
-        throw new Error(`Invalid JSON in OpenAI content: ${content}`);
-      }
-
-      console.log("Parsed OpenAI content:", contentParsed);
-      return contentParsed;
-    } catch (err) {
-      console.error("OpenAI error:", err.message);
-      return { error: `OpenAI error: ${err.message}` };
     }
   };
 
