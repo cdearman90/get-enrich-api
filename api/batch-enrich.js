@@ -409,8 +409,7 @@ export default async function handler(req, res) {
       const raw = Buffer.concat(buffers).toString("utf-8");
       console.log("Raw request body:", raw);
       try {
-        const parsed = JSON.parse(raw);
-        leads = parsed.leads || parsed || [];
+        leads = JSON.parse(raw);
       } catch (err) {
         console.error("Failed to parse JSON:", err.message);
         return res.status(400).json({ error: "Invalid JSON body", details: err.message });
@@ -435,7 +434,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Missing OPENAI_API_KEY in environment variables" });
   }
 
-  const limit = pLimit(100 / 60); // ~1.67 requests per second
+  const limit = pLimit(2); // Allow 2 concurrent OpenAI calls
   const manualReviewQueue = [];
   const results = [];
   let totalTokens = 0;
@@ -447,9 +446,9 @@ export default async function handler(req, res) {
     for (let attempt = 1; attempt <= retries; attempt++) {
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 30000);
+        const timeoutId = setTimeout(() => controller.abort(), 10000);
 
-        const response = await limit(() => fetch("https://api.openai.com/v1/chat/completions", {
+        const response = await fetch("https://api.openai.com/v1/chat/completions", {
           method: "POST",
           headers: {
             Authorization: `Bearer ${OPENAI_API_KEY}`,
@@ -464,7 +463,7 @@ export default async function handler(req, res) {
             temperature: 0.3
           }),
           signal: controller.signal
-        }));
+        });
 
         clearTimeout(timeoutId);
 
@@ -480,6 +479,10 @@ export default async function handler(req, res) {
         }
 
         console.log("Raw OpenAI response:", text);
+        if (!text.trim().startsWith("{")) {
+          throw new Error("Non-JSON response from OpenAI: " + text);
+        }
+
         let openAiResponse;
         try {
           openAiResponse = JSON.parse(text);
@@ -495,21 +498,21 @@ export default async function handler(req, res) {
 
         const content = openAiResponse.choices[0].message.content;
         console.log("Extracted OpenAI content:", content);
-        const match = content.match(/##Name:\s*(.+)/);
-        if (!match) {
+        const match = content.match(/##Name:\s*([^\n\r]+)/);
+        if (!match || !match[1]) {
           console.error("Failed to extract name from OpenAI response:", content);
-          throw new Error("Invalid OpenAI response format: missing ##Name: delimiter");
+          throw new Error("Invalid OpenAI response format: missing or malformed ##Name: delimiter");
         }
         return { result: match[1].trim(), tokens: estimatedTokens };
       } catch (err) {
         if (err.name === "AbortError") {
-          console.error("OpenAI request timed out after 30 seconds");
+          console.error("OpenAI request timed out after 10 seconds");
           if (attempt < retries) {
             console.warn(`Retrying (${attempt}/${retries}) after ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
           }
-          return { result: null, error: "OpenAI request timed out after 30 seconds", tokens: estimatedTokens };
+          return { result: null, error: "OpenAI request timed out after 10 seconds", tokens: estimatedTokens };
         }
         if (attempt < retries) {
           console.warn(`OpenAI request failed, retrying (${attempt}/${retries}) after ${delay}ms...`, err.message);
@@ -536,173 +539,105 @@ export default async function handler(req, res) {
     }
 
     const prompt = `
-Given the dealership domain "${domain}" sourced from an email list, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach, based on your knowledge of the dealership's domain, logo, and homepage meta title as of April 2025. Consider the domain, logo, and homepage meta title equally to formulate the most natural name, as if a dealer is casually speaking to another dealer in a conversation.
+Given the dealership domain "${domain}" sourced from an email list, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach, based on your knowledge of the dealership's domain, logo, and homepage meta title as of April 2025. 
 
-The name must fit seamlessly in cold email copy like:
-- "{{CompanyName}}’s CRM isn’t broken — it’s bleeding."
-- "Want me to run {{CompanyName}}’s CRM numbers?"
-- "$450K may be hiding in {{CompanyName}}’s CRM."
-Ensure the name is singular to work naturally with the possessive form (e.g., Duval Ford’s, Pat Milliken’s).
-
-### Do's:
-- Generate a name that sounds natural and conversational, as if one dealer is speaking to another.
-- Decompress the domain name by separating compressed words using common US first and last names, known car brand names (e.g., Ford, Chevy, Toyota, GMC, Kia), and US city names or geographic regions. For example, unionpark → Union Park, richmondford → Richmond Ford.
-- Include a dealership-specific identifier (e.g., a city, state, person’s last name, or unique name) when it makes sense and sounds natural, like Duval Ford, Athens Ford, Chastang Ford, Mercedes-Benz Caldwell, BMW West Springfield.
-- Use well-known dealership names if they are recognizable, like Pat Milliken, Tuttle-Click, Penske Auto, Union Park, Malouf Auto, Tasca Auto, Suntrup Auto, JT Auto. Do not append a brand to well-known names, e.g., Pat Milliken Ford → Pat Milliken.
-- Include "Auto" if it makes the name sound more natural and the name lacks a brand, e.g., Fletcher Auto, or if it’s part of the dealership’s identity, e.g., Lifted Trucks Auto. Only add "Auto" if the name is ambiguous without it, e.g., Regal → Regal Auto, but not Ted Britt → Ted Britt Auto.
-- Always use "auto" instead of "automotive", only where applicable.
-- Ensure proper spacing and capitalization, like San Leandro Ford instead of sanleandroford.
-- Prefer spaces over dashes for names unless the dash is part of the dealership’s well-known identity, e.g., Tuttle-Click → Tuttle Click unless Tuttle-Click is explicitly well-known.
-- Prioritize the domain when generating the name, ensuring the name contains at least one significant word from the domain, e.g., newhollandauto.com → New Holland Auto, not Crossroads Auto.
-
-### Don'ts:
-- Do not return just the car brand, like Ford, Chevrolet, Toyota.
-- Do not start the name with "of", like of Greenwich (should be Greenwich Toyota). Names like Team Ford are acceptable and should not be transformed into Ford of Teamford.
-- Never capitalize the first letter of transition words like "of" or "to".
-- Never capitalize an S after an apostrophe, e.g., Jane'S Auto Group.
-- Avoid using all capital letters in a word, unless it's initials like JT or MB. Use your best judgment to identify the exceptions.
-- Avoid using one-word names or names with more than 4 words, unless you think it is appropriate for the use case.
-- Never use 5 words in one name under any circumstances.
-- Do not include city names, person names, or marketing phrases, e.g., Jacksonville’s Best Dealership, Stuart, unless they are essential to the dealership’s identity, e.g., Miami Lakes Auto Mall. Simplify city names if possible, e.g., West Springfield → Springfield.
-- Do not include .com, www, dealer, autos, group, inc, llc, hyphens, URLs, symbols, or words like Website, Home, Welcome.
-- Avoid filler words like LLC, Inc, Enterprise, Group, or Team unless essential to the dealership’s identity, e.g., McCarthy Auto Group → McCarthy Auto.
-
-### Example Inputs and Outputs:
-Input: Domain: duvalford.com
-Output: ##Name: Duval Ford
-
-Input: Domain: patmillikenford.com
-Output: ##Name: Pat Milliken
-
-Input: Domain: sanleandroford.com
-Output: ##Name: San Leandro Ford
-
-Input: Domain: miamilakesautomall.com
-Output: ##Name: Miami Lakes Auto Mall
-
-Input: Domain: unionpark.com
-Output: ##Name: Union Park
-
-Return the final dealership name in the format: ##Name: [Clean Dealership Name]
-Use your best judgment to choose the most natural name to flow in our cold email examples.
+Return it in this format only:
+##Name: [Clean Dealership Name]
     `.trim();
 
-    const { result, error, tokens } = await callOpenAI(prompt);
+    const { result: gptNameRaw, error, tokens } = await limit(() => callOpenAI(prompt));
     totalTokens += tokens;
 
     if (error) {
-      console.error(`Failed to process domain ${domain}: ${error}`);
+      console.error(`❌ OpenAI error for ${domain}: ${error}`);
       return { name: "", confidenceScore: 0, error };
     }
 
-    try {
-      const gptNameRaw = result || "";
-      const match = gptNameRaw.match(/##Name:\s*(.+)/);
-      const extractedName = match ? match[1].trim() : "";
+    const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
+    const domainKey = domain.replace(".com", "").toLowerCase();
+    const cleanedGPT = gptNameRaw?.trim() || "";
+    const cleanedNameKey = cleanedGPT.replace(/\s+/g, "").toLowerCase();
 
-      if (!extractedName) {
-        console.error(`No valid ##Name found for domain ${domain}: ${result}`);
-        return { name: "", confidenceScore: 0, error: "No valid ##Name found" };
-      }
-
-      const domainKey = domain.replace(".com", "").toLowerCase();
-      const cleanedName = extractedName.replace(/\s+/g, "").toLowerCase();
-      const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
-
-      if (cleanedName === domainKey) {
-        console.log(`GPT name matches domain for ${domain}, falling back to humanizeName`);
-        const cleaned = humanizeName(extractedName, domain);
-        const finalResult = {
-          name: cleaned.name,
-          confidenceScore: cleaned.confidenceScore,
-          flags: cleaned.flags, // Use flags from humanizeName
-          modelUsed: model,
-          reason: "GPT name matches domain, used fallback humanization"
-        };
-        if (finalResult.name && finalResult.name.toLowerCase().replace(/\s+/g, "") !== domainKey) {
-          domainCache.set(domain, finalResult);
-        }
-        console.log(`Processed domain ${domain}: ${extractedName} -> ${finalResult.name} (Confidence: ${finalResult.confidenceScore})`);
-        if (finalResult.confidenceScore < 70 || finalResult.flags.length > 0) {
-          console.log(`Flagging for manual review: ${finalResult.name} (Confidence: ${finalResult.confidenceScore})`);
-          manualReviewQueue.push({
-            domain,
-            name: finalResult.name,
-            confidenceScore: finalResult.confidenceScore,
-            reason: finalResult.flags.join(", ") || "Low confidence"
-          });
-        }
-        return finalResult;
-      }
-
-      const wordCount = extractedName.split(" ").length;
-      if (
-        extractedName &&
-        wordCount <= 4 &&
-        !extractedName.toLowerCase().includes("group") &&
-        cleanedName !== domainKey &&
-        !extractedName.toLowerCase().startsWith("of ")
-      ) {
-        const cleaned = humanizeName(extractedName, domain);
-        const finalResult = {
-          name: cleaned.name,
-          confidenceScore: cleaned.confidenceScore,
-          flags: cleaned.flags,
-          modelUsed: model,
-          reason: cleaned.confidenceScore < 70 ? "Low confidence (GPT name used with humanization)" : null
-        };
-
-        if (finalResult.name && finalResult.name.toLowerCase() !== domainKey) {
-          domainCache.set(domain, finalResult);
-        }
-
-        console.log(`Processed domain ${domain}: ${extractedName} -> ${finalResult.name} (Confidence: ${finalResult.confidenceScore})`);
-        if (finalResult.confidenceScore < 70 || finalResult.flags.length > 0) {
-          console.log(`Flagging for manual review: ${finalResult.name} (Confidence: ${finalResult.confidenceScore})`);
-          manualReviewQueue.push({
-            domain,
-            name: finalResult.name,
-            confidenceScore: finalResult.confidenceScore,
-            reason: finalResult.flags.join(", ") || "Low confidence"
-          });
-        }
-        return finalResult;
-      }
-
-      console.log(`Falling back to humanizeName for domain ${domain}: GPT name "${extractedName}" is invalid`);
-      const cleaned = humanizeName(extractedName, domain);
-      if (!cleaned.name) {
-        console.error(`Failed to humanize name for domain ${domain}: ${extractedName}`);
-        return { name: "", confidenceScore: 0, error: `Failed to humanize name: ${extractedName}` };
-      }
-
-      const finalResult = {
-        name: cleaned.name,
-        confidenceScore: cleaned.confidenceScore,
-        flags: cleaned.flags,
+    if (!cleanedGPT || cleanedNameKey === domainKey) {
+      console.log(`🧠 GPT name "${cleanedGPT}" matches domain "${domain}", falling back`);
+      const fallback = humanizeName(cleanedGPT, domain);
+      const fallbackResult = {
+        name: fallback.name,
+        confidenceScore: fallback.confidenceScore,
+        flags: fallback.flags,
         modelUsed: model,
-        reason: cleanedName === domainKey ? "GPT name matches domain, used fallback" : null
+        reason: "GPT name matches domain, used fallback humanization"
       };
 
-      if (finalResult.name && finalResult.name.toLowerCase() !== domainKey) {
-        domainCache.set(domain, finalResult);
+      if (fallbackResult.name && fallbackResult.name.toLowerCase().replace(/\s+/g, "") !== domainKey) {
+        domainCache.set(domain, fallbackResult);
       }
 
-      console.log(`Processed domain ${domain}: ${extractedName} -> ${finalResult.name} (Confidence: ${finalResult.confidenceScore})`);
-      if (finalResult.confidenceScore < 70 || finalResult.flags.length > 0) {
-        console.log(`Flagging for manual review: ${finalResult.name} (Confidence: ${finalResult.confidenceScore})`);
+      if (fallbackResult.confidenceScore < 70 || fallbackResult.flags.length > 0) {
         manualReviewQueue.push({
           domain,
-          name: finalResult.name,
-          confidenceScore: finalResult.confidenceScore,
-          reason: finalResult.flags.join(", ") || "Low confidence"
+          name: fallbackResult.name,
+          confidenceScore: fallbackResult.confidenceScore,
+          reason: fallbackResult.flags.join(", ") || "Low confidence"
         });
       }
-      return finalResult;
-    } catch (err) {
-      console.error(`Error in humanizeName for domain ${domain}: ${err.message}`);
-      return { name: "", confidenceScore: 0, error: `Error in humanizeName: ${err.message}` };
+
+      return fallbackResult;
     }
+
+    const wordCount = cleanedGPT.split(" ").length;
+    if (
+      wordCount > 4 ||
+      cleanedGPT.toLowerCase().includes("group") ||
+      cleanedGPT.toLowerCase().startsWith("of ")
+    ) {
+      console.log(`📛 GPT name "${cleanedGPT}" is structurally invalid — fallback triggered`);
+      const fallback = humanizeName(cleanedGPT, domain);
+      const fallbackResult = {
+        name: fallback.name,
+        confidenceScore: fallback.confidenceScore,
+        flags: fallback.flags,
+        modelUsed: model,
+        reason: "GPT name structurally invalid, used fallback"
+      };
+
+      domainCache.set(domain, fallbackResult);
+      if (fallbackResult.confidenceScore < 70 || fallbackResult.flags.length > 0) {
+        manualReviewQueue.push({
+          domain,
+          name: fallbackResult.name,
+          confidenceScore: fallbackResult.confidenceScore,
+          reason: fallbackResult.flags.join(", ") || "Low confidence"
+        });
+      }
+
+      return fallbackResult;
+    }
+
+    const cleaned = humanizeName(cleanedGPT, domain);
+    const finalResult = {
+      name: cleaned.name,
+      confidenceScore: cleaned.confidenceScore,
+      flags: cleaned.flags,
+      modelUsed: model,
+      reason: cleaned.confidenceScore < 70 ? "Low confidence (GPT name + humanization)" : null
+    };
+
+    if (finalResult.name && finalResult.name.toLowerCase().replace(/\s+/g, "") !== domainKey) {
+      domainCache.set(domain, finalResult);
+    }
+
+    if (finalResult.confidenceScore < 70 || finalResult.flags.length > 0) {
+      manualReviewQueue.push({
+        domain,
+        name: finalResult.name,
+        confidenceScore: finalResult.confidenceScore,
+        reason: finalResult.flags.join(", ") || "Low confidence"
+      });
+    }
+
+    console.log(`✅ Processed domain ${domain}: "${cleanedGPT}" → "${finalResult.name}" (Score: ${finalResult.confidenceScore})`);
+    return finalResult;
   };
 
   const enrichLead = async (lead) => {
@@ -724,7 +659,7 @@ Enrich this lead based on:
 Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Name"}
     `.trim();
 
-    const { result, error, tokens } = await callOpenAI(prompt);
+    const { result, error, tokens } = await limit(() => callOpenAI(prompt));
     totalTokens += tokens;
 
     if (error) {
@@ -770,13 +705,18 @@ Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Na
     return null;
   };
 
-  const BATCH_SIZE = 10;
+  const BATCH_SIZE = 2;
   const leadChunks = Array.from(
     { length: Math.ceil(leads.length / BATCH_SIZE) },
     (_, i) => leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
   );
 
   for (const chunk of leadChunks) {
+    if (Date.now() - startTime > 10000) {
+      console.warn("⏳ Timeout guard hit. Returning early to avoid Vercel kill.");
+      return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
+    }
+
     const chunkResults = await Promise.all(
       chunk.map(lead =>
         limit(async () => {
@@ -796,7 +736,7 @@ Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Na
 
   console.log("Returning results:", results);
   console.log(`Request completed in ${Date.now() - startTime}ms at`, new Date().toISOString());
-  return res.status(200).json({ results, manualReviewQueue, totalTokens });
+  return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: false });
 }
 
 export const config = {
