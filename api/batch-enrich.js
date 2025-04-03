@@ -166,7 +166,7 @@ const states = [
   "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
   "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire",
   "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio",
-  "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota",
+  "oklahomacity", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota",
   "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia",
   "wisconsin", "wyoming", "district of columbia", "dc"
 ];
@@ -648,9 +648,8 @@ Return it in this format only:
     }
 
     // Check for multiple cities
-    const knownCities = topCitiesNormalized;
     const gptWords = cleanedGPT.toLowerCase().split(" ");
-    const cityCount = gptWords.filter(word => knownCities.includes(word)).length;
+    const cityCount = gptWords.filter(word => topCitiesNormalized.includes(word)).length;
     if (cityCount >= 3) {
       console.log(`📛 GPT name "${cleanedGPT}" has too many cities (${cityCount}) — fallback triggered`);
       const fallback = humanizeName(cleanedGPT, domain);
@@ -734,47 +733,63 @@ Return it in this format only:
     return finalResult;
   };
 
-  const enrichLead = async (lead) => {
-    const { email, firstName, lastName, jobTitle, domain, mobilePhone, leadLinkedIn, engagedContact } = lead;
+  const enrichFranchiseGroup = async (lead) => {
+    const { email, domain } = lead;
     if (!email || !domain) {
       console.error("Missing email or domain for lead:", lead);
-      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: "Missing email or domain" };
+      return { franchiseGroup: "", confidenceScore: 0, buyerScore: 0, referenceClient: "", error: "Missing email or domain" };
     }
 
     const prompt = `
 Enrich this lead based on:
 - Email: ${email}
-- Name: ${firstName || "N/A"} ${lastName || ""}
-- Title: ${jobTitle || "N/A"}
 - Domain: ${domain}
-- Mobile: ${mobilePhone || "N/A"}
-- LinkedIn: ${leadLinkedIn || "N/A"}
-- Engaged: ${engagedContact || "N/A"}
-Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Name"}
+Identify the primary brand (e.g., "Toyota", "Ford") associated with the dealership, which should be the first brand mentioned in the dealership's name, tagline, brand story, or marketing materials as of April 2025.
+Return only: {"franchiseGroup": "X", "confidenceScore": 0-100, "buyerScore": 0-100, "referenceClient": "Name"}
     `.trim();
 
     const { result, error, tokens } = await limit(() => callOpenAI(prompt));
     totalTokens += tokens;
 
     if (error) {
-      console.error(`Failed to process email ${email}: ${error}`);
-      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error };
+      console.error(`❌ OpenAI error for ${email}: ${error}`);
+      return { franchiseGroup: "", confidenceScore: 0, buyerScore: 0, referenceClient: "", error };
     }
 
-    const parsed = extractJsonSafely(result, ["franchiseGroup", "buyerScore", "referenceClient"]);
-    if (parsed) {
-      console.log(`Enriched lead for email ${email}:`, parsed);
-      const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
-      return {
-        franchiseGroup: parsed.franchiseGroup,
-        buyerScore: parsed.buyerScore,
-        referenceClient: parsed.referenceClient,
-        modelUsed: model
-      };
+    const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
+    const parsed = extractJsonSafely(result, ["franchiseGroup", "confidenceScore", "buyerScore", "referenceClient"]);
+    if (!parsed) {
+      console.error(`Invalid GPT response for email ${email}: ${result}`);
+      return { franchiseGroup: "", confidenceScore: 0, buyerScore: 0, referenceClient: "", error: `Invalid GPT response: ${result}` };
     }
 
-    console.error(`Invalid GPT response for email ${email}: ${result}`);
-    return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Invalid GPT response: ${JSON.stringify(result)}` };
+    // Validate that franchiseGroup contains only a single brand
+    let finalFranchiseGroup = parsed.franchiseGroup || "";
+    if (finalFranchiseGroup && finalFranchiseGroup.includes(",")) {
+      console.log(`📛 Multiple brands detected in "${finalFranchiseGroup}" — selecting first brand`);
+      finalFranchiseGroup = finalFranchiseGroup.split(",")[0].trim();
+    }
+
+    const finalResult = {
+      franchiseGroup: applyMinimalFormatting(finalFranchiseGroup),
+      confidenceScore: parsed.confidenceScore || 0,
+      buyerScore: parsed.buyerScore || 0,
+      referenceClient: parsed.referenceClient || "",
+      modelUsed: model,
+      reason: parsed.confidenceScore < 80 ? "Low confidence" : null
+    };
+
+    if (finalResult.confidenceScore < 80) {
+      manualReviewQueue.push({
+        domain,
+        franchiseGroup: finalResult.franchiseGroup,
+        confidenceScore: finalResult.confidenceScore,
+        reason: "Low confidence"
+      });
+    }
+
+    console.log(`✅ Processed email ${email}: Franchise Group: "${finalResult.franchiseGroup}" (Score: ${finalResult.confidenceScore})`);
+    return finalResult;
   };
 
   const extractJsonSafely = (data, fields = []) => {
@@ -799,7 +814,7 @@ Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Na
     return null;
   };
 
-  const BATCH_SIZE = 2;
+  const BATCH_SIZE = 3; // Align with Google Apps Script menu specification
   const leadChunks = Array.from(
     { length: Math.ceil(leads.length / BATCH_SIZE) },
     (_, i) => leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
@@ -817,10 +832,12 @@ Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Na
           try {
             return lead.domain && !lead.email
               ? await cleanCompanyName(lead)
-              : await enrichLead(lead);
+              : await enrichFranchiseGroup(lead);
           } catch (err) {
             console.error("Error processing lead:", lead, err.message);
-            return { name: "", franchiseGroup: "", buyerScore: 0, referenceClient: "", error: err.message };
+            return lead.domain && !lead.email
+              ? { name: "", confidenceScore: 0, error: err.message }
+              : { franchiseGroup: "", confidenceScore: 0, buyerScore: 0, referenceClient: "", error: err.message };
           }
         })
       )
@@ -831,7 +848,7 @@ Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Na
   console.log("Returning results:", results);
   console.log(`Request completed in ${Date.now() - startTime}ms at`, new Date().toISOString());
   return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: false });
-}
+};
 
 export const config = {
   api: {
