@@ -1,6 +1,6 @@
-// ✅ FULL VERSION OF batch-enrich.js WITH FALLBACKS, CITY/BRAND DETECTION, TYPOS, FLAGS, REVIEW QUEUE
+// ✅ FULL VERSION: Company Name Cleaning Only (includes fallbacks, typo correction, JSON resilience, brand detection, review queue, timeout guard)
 
-// --- Rate Limiting ---
+// --- Simple rate-limiting (p-limit style) ---
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
@@ -19,7 +19,7 @@ const pLimit = (concurrency) => {
   });
 };
 
-// --- Cache & Brand/City Constants ---
+// --- Cache, constants ---
 const domainCache = new Map();
 const BRANDS = [
   "chevrolet", "gmc", "cadillac", "buick", "ford", "lincoln", "chrysler",
@@ -27,10 +27,24 @@ const BRANDS = [
   "hyundai", "kia", "bmw", "mercedes", "benz", "subaru", "toyota", "vw",
   "lexus", "infiniti"
 ];
-const STATES = ["alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut", "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa", "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan", "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire", "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio", "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota", "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia", "wisconsin", "wyoming"];
-const COMMON_WORDS = ["pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto", ...STATES];
+const STATES = [
+  "alabama", "alaska", "arizona", "arkansas", "california", "colorado", "connecticut",
+  "delaware", "florida", "georgia", "hawaii", "idaho", "illinois", "indiana", "iowa",
+  "kansas", "kentucky", "louisiana", "maine", "maryland", "massachusetts", "michigan",
+  "minnesota", "mississippi", "missouri", "montana", "nebraska", "nevada", "new hampshire",
+  "new jersey", "new mexico", "new york", "north carolina", "north dakota", "ohio",
+  "oklahoma", "oregon", "pennsylvania", "rhode island", "south carolina", "south dakota",
+  "tennessee", "texas", "utah", "vermont", "virginia", "washington", "west virginia",
+  "wisconsin", "wyoming", "district of columbia", "dc"
+];
+const COMMON_WORDS = [
+  "pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto",
+  ...STATES
+];
 
-// --- Normalize text ---
+const capitalize = (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+
+// --- Normalize & clean incoming name ---
 const normalizeText = (name) => {
   if (!name || typeof name !== "string") return [];
   let result = name.replace(/^"|"$/g, '');
@@ -39,13 +53,13 @@ const normalizeText = (name) => {
   return words;
 };
 
-// --- Brand Detection (from array of words) ---
+// --- Detect brand from array of words ---
 const detectBrand = (words) => {
   const brand = words.find(word => BRANDS.includes(word.toLowerCase()));
   return { hasBrand: !!brand, brand };
 };
 
-// --- Memoized Levenshtein Distance for typo correction ---
+// --- Levenshtein Distance with memoization for typo correction ---
 const levenshteinDistance = (a, b, cache = new Map()) => {
   const key = `${a}|${b}`;
   if (cache.has(key)) return cache.get(key);
@@ -67,24 +81,30 @@ const levenshteinDistance = (a, b, cache = new Map()) => {
   return dist;
 };
 
-// --- Typo Correction (city detection only) ---
+// --- Correct city typos based on known city match ---
 const correctTypos = (words) => {
   const cache = new Map();
-  const CITIES = ["houston", "chicago", "phoenix", "dallas", "austin", "atlanta", "miami", "tampa", "orlando", "jacksonville", "losangeles", "newyork", "charlotte"];
-  const cityDisplay = { "losangeles": "Los Angeles", "newyork": "New York", "fortlauderdale": "Fort Lauderdale", "westpalmbeach": "West Palm Beach" };
+  const cities = ["sanleandro", "fortlauderdale", "westpalmbeach", "newyork", "jacksonville"];
+  const cityMap = {
+    "sanleandro": "San Leandro",
+    "fortlauderdale": "Fort Lauderdale",
+    "westpalmbeach": "West Palm Beach",
+    "newyork": "New York",
+    "jacksonville": "Jacksonville"
+  };
+
   return words.map(word => {
     const normalized = word.toLowerCase().replace(/\s+/g, '');
-    const closestMatch = CITIES.reduce((best, city) => {
+    const closest = cities.reduce((best, city) => {
       const dist = levenshteinDistance(normalized, city, cache);
-      return (dist < best.distance && dist <= 2)
-        ? { city, distance: dist }
-        : best;
+      return dist < best.distance ? { city, distance: dist } : best;
     }, { city: null, distance: Infinity });
-    return closestMatch.city ? (cityDisplay[closestMatch.city] || capitalize(closestMatch.city)) : word;
+
+    return closest.distance <= 2 ? cityMap[closest.city] || capitalize(closest.city) : word;
   });
 };
 
-// --- Domain decompression (splits things like 'jackpowelltoyota') ---
+// --- Decompress domain into component words ---
 const splitDomainIntoWords = (domain) => {
   let name = domain.replace(/\.com$/, '');
   name = name.replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -97,6 +117,7 @@ const decompressDomain = (words, domain) => {
   const domainWords = splitDomainIntoWords(domain).map(word => word.toLowerCase());
   const result = [];
   let domainIndex = 0;
+
   for (let i = 0; i < words.length; i++) {
     const word = words[i];
     if (domainIndex >= domainWords.length) {
@@ -111,31 +132,28 @@ const decompressDomain = (words, domain) => {
       result.push(word);
     }
   }
-  return result;
-};
-
-const capitalize = (s) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-
-// --- Final formatting with casing, brand/city fixes ---
-const applyMinimalFormatting = (name) => {
-  let result = name
-    .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1))
-    .replace(/Mccarthy/g, "McCarthy")
-    .replace(/Mclarty/g, "McLarty")
-    .replace(/Bmw/g, "BMW")
-    .replace(/Vw/g, "VW")
-    .replace(/'s\b/gi, "'s")
-    .replace(/([a-z])'S\b/gi, "$1's");
 
   return result;
 };
 
-// --- Cleanup helpers ---
+// --- Remove common filler words ---
 const cleanupFillers = (words) => {
   const fillers = ["motors", "llc", "inc", "enterprise", "group", "dealership", "team"];
   return words.filter(word => !fillers.includes(word.toLowerCase())).map(word => word.replace(/^-/, ""));
 };
 
+// --- Remove unnecessary trailing 'auto' unless it's a well-known phrase ---
+const removeUnnecessaryAuto = (words) => {
+  const last = words[words.length - 1];
+  const base = words.slice(0, -1).join(" ").toLowerCase();
+  const preserve = ["penske auto", "tasca auto", "union park", "jt auto", "suntrup auto"];
+  if (last === "auto" && words.length > 1 && !preserve.includes(base + " auto")) {
+    return words.slice(0, -1);
+  }
+  return words;
+};
+
+// --- Adjust for possessive flow (e.g., Gus's → Gus) ---
 const adjustForPossessiveFlow = (words) => {
   if (words.length > 1 && words[1].toLowerCase().endsWith("s") && words[1].toLowerCase() !== "cars") {
     words[1] = words[1].replace(/s$/, "");
@@ -143,25 +161,29 @@ const adjustForPossessiveFlow = (words) => {
   return words;
 };
 
+// --- Abbreviation detection (e.g., CZAG, ABCD) ---
 const detectAbbreviation = (words) => {
-  return words.some(word =>
+  return words.some(word => (
     (/^[A-Z]{2,4}$/.test(word) ||
      /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) ||
      /^[A-Z][a-z]{1,2}$/.test(word) ||
      (!/^[a-z]+$/i.test(word) && !COMMON_WORDS.includes(word.toLowerCase()) && word.length > 3))
-  );
+  ));
 };
 
-const removeUnnecessaryAuto = (words) => {
-  if (words[words.length - 1] === "auto" && words.length > 1) {
-    const nameWithoutAuto = words.slice(0, -1).join(" ").toLowerCase();
-    const keepAuto = ["pat milliken", "penske auto", "union park", "tasca auto", "jt auto"].some(n => nameWithoutAuto.includes(n));
-    if (!keepAuto) words = words.slice(0, -1);
-  }
-  return words;
+// --- Final formatting for output ---
+const applyMinimalFormatting = (name) => {
+  return name
+    .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1))
+    .replace(/Mccarthy/g, "McCarthy")
+    .replace(/Mclarty/g, "McLarty")
+    .replace(/Bmw/g, "BMW")
+    .replace(/Vw/g, "VW")
+    .replace(/'s\b/gi, "'s")
+    .replace(/([a-z])'S\b/gi, "$1's");
 };
 
-// --- Scoring ---
+// --- Confidence Score Calculation ---
 const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation) => {
   let score = 0;
   const domainWords = splitDomainIntoWords(domain).map(w => w.toLowerCase());
@@ -187,39 +209,40 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation) => {
   score += hasBrand ? 30 : 0;
   score += hasAbbreviation ? 0 : 20;
 
-  const wellKnownNames = ["pat milliken", "union park", "tasca auto", "jt auto"];
   const nameStr = nameWords.join(" ");
-  score += wellKnownNames.includes(nameStr) ? 10 : 0;
+  if (["pat milliken", "union park", "tasca auto", "jt auto"].includes(nameStr)) {
+    score += 10;
+  }
 
   return Math.min(score, 100);
 };
 
-// --- Full Fallback Cleanup Logic ---
+// --- Fallback Cleanup + Scoring + Flagging ---
 const humanizeName = (name, domain) => {
   let words = normalizeText(name);
   const { hasBrand } = detectBrand(words);
 
-  // Known safe names
-  const wellKnownNames = ["pat milliken", "union park", "tasca auto", "jt auto"];
-  const normalizedName = words.join(" ").toLowerCase();
-  if (wellKnownNames.includes(normalizedName) && !hasBrand) {
+  // Trusted names
+  const knownGood = ["pat milliken", "union park", "tasca auto", "jt auto"];
+  const normalized = words.join(" ").toLowerCase();
+  if (knownGood.includes(normalized) && !hasBrand) {
     return {
-      name: applyMinimalFormatting(normalizedName),
+      name: applyMinimalFormatting(normalized),
       confidenceScore: 90,
       flags: []
     };
   }
 
-  // Decompress domain for pattern match
+  // Clean up sequence
   words = decompressDomain(words, domain);
-  words = [...new Set(words)]; // Deduplicate
+  words = [...new Set(words)];
   words = correctTypos(words);
   const hasAbbreviation = detectAbbreviation(words);
   words = cleanupFillers(words);
   words = removeUnnecessaryAuto(words);
   words = adjustForPossessiveFlow(words);
 
-  // Enforce 4-word limit
+  // Trim long names
   const flags = [];
   if (words.length > 4) {
     flags.push("TooLong");
@@ -233,19 +256,18 @@ const humanizeName = (name, domain) => {
     }
   }
 
-  // Final cleanup & scoring
-  const cleanedName = words.join(" ").replace(/\s+/g, " ").trim();
+  const formattedName = words.join(" ").trim();
   const confidenceScore = computeConfidenceScore(words, domain, hasBrand, hasAbbreviation);
   if (hasAbbreviation) flags.push("Unexpanded");
 
   return {
-    name: applyMinimalFormatting(cleanedName),
+    name: applyMinimalFormatting(formattedName),
     confidenceScore,
     flags
   };
 };
 
-// --- OpenAI Call Logic with Timeout + Retry + Safety ---
+// --- GPT Call with Timeout, Retry, and max_tokens ---
 const callOpenAI = async (prompt, apiKey, retries = 3) => {
   const estimatedTokens = Math.ceil(prompt.length / 4);
   const model = process.env.OPENAI_MODEL || "gpt-4-turbo";
@@ -253,7 +275,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const timeoutId = setTimeout(() => controller.abort(), 9000); // 9s timeout to fit in Vercel window
 
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -263,27 +285,33 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
         },
         body: JSON.stringify({
           model,
+          max_tokens: 100, // optimization: smaller response = faster
+          temperature: 0.3,
           messages: [
-            { role: "system", content: "You are a dealership naming expert with deep familiarity with U.S. auto dealerships. Respond with: ##Name: Clean Name" },
-            { role: "user", content: prompt }
-          ],
-          temperature: 0.3
+            {
+              role: "system",
+              content: "You are a dealership naming expert. Respond only in this format:\n##Name: Clean Name"
+            },
+            {
+              role: "user",
+              content: prompt
+            }
+          ]
         }),
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
       const text = await response.text();
-
+      console.log("Raw OpenAI response:", text); // Added logging
       if (!response.ok) {
         throw new Error(`Status ${response.status}: ${text}`);
       }
-
-      const match = text.match(/##Name:\s*(.+)/);
-      if (!match || !match[1]) {
-        throw new Error("Missing ##Name: in GPT output");
+      const match = text.match(/##Name:\s*([^\n\r]+)/);
+      if (!match) {
+        console.error("Failed to extract name from OpenAI response:", text);
+        throw new Error("Missing ##Name: in response");
       }
-
       return { result: match[1].trim(), tokens: estimatedTokens };
 
     } catch (err) {
@@ -298,85 +326,112 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
   }
 };
 
+// --- Safe JSON extraction (for future JSON-mode prompts) ---
+const extractJsonSafely = (data, fields = []) => {
+  let parsed = data;
+  if (typeof data === "string") {
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      const match = data.match(/\{[^}]+\}/);
+      if (match) {
+        try {
+          parsed = JSON.parse(match[0]);
+        } catch {}
+      }
+    }
+  }
+
+  if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+    const missing = fields.filter(f => !(f in parsed));
+    return missing.length === 0 ? parsed : null;
+  }
+
+  return null;
+};
+
 export default async function handler(req, res) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "Missing OpenAI API key" });
-
-  const startTime = Date.now();
-  const limit = pLimit(1);
-  const manualReviewQueue = [];
-  const results = [];
-  let totalTokens = 0;
 
   let leads;
   try {
     const buffers = [];
     for await (const chunk of req) buffers.push(chunk);
-    const raw = Buffer.concat(buffers).toString("utf-8");
-    leads = JSON.parse(raw);
+    leads = JSON.parse(Buffer.concat(buffers).toString("utf-8"));
   } catch (err) {
-    return res.status(400).json({ error: "Invalid request body", details: err.message });
+    return res.status(400).json({ error: "Invalid JSON", details: err.message });
   }
 
   if (!Array.isArray(leads) || leads.length === 0) {
     return res.status(400).json({ error: "Missing or invalid lead list" });
   }
 
-  const BATCH_SIZE = 2;
+  const startTime = Date.now();
+  const limit = pLimit(1); // sequential GPT calls for timeout safety
+  const results = [];
+  const manualReviewQueue = [];
+  let totalTokens = 0;
+
+  const BATCH_SIZE = 3; // Match Google Apps Script menu specification
   const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
     leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
   );
 
   for (const chunk of leadChunks) {
-    if (Date.now() - startTime > 9500) {
-      console.warn("⏳ Timeout guard hit. Returning partial response.");
+    if (Date.now() - startTime > 9000) {
       return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
     }
 
-    const chunkResults = await Promise.all(chunk.map(lead =>
-      limit(async () => {
-        const { domain, rowNum } = lead;
-        if (!domain) return { name: "", confidenceScore: 0, error: "Missing domain", rowNum };
+    const chunkResults = await Promise.all(
+      chunk.map(lead =>
+        limit(async () => {
+          const { domain, rowNum } = lead;
+          if (!domain) return { name: "", confidenceScore: 0, error: "Missing domain", rowNum };
 
-        if (domainCache.has(domain)) {
-          return { ...domainCache.get(domain), rowNum };
-        }
-
-        const prompt = `Given the dealership domain "${domain}", return a clean, human-friendly dealership name as of April 2025. Respond in this format:\n##Name: [Clean Name]`;
-        const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
-        totalTokens += tokens;
-
-        let fallback = { name: "", confidenceScore: 0, flags: [], reason: error || "No result" };
-
-        if (gptNameRaw) {
-          fallback = humanizeName(gptNameRaw, domain);
-          if (fallback.confidenceScore >= 80 && fallback.flags.length === 0) {
-            fallback.name = applyMinimalFormatting(gptNameRaw);
-            fallback.reason = "GPT name used directly (high confidence)";
-          } else {
-            fallback.reason = "Used fallback (low confidence or flagged)";
+          if (domainCache.has(domain)) {
+            return { ...domainCache.get(domain), rowNum };
           }
-        }
 
-        const result = {
-          ...fallback,
-          rowNum,
-          modelUsed: "gpt-4-turbo"
-        };
+          const prompt = `Given the dealership domain "${domain}", return a clean, human-friendly dealership name as of April 2025.\nRespond only with:\n##Name: Clean Name`;
 
-        if (result.confidenceScore < 80 || result.flags.length > 0) {
-          manualReviewQueue.push({
-            domain,
-            name: result.name,
-            confidenceScore: result.confidenceScore,
-            reason: result.reason
+          const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
+          totalTokens += tokens;
+
+          const fallback = gptNameRaw
+            ? humanizeName(gptNameRaw, domain)
+            : { name: "", confidenceScore: 0, flags: [], reason: error || "Timeout" };
+
+          const finalResult = {
+            ...fallback,
+            reason:
+              fallback.confidenceScore >= 80 && fallback.flags.length === 0
+                ? "GPT name used directly (high confidence)"
+                : "Used fallback",
+            rowNum
+          };
+
+          if (finalResult.confidenceScore < 80 || finalResult.flags.length > 0) {
+            manualReviewQueue.push({
+              domain,
+              name: finalResult.name,
+              confidenceScore: finalResult.confidenceScore,
+              reason: finalResult.reason,
+              flags: finalResult.flags,
+              rowNum
+            });
+          }
+
+          domainCache.set(domain, {
+            name: finalResult.name,
+            confidenceScore: finalResult.confidenceScore,
+            flags: finalResult.flags
           });
-        }
 
-        domainCache.set(domain, { name: result.name, confidenceScore: result.confidenceScore, flags: result.flags });
-        return result;
-      })
-    ));
+          return finalResult;
+        })
+      )
+    );
 
     results.push(...chunkResults);
   }
@@ -388,7 +443,7 @@ export const config = {
   api: { bodyParser: false }
 };
 
-// --- Unit Test Suite (optional) ---
+// --- Optional: Local Unit Test Runner ---
 function runUnitTests() {
   const tests = [
     {
@@ -412,7 +467,7 @@ function runUnitTests() {
       expected: { name: "San Leandro Ford", confidenceScore: 80, flags: [] }
     },
     {
-      name: "Too many words with fallback",
+      name: "Too many words fallback",
       input: { name: "Jack Powell Chrysler Dodge Jeep Ram", domain: "jackpowell.com" },
       expected: { name: "Jack Powell Chrysler", confidenceScore: 70, flags: ["TooLong"] }
     }
@@ -425,7 +480,6 @@ function runUnitTests() {
     const passedName = result.name === test.expected.name;
     const passedConfidence = result.confidenceScore >= test.expected.confidenceScore;
     const passedFlags = JSON.stringify(result.flags) === JSON.stringify(test.expected.flags);
-
     if (passedName && passedConfidence && passedFlags) {
       console.log(`✅ Test ${index + 1}: ${test.name} - Passed`);
       passed++;
@@ -437,7 +491,5 @@ function runUnitTests() {
     }
   });
 
-  console.log(`✅ Unit tests completed: ${passed}/${tests.length} passed`);
+  console.log(`🏁 Unit tests completed: ${passed}/${tests.length} passed`);
 }
-
-runUnitTests();
