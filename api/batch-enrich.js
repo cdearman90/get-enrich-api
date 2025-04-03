@@ -155,39 +155,34 @@ export default async function handler(req, res) {
 
     baseName = baseName.map(word => word.replace(/^-/, ""));
 
-    const wellKnownNames = ["pat milliken", "tommy nix", "elway", "kossi honda", "sarant cadillac", "penske auto", "tuttle-click"];
+    const wellKnownNames = ["pat milliken", "tommy nix", "elway", "kossi honda", "sarant cadillac", "penske auto", "tuttle-click", "lifted trucks", "union park", "malouf auto", "tasca auto", "suntrup auto", "jt auto"];
     let finalName = baseName;
     if (hasBrand) {
-      if (baseName.length > 0 && !wellKnownNames.some(wn => baseName.join(" ").includes(wn.split(" ")[0]))) {
+      if (baseName.length > 0 && !wellKnownNames.some(wn => baseName.join(" ").toLowerCase() === wn)) {
         finalName = [...baseName, brand];
-      } else if (wellKnownNames.some(wn => baseName.join(" ").includes(wn.split(" ")[0]))) {
+      } else if (wellKnownNames.some(wn => baseName.join(" ").toLowerCase() === wn)) {
         finalName = baseName;
-      } else {
-        finalName = [brand, "of", domain.split(".")[0]];
       }
-    } else if (baseName.length <= 1 && !wellKnownNames.some(wn => baseName.join(" ").includes(wn.split(" ")[0])) && !baseName.includes("auto")) {
+    }
+
+    // Specific rule for "Lifted Trucks"
+    if (finalName.join(" ").toLowerCase() === "lifted trucks") {
       finalName.push("auto");
     }
 
     const finalHasBrand = finalName.some(word => brands.includes(word));
     const isJustBrand = finalHasBrand && finalName.length === 1;
-    const genericTerms = ["dealership", "team", "group", "motors", "enterprise"];
-    const isBrandWithGenericTerm = finalHasBrand && finalName.length === 2 && genericTerms.includes(finalName[1]);
-    const baseNameWithoutBrand = finalHasBrand ? finalName.filter(word => !brands.includes(word) && !genericTerms.includes(word)) : finalName;
-    const lacksIdentifier = finalHasBrand && baseNameWithoutBrand.length === 0;
-    if (isJustBrand || isBrandWithGenericTerm || lacksIdentifier) {
-      console.warn(`Name lacks a dealership-specific identifier: ${finalName.join(" ")}`);
-      finalName = [brand || finalName[0], "of", domain.split(".")[0]];
+    if (isJustBrand) {
+      console.warn(`Name is just a brand: ${finalName.join(" ")}`);
+      finalName = [brand, "of", domain.split(".")[0]];
     }
 
     const commonWords = ["pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto", "hills", "birmingham", "mercedes", "benz", "elway", "kossi", "sarant", "tommy", "nix"];
     const hasAbbreviation = finalName.some(word => (/^[A-Z]{2,4}$/.test(word) || /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) || /^[A-Z][a-z]{1,2}$/.test(word)) && !commonWords.includes(word) && !brands.includes(word));
     let result = finalName.join(" ").replace(/\s+/g, " ").trim();
 
-    if (!result.match(/ford|chevy|toyota|honda|nissan|hyundai|kia|bmw|mercedes|benz|subaru|jeep|dodge|ram|chrysler|vw|lexus|cadillac|infiniti|dealership/i) && !wellKnownNames.some(wn => result.toLowerCase().includes(wn.split(" ")[0]))) {
-      console.warn(`Name does not resemble a dealership: ${result}`);
-      result = `${result} of ${domain.split(".")[0]}`;
-    }
+    // Strip any quotation marks from the final result
+    result = result.replace(/^"|"$/g, '');
 
     let titleCased = result
       .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1))
@@ -220,7 +215,8 @@ Ensure the name is singular to work naturally with the possessive form (e.g., "D
 ### Do's:
 - Include a dealership-specific identifier (e.g., a city, state, person’s last name, or unique name) with the brand when possible, like "Duval Ford", "Athens Ford", "Chastang Ford", "Mercedes-Benz Caldwell", "BMW West Springfield".
 - Use well-known dealership names without a brand if they are recognizable, like "Pat Milliken", "Tuttle-Click", "Penske Auto".
-- Include "Auto" or "Auto Group" only if it sounds natural and no brand is present, or if it's already stated like that in their domain, like "Malouf Auto", "Bentley Auto Group".
+- Include "Auto" if it helps it sound more natural or if no strong brand is present
+- Always use "auto" instead of "automotive", only where applicable.
 - Ensure proper spacing and capitalization, like "San Leandro Ford" instead of "sanleandroford".
 
 ### Don'ts:
@@ -243,7 +239,7 @@ Ensure the name is singular to work naturally with the possessive form (e.g., "D
 - "Bentley Auto Group"
 - "Malouf Auto"
 - "Union Park"
-- "Lifted Trucks"
+- "Lifted Trucks Auto's"
 - "Huntsville BMW"
 - "Lucky Chevrolet"
 - "Petrus Ford"
@@ -284,19 +280,20 @@ Ensure the name is singular to work naturally with the possessive form (e.g., "D
 - "Camino Real Chevrolet"
 
 ### Examples of Unacceptable Names (and Fixes):
-- "Ford" → "Ford Atlanta"
-- "Gy" → "GY Chevrolet"
-- "Sanleandroford" → "San Leandro Ford"
-- "Kia of Auburn" → "Auburn Kia"
-- "Pat Milliken Of Patmillikenford" → "Pat Milliken"
-- "Nissan of Athens" → "Athens Nissan"
-- "Mazda of South Charolotte" → "Mazda SC"
-- "Mercedes-Benz of Mbbhm" → "Mercedes-Benz Birmingham"
-- "Mercedes-Benz of Mb Usa" → "MB USA"
-- "Cadillac of Las Vegas" → "Vegas Cadillac" 
+- "Ford" → Ford Atlanta
+- "Gy" → GY Chevrolet
+- "Ford of Teamford → "Team Ford"
+- "Sanleandroford" → San Leandro Ford
+- "Kia of Auburn" → Auburn Kia
+- "Pat Milliken Of Patmillikenford" → Pat Milliken
+- "Nissan of Athens" → Athens Nissan
+- "Mazda of South Charolotte" → Mazda SC
+- "Mercedes-Benz of Mbbhm" → Mercedes-Benz Birmingham
+- "Mercedes-Benz of Mb Usa" → MB USA
+- "Cadillac of Las Vegas" → Vegas Cadillac 
 
 ### Formatting Guidelines:
-- Include a dealership-specific identifier (e.g., a city, state, person’s last name, or unique name) with the brand when possible, like "Duval Ford", "Athens Ford", "Chastang Ford", "Mercedes-Benz Caldwell", "BMW West Springfield". 
+- Include a dealership-specific identifier (e.g., a city, state, person’s last name, or unique name) with the brand when possible, like "Duval Ford", "Athens Ford", "Chastang Ford", "Mercedes-Benz Caldwell", "BMW West Springfield". Never try to force it if it doesn't sound natural.
 - Expand all abbreviations to their full form (e.g., "EH" → "East Hills", "CHMB" → "Chapman Mercedes-Benz", "G Y" → "GY Chevy", "Np" → "North Point", "Rt" → "Route"). If an abbreviation cannot be expanded with certainty, append a known brand associated with the dealership (e.g., "CZAG" → "CZAG Ford" if it’s a Ford dealership) or "Auto" (e.g., "CZAG" → "CZAG Auto") to ensure clarity. Do not return a name with unexpanded abbreviations like "CZAG" without a brand or "Auto".
 - Use well-known dealership names without a brand if they are recognizable, like "Pat Milliken", "Tuttle-Click", "Penske Auto".
 - Avoid including slogans, taglines, city names, or marketing phrases (e.g., "Jacksonville’s Best Dealership") unless essential to the dealership’s identity (e.g., "Metro of Madison"). 
@@ -304,7 +301,8 @@ Ensure the name is singular to work naturally with the possessive form (e.g., "D
 - Avoid other filler words like, "LLC", "Inc", "Enterprise", "Group", or "Team" unless essential to the dealership’s identity. 
 - Ensure proper spacing and capitalization, like "San Leandro Ford" instead of "sanleandroford".
 - If the first two words end with an s  (e.g., "Crossroads Cars"), either change the second word to Auto or something similar that would flow smooth in a cold email in a possessive format. For example, “Crossroads Cars” could be changed to “Crossroad Cars” or “Crossroads Auto” so it works better in a possessive form in a cold email (e.g. Crossroad Cars CRM isn’t broken—it’s bleeding). If it doesn’t make sense like this, use your best judgement to alter it or flag it and move to the next row if you’re extremely unsure.
-- The final name must sound 100% natural when spoken aloud, like something you’d say to a dealer over the phone. Avoid formatting errors (e.g., no "-benz" or starting with "Of" or dashes unless it’s separating two words. Never use quotation marks).
+- The final name must sound 100% natural when spoken aloud, like something you’d say to a dealer over the phone. Avoid formatting errors (e.g., no "-benz" or starting with "Of" or dashes unless it’s separating two words).
+- Only use letters/words in a name. The only exception is when your using a dash to separate two words (e.g.mercedes-benz) 
 - Ensure proper spacing and capitalization, like "San Leandro Ford" instead of "sanleandroford”.
 - Always use all capital letters for car brand names like “BMW” or “RAM”. 
 
@@ -312,7 +310,7 @@ Only return the final dealership name with no quotes or punctuation.
 
 Use your best judgement to choose the most natural name to flow in our cold email examples. Don't hesitiate to flag something and skip it if you are extremely unsure.
 
-    `.trim();
+   `.trim();
 
     const result = await callOpenAI(prompt);
 
@@ -332,14 +330,10 @@ Use your best judgement to choose the most natural name to flow in our cold emai
 
     const hasBrand = words.some(word => brands.includes(word));
     const isJustBrand = hasBrand && words.length === 1;
-    const genericTerms = ["dealership", "team", "group", "motors", "enterprise"];
-    const isBrandWithGenericTerm = hasBrand && words.length === 2 && genericTerms.includes(words[1]);
-    const baseNameWithoutBrand = hasBrand ? words.filter(word => !brands.includes(word) && !genericTerms.includes(word)) : words;
-    const lacksIdentifier = hasBrand && baseNameWithoutBrand.length === 0;
     let validatedResult = result;
-    if (isJustBrand || isBrandWithGenericTerm || lacksIdentifier) {
-      console.warn(`OpenAI returned a name without a dealership-specific identifier for domain ${domain}: ${result}`);
-      validatedResult = `${words.filter(word => !genericTerms.includes(word)).join(" ")} of ${domain.split(".")[0]}`;
+    if (isJustBrand) {
+      console.warn(`OpenAI returned a name that is just a brand for domain ${domain}: ${result}`);
+      validatedResult = `${words.join(" ")} of ${domain.split(".")[0]}`;
     }
 
     const cleanedName = humanizeName(validatedResult, domain);
@@ -392,7 +386,7 @@ Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Na
       };
     }
 
-    console.error(`Invalid GPT response for email ${email}:`, result);
+    console.error(`Invalid GPT response for email ${email}: ${result}`);
     return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: `Invalid GPT response: ${JSON.stringify(result)}` };
   };
 
