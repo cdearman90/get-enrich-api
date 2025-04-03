@@ -74,7 +74,6 @@ export default async function handler(req, res) {
         const text = await response.text();
         if (!response.ok) {
           if (response.status === 429 && attempt < retries) {
-            // Rate limit error, wait and retry
             console.warn(`Rate limit exceeded, retrying (${attempt}/${retries}) after ${delay}ms...`);
             await new Promise(resolve => setTimeout(resolve, delay));
             continue;
@@ -83,10 +82,8 @@ export default async function handler(req, res) {
           throw new Error(text);
         }
 
-        // Log the raw OpenAI response
         console.log("Raw OpenAI response:", text);
 
-        // Parse the OpenAI response as JSON
         let openAiResponse;
         try {
           openAiResponse = JSON.parse(text);
@@ -95,17 +92,13 @@ export default async function handler(req, res) {
           throw new Error(`Invalid JSON response from OpenAI: ${text}`);
         }
 
-        // Extract the content from choices[0].message.content
         if (!openAiResponse.choices || !openAiResponse.choices[0] || !openAiResponse.choices[0].message || !openAiResponse.choices[0].message.content) {
           console.error("Invalid OpenAI response structure:", openAiResponse);
           throw new Error("Invalid OpenAI response structure: missing choices[0].message.content");
         }
 
         const content = openAiResponse.choices[0].message.content;
-
-        // Log the extracted content
         console.log("Extracted OpenAI content:", content);
-
         return content;
       } catch (err) {
         if (attempt < retries) {
@@ -123,58 +116,69 @@ export default async function handler(req, res) {
   const humanizeName = (name) => {
     if (!name || typeof name !== "string") return "";
 
-    // Step 1: Remove unwanted elements (city names, marketing phrases)
-    let cleanedName = name
-      .replace(/\b(jacksonville|atlanta|chicago|new york|los angeles|best dealership|your trusted dealer|welcome to|home of)\b/gi, '') // Remove city names and marketing phrases
-      .replace(/\s+/g, ' ') // Replace multiple spaces with a single space
-      .trim();
+    // Step 1: Normalize and split
+    let words = name.toLowerCase().trim().split(/\s+/);
 
-    // Step 2: Remove filler words unless essential to identity
-    const fillerWords = /\b(auto|motors|llc|inc|enterprise|group|dealership)\b/gi;
-    const knownBrands = /\b(ford|chevy|toyota|honda|nissan|hyundai|kia|bmw|mercedes|volkswagen|jeep|dodge|ram|chrysler)\b/gi;
+    // Step 2: Remove unwanted elements (e.g., city names)
+    const cityNames = ["jacksonville", "birmingham", "greenwich", "atlanta", "chicago", "washington", "madison", "brooklyn", "wakefield", "gwinnett"];
+    words = words.filter(word => !cityNames.includes(word));
 
-    // Check if the name ends with a known brand
-    const brandMatch = cleanedName.match(knownBrands);
-    const brand = brandMatch ? brandMatch[0] : null;
-    let nameWithoutBrand = brand ? cleanedName.replace(knownBrands, '').trim() : cleanedName;
-
-    // Remove filler words
-    const wordCountBefore = nameWithoutBrand.split(' ').filter(word => word).length;
-    nameWithoutBrand = nameWithoutBrand.replace(fillerWords, '').trim();
-    const wordCountAfter = nameWithoutBrand.split(' ').filter(word => word).length;
-
-    // Step 3: Handle known brands (remove if <= 2 words and not confusing)
-    if (brand) {
-      const isConfusing = nameWithoutBrand.toLowerCase().match(/\b(team|east|west|north|south|central|city|valley|hill|ridge|park|lake|river|mountain|auto)\b/);
-      const isEssentialFiller = wordCountBefore > wordCountAfter && wordCountAfter <= 1; // Keep filler if it results in a very short name
-      if (wordCountAfter <= 2 && !isConfusing && !isEssentialFiller) {
-        cleanedName = nameWithoutBrand;
-      } else {
-        cleanedName = `${nameWithoutBrand} ${brand}`;
-      }
-    } else {
-      cleanedName = nameWithoutBrand;
+    // Step 3: Rephrase "Of" constructions
+    if (words[0] === "of" && words.length > 1) {
+      words = [...words.slice(1), words[0]]; // Move "Of" to end, will be filtered later if unnecessary
     }
 
-    // Step 4: Limit to 3 words (or 4 if a brand is included)
-    const words = cleanedName.split(' ').filter(word => word);
-    if (words.length > 4 || (words.length > 3 && !brand)) {
-      cleanedName = words.slice(0, brand ? 4 : 3).join(' ');
-      console.log(`Truncated name to ${brand ? 4 : 3} words: ${cleanedName}`);
+    // Step 4: Handle known brands
+    const brands = ["ford", "chevy", "toyota", "honda", "nissan", "hyundai", "kia", "bmw", "mercedes", "benz", "subaru", "jeep", "dodge", "ram", "chrysler"];
+    const hasBrand = words.some(word => brands.includes(word));
+    const brandIndex = words.findIndex(word => brands.includes(word));
+    const brand = hasBrand ? words[brandIndex] : null;
+    let baseName = hasBrand ? words.filter(word => !brands.includes(word)) : words;
+
+    // Step 5: Handle filler words
+    const fillers = ["motors", "llc", "inc", "enterprise", "group", "dealership"];
+    baseName = baseName.filter(word => !fillers.includes(word) || (word === "dealership" && baseName.length === 1));
+    if (baseName.includes("auto") && baseName.length > 2) {
+      baseName = baseName.filter(word => word !== "auto"); // Remove "Auto" if name is long enough
     }
 
-    // Step 5: Apply title case
-    cleanedName = cleanedName
-      .split(' ')
-      .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-      .join(' ');
+    // Step 6: Ensure singular form
+    const lastWord = baseName[baseName.length - 1];
+    if (lastWord === "cars" || lastWord === "autos") {
+      baseName[baseName.length - 1] = "auto";
+    }
 
-    return cleanedName;
+    // Step 7: Fix formatting errors (e.g., "-benz")
+    baseName = baseName.map(word => word.replace(/^-/, ""));
+
+    // Step 8: Reconstruct name
+    let finalName = baseName;
+    if (hasBrand && (baseName.length > 2 || !["pat", "milliken"].every(w => baseName.includes(w)))) {
+      finalName = [...baseName, brand]; // Keep brand unless well-known short name
+    }
+    if (finalName.length <= 2 && !finalName.includes("auto") && !hasBrand) {
+      finalName.push("auto"); // Add "Auto" for short names without brand
+    }
+
+    // Step 9: Limit length
+    const maxWords = hasBrand ? 4 : 3;
+    finalName = finalName.slice(0, maxWords);
+
+    // Step 10: Flag unexpanded abbreviations
+    const hasAbbreviation = finalName.some(word => /^[a-z]{1,4}$/.test(word) && !brands.includes(word));
+    const result = finalName.join(" ");
+
+    // Step 11: Apply title case with specific fixes
+    let titleCased = result
+      .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1))
+      .replace(/Mccarthy/g, "McCarthy")
+      .replace(/Mclarty/g, "McLarty");
+
+    return hasAbbreviation ? `${titleCased} [Unexpanded]` : titleCased;
   };
 
-  // Function to safely extract JSON (updated to handle parsed objects)
+  // Function to safely extract JSON
   const extractJsonSafely = (data, fields = []) => {
-    // If data is a string, try to parse it as JSON
     let parsed = data;
     if (typeof data === "string") {
       try {
@@ -189,7 +193,6 @@ export default async function handler(req, res) {
       }
     }
 
-    // If parsed is an object and has all required fields, return it
     if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
       const missing = fields.filter(f => !(f in parsed));
       return missing.length === 0 ? parsed : null;
@@ -207,40 +210,39 @@ export default async function handler(req, res) {
     }
 
     const prompt = `
-Given the dealership domain "${domain}" sourced from an email list, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach, based on your knowledge of the dealership's domain, logo, and homepage meta title as of late 2023. Consider all factors equally to make the best decision.
+Given the dealership domain "${domain}" sourced from an email list, return a clean, human-friendly dealership name that would be used naturally in conversation or cold outreach, based on your knowledge of the dealership's domain, logo, and homepage meta title as of April 2025. Consider all factors equally to make the best decision.
 
 The name must fit seamlessly in cold email copy like:
 - "{{CompanyName}}’s CRM isn’t broken — it’s bleeding."
 - "Want me to run {{CompanyName}}’s CRM numbers?"
 - "$450K may be hiding in {{CompanyName}}’s CRM."
+Ensure the name is singular to work naturally with the possessive form (e.g., "Fletcher Auto’s" instead of "Fletcher Autos’").
 
 Formatting Guidelines:
-- Use the dealership's domain, logo text, and homepage meta title as references (based on your knowledge up to late 2023), considering all factors equally.
-- Expand abbreviations (e.g., "EH" → "East Hills").
-- Avoid including slogans, taglines, city names, or marketing phrases (e.g., "Jacksonville’s Best Dealership") unless they enhance the naturalness of the name.
-- Avoid filler words like "Auto", "Motors", "LLC", "Inc", "Enterprise", "Group", or "Dealership" unless they make the name sound more natural or are essential to the dealership's identity.
-- You may remove a known brand (e.g., "Ford", "Chevy", "Toyota") from the end of the name if the rest of the name is 2 words or fewer and removing the brand does not cause confusion (e.g., "Pat Milliken Ford" → "Pat Milliken", but keep "Team Ford" as "Team" would be too vague).
-- The final name must sound 100% natural when spoken aloud — like something you’d say to a dealer over the phone.
+- Use the dealership's domain, logo text, and homepage meta title as references (based on your knowledge up to April 2025), considering all factors equally.
+- Expand all abbreviations to their full form (e.g., "EH" → "East Hills", "CHMB" → "Chapman Mercedes-Benz", "G Y" → "GY Chevy"). If an abbreviation cannot be expanded, include a brand or "Auto" to ensure clarity (e.g., "CHMB" → "CHMB Auto").
+- Avoid including slogans, taglines, city names, or marketing phrases (e.g., "Jacksonville’s Best Dealership") unless they are essential to the dealership’s identity (e.g., "Metro Of Madison" can keep "Of Madison" if part of the official name). Do not start the name with "Of" (e.g., "Of Greenwich" should be "Greenwich Toyota").
+- Include filler words like "Auto" if they make the name sound more natural in a cold email (e.g., "Fletcher Auto" instead of "Fletcher"), but avoid other filler words like "Motors", "LLC", "Inc", "Enterprise", "Group", or "Dealership" unless essential to the dealership’s identity (e.g., "Team Dealership" can keep "Dealership" if "Team" alone is too vague).
+- Keep a known brand (e.g., "Ford", "Chevy", "Toyota") in the name unless the dealership is well-known without it (e.g., "Pat Milliken Ford" can be "Pat Milliken", but "Duval Ford" should stay "Duval Ford"). If the name ends in a plural form (e.g., "Crossroads Cars"), use a singular form with "Auto" (e.g., "Crossroads Auto").
+- The final name must sound 100% natural when spoken aloud — like something you’d say to a dealer over the phone. Avoid formatting errors (e.g., do not include prefixes like "-benz" or start with "Of").
 
 Only return the final dealership name with no quotes or punctuation.
     `.trim();
 
     const result = await callOpenAI(prompt);
 
-    // Check if result is an error object
     if (result && result.error) {
       console.error(`Failed to process domain ${domain}: ${result.error}`);
       return { name: "", error: result.error };
     }
 
-    // Humanize the name returned by OpenAI
     const cleanedName = humanizeName(result);
     if (!cleanedName) {
       console.error(`Failed to humanize name for domain ${domain}: ${result}`);
       return { name: "", error: `Failed to humanize name: ${result}` };
     }
 
-    console.log(`Cleaned name for domain ${domain}: ${cleanedName}`);
+    console.log(`Original name: ${result} -> Cleaned name for domainIt ${domain}: ${cleanedName}`);
     return { name: cleanedName, modelUsed: "gpt-4" };
   };
 
@@ -268,7 +270,6 @@ Return only: {"franchiseGroup": "X", "buyerScore": 0-100, "referenceClient": "Na
 
     const result = await callOpenAI(prompt);
 
-    // Check if result is an error object
     if (result && result.error) {
       console.error(`Failed to process email ${email}: ${result.error}`);
       return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: result.error };
