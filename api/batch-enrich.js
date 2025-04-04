@@ -200,7 +200,7 @@ export default async function handler(req, res) {
   );
 
   for (const chunk of leadChunks) {
-    if (Date.now() - startTime > 9000) {
+    if (Date.now() - startTime > 30000) { // Adjusted to 30 seconds for 3-row batch
       console.log("Partial response due to timeout");
       return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
     }
@@ -224,13 +224,12 @@ export default async function handler(req, res) {
           return { ...domainCache.get(domain), rowNum };
         }
 
-        const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use.`;
+        const prompt = `Given the dealership domain "${ DOMAIN }", return the clean, natural dealership name already in use.`;
         const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
         totalTokens += tokens;
 
         let finalResult;
         if (gptNameRaw && !error) {
-          // Hallucination guard
           const nameWords = normalizeText(gptNameRaw);
           const lastWord = nameWords[nameWords.length - 1]?.toLowerCase();
           const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership"];
@@ -293,7 +292,7 @@ function runUnitTests() {
     { input: { name: "Duval LLC", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } },
     { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
     { input: { name: "Crossroads Ford", domain: "crossroadsford.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
-    { input: { name: "Duval Auto Mall", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } } // Hallucination test
+    { input: { name: "Duval Auto Mall", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } }
   ];
 
   let passed = 0;
