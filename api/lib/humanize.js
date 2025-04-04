@@ -223,8 +223,7 @@ export const KNOWN_CITIES_SET = new Set([
   "thermopolis", "kemmerer", "glenrock", "lovell", "lyman"
 ]);
 
-// Continuation of humanize.js (excluding KNOWN_CITIES_SET for brevity)
-const normalizeText = (name) => {
+export const normalizeText = (name) => {
   if (!name || typeof name !== "string") return [];
   return name
     .replace(/\.com$/, "") // Explicitly strip .com
@@ -287,10 +286,18 @@ const extractDomainWords = (domain) => {
       if (!foundMatch && i === word.length - 1) {
         let remaining = currentWord;
         currentWord = "";
-        let j = Math.min(3, remaining.length);
-        while (j < remaining.length && !/[aeiou]/.test(remaining[j])) j++; // Vowel/consonant heuristic
-        splitWords.push(remaining.slice(0, j + 1));
-        if (j + 1 < remaining.length) splitWords.push(remaining.slice(j + 1));
+        let j = 0;
+        while (j < remaining.length) {
+          let k = j + 1;
+          while (k < remaining.length && !/[aeiou]/.test(remaining[k])) k++;
+          if (k < remaining.length) {
+            splitWords.push(remaining.slice(j, k + 1));
+            j = k + 1;
+          } else {
+            splitWords.push(remaining.slice(j));
+            break;
+          }
+        }
       }
       i++;
     }
