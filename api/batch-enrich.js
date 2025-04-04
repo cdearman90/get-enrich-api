@@ -1,6 +1,5 @@
 // batch-enrich.js (Version 3.4 - Updated 2025-04-05)
-import fetch from 'node-fetch';
-import { humanizeName, CAR_BRANDS, COMMON_WORDS } from "./lib/humanize.js"; // Updated path
+import { humanizeName, CAR_BRANDS, COMMON_WORDS } from "./lib/humanize.js";
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
@@ -13,7 +12,7 @@ const pLimit = (concurrency) => {
     active++;
     const { fn, resolve, reject } = queue.shift();
     fn().then(resolve).catch(reject).finally(() => {
-      active--;
+      active
       next();
     });
   };
@@ -96,7 +95,7 @@ const fetchWebsiteMetadata = async (domain) => {
         });
         const httpHtml = await httpResponse.text();
         const httpTitleMatch = httpHtml.match(/<title>([^<]+)<\/title>/i);
-        const httpMetaMatch = httpHtml.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
+        const httpMetaMatch = httpHtml.match(/<meta[^>]+name=["'] Wdescription["'][^>]+content=["']([^"']+)["']/i);
         return {
           title: httpTitleMatch ? httpTitleMatch[1] : "",
           description: httpMetaMatch ? httpMetaMatch[1] : "",
