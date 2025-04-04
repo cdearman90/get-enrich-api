@@ -515,8 +515,7 @@ const callOpenAIForMeta = async (domain, metadata, logoText, apiKey) => {
   Title: "${metadata.title}"
   Description: "${metadata.description}"
   Logo Text: "${logoText}"
-  Extract the clean, natural dealership name already in use. Prioritize the logo text over the meta title for identifying the dealership name, as the logo often contains the parent company or true dealership name. If the logo text is unavailable or ambiguous, fall back to the meta title. If the original domain "${domain}" contains a generic word paired with a car brand (e.g., "classicbmw.com" for "Classic BMW"), preserve that name if it matches the meta title or logo text. Prefer multi-word names that include a proper name and are suitable for possessive form. Avoid returning generic names like "Classic" unless they are part of a proper dealership name (e.g., "Classic Dallas"). Avoid including brand names like Ford unless they are part of the dealership name. Do not return a city-only name unless no other proper name is found. If the name is a car brand or too generic, you may append "Auto" or "Auto Group" only if those suffixes are present in the meta title or logo text.
-  ##Name: [Your Clean Name]`;
+  Extract the clean, natural dealership name already in use. Prioritize the logo text over the meta title for identifying the dealership name, as the logo often contains the parent company or true dealership name. If the logo text is unavailable or ambiguous, fall back to the meta title. If the original domain "${domain}" contains a generic word paired with a car brand (e.g., "classicbmw.com" for "Classic BMW"), preserve that name if it matches the meta title or logo text. Prefer multi-word names that include a proper name and are suitable for possessive form. Avoid returning generic names like "Classic" unless they are part of a proper dealership name (e.g., "Classic Dallas"). Avoid including brand names like Ford unless they are part of the dealership name. Do not return a city-only name unless no other proper name is found. If the name is a car brand or too generic, you may append "Auto" or "Auto Group" only if those suffixes are present in the meta title or logo text.`;
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
@@ -536,7 +535,7 @@ const callOpenAIForMeta = async (domain, metadata, logoText, apiKey) => {
           messages: [
             {
               role: "system",
-              content: "You are a dealership naming expert. Extract the dealership name from the provided metadata and logo text. Do not invent names or add car brands unless unavoidable."
+              content: "You are a dealership naming expert. Respond only in this format:\n##Name: Clean Name\nExtract the dealership name from the provided metadata and logo text. Do not invent names or add car brands unless unavoidable."
             },
             { role: "user", content: prompt }
           ]
@@ -591,7 +590,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
           messages: [
             {
               role: "system",
-              content: "You are a dealership naming expert. Respond only in this format:\n##Name: Clean Name\nGiven the dealership domain \"${domain}\", return the clean, natural dealership name already in use. Do not invent or add suffixes like \"Plaza\", \"Gallery\", \"Superstore\", \"Mall\", or \"Center\" unless they are actually part of the business name. Never include a car brand name in the name (e.g., Ford, Toyota, BMW, Chevrolet, GMC, Lexus, Mercedes-Benz, etc.) unless unavoidable and the only identifiers are a city and car brand. For names ending in 's', prefer the singular form (e.g., 'Stan' over 'Stans') unless the plural is clearly intentional (e.g., 'Crossroads')."
+              content: "You are a dealership naming expert. Respond only in this format:\n##Name: Clean Name\nGiven the dealership domain \"${prompt}\", return the clean, natural dealership name already in use. Do not invent or add suffixes like \"Plaza\", \"Gallery\", \"Superstore\", \"Mall\", or \"Center\" unless they are actually part of the business name. Never include a car brand name in the name (e.g., Ford, Toyota, BMW, Chevrolet, GMC, Lexus, Mercedes-Benz, etc.) unless unavoidable and the only identifiers are a city and car brand. For names ending in 's', prefer the singular form (e.g., 'Stan' over 'Stans') unless the plural is clearly intentional (e.g., 'Crossroads')."
             },
             { role: "user", content: prompt }
           ]
@@ -619,7 +618,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
 
 // Main handler
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 2.8 - Updated 2025-04-04");
+  console.log("batch-enrich.js Version 3.0 - Updated 2025-04-04");
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "Missing OpenAI API key" });
 
