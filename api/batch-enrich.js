@@ -179,6 +179,11 @@ const ensurePossessiveSuitability = (words) => {
   const unsuitableWords = ["sales"];
   words = words.filter(word => !unsuitableWords.includes(word.toLowerCase()));
 
+  // If "auto" is the last word and the name has more than two words, remove it for better possessive form
+  if (words.length > 2 && words[words.length - 1].toLowerCase() === "auto") {
+    words = words.slice(0, -1);
+  }
+
   // If the name is empty after removing unsuitable words, try to use a distinguishing word from the domain
   if (words.length === 0) {
     return ["Unknown"];
@@ -529,6 +534,11 @@ function runUnitTests() {
       name: "Generic name with sales",
       input: { name: "Ford Auto Sales", domain: "teamfordauto.com" },
       expected: { name: "Team Auto", confidenceScore: 50, flags: [] }
+    },
+    {
+      name: "Name with auto in the middle",
+      input: { name: "Athens Family Auto Ford", domain: "athensfamilyauto.com" },
+      expected: { name: "Athens Family", confidenceScore: 60, flags: [] }
     }
   ];
 
