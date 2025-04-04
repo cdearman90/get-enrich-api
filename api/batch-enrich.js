@@ -31,6 +31,10 @@ const COMMON_WORDS = [
   "auto", "motors"
 ];
 
+const CAR_BRANDS = [
+  "ford", "toyota", "bmw", "chevrolet", "gmc", "lexus", "mercedes", "benz"
+];
+
 // Normalize text
 const normalizeText = (name) => {
   if (!name || typeof name !== "string") return [];
@@ -65,8 +69,13 @@ const extractDomainWords = (domain) => {
 
 // Check for car brand
 const containsCarBrand = (name) => {
-  const brands = ["ford", "toyota", "bmw", "chevrolet", "gmc", "lexus", "mercedes", "benz"];
-  return brands.some(brand => name.toLowerCase().includes(brand));
+  const words = name.toLowerCase().split(/\s+/);
+  return words.some(word => CAR_BRANDS.includes(word));
+};
+
+// Remove car brands
+const removeCarBrands = (words) => {
+  return words.filter(word => !CAR_BRANDS.includes(word.toLowerCase()));
 };
 
 // Check possessive fit
@@ -84,6 +93,9 @@ const endsWithS = (name) => {
 const humanizeName = (inputName, domain) => {
   let words = normalizeText(inputName || domain);
   const domainWords = extractDomainWords(domain);
+  
+  // Remove car brands explicitly
+  words = removeCarBrands(words);
   
   words = words.filter(word => word.length > 2 || /^[A-Z]{2,}$/.test(word));
   if (words.length > 3) words = words.slice(0, 3);
@@ -143,7 +155,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
           messages: [
             {
               role: "system",
-              content: "You are a dealership naming expert. Respond only in this format:\n##Name: Clean Name\nGiven the dealership domain \"${domain}\", return the clean, natural dealership name already in use. A short name used like a dealer insider speaking to another dealer insider in a casual conversation. Do not invent or add suffixes like \"Plaza\", \"Gallery\", \"Superstore\", \"Mall\", or \"Center\" unless they are actually part of the business name. Never include a car brand name in the name (e.g., Ford, Toyota, BMW, Chevrolet, GMC, Lexus, Mercedes-Benz, etc.) unless unavoidable and the only identifiers are a city and car brand. For names ending in 's', prefer the singular form (e.g., 'Stan' over 'Stans') unless the plural is clearly intentional (e.g., 'Crossroads')."
+              content: "You are a dealership naming expert. Respond only in this format:\n##Name: Clean Name\nGiven the dealership domain \"${domain}\", return the clean, natural dealership name already in use. Do not invent or add suffixes like \"Plaza\", \"Gallery\", \"Superstore\", \"Mall\", or \"Center\" unless they are actually part of the business name. Never include a car brand name in the name (e.g., Ford, Toyota, BMW, Chevrolet, GMC, Lexus, Mercedes-Benz, etc.) unless unavoidable and the only identifiers are a city and car brand. For names ending in 's', prefer the singular form (e.g., 'Stan' over 'Stans') unless the plural is clearly intentional (e.g., 'Crossroads')."
             },
             { role: "user", content: prompt }
           ]
@@ -224,7 +236,7 @@ export default async function handler(req, res) {
           return { ...domainCache.get(domain), rowNum };
         }
 
-        const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use.`; // Fixed typo: DOMAIN → domain
+        const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use.`;
         const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
         totalTokens += tokens;
 
@@ -246,9 +258,9 @@ export default async function handler(req, res) {
           console.error(`Row ${rowNum}: GPT failed - ${error}`);
         }
 
+        // Only flag for review if truly ambiguous
         if (finalResult.confidenceScore < 30 || 
             finalResult.flags.includes("TooGeneric") || 
-            (finalResult.flags.includes("BrandIncluded") && finalResult.name.split(/\s+/).length === 2) ||
             finalResult.flags.includes("PossessiveAmbiguity")) {
           manualReviewQueue.push({ 
             domain, 
@@ -290,9 +302,10 @@ function runUnitTests() {
   const tests = [
     { input: { name: "Pat Milliken Ford", domain: "patmillikenford.com" }, expected: { name: "Pat Milliken", confidenceScore: 100, flags: [] } },
     { input: { name: "Duval LLC", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } },
-    { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
+    { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "Redlands", confidenceScore: 70, flags: [] } },
     { input: { name: "Crossroads Ford", domain: "crossroadsford.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
-    { input: { name: "Duval Auto Mall", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } }
+    { input: { name: "Duval Ford", domain: "duvalford.com" }, expected: { name: "Duval", confidenceScore: 70, flags: [] } },
+    { input: { name: "Athens Ford", domain: "athensford.com" }, expected: { name: "Athens", confidenceScore: 70, flags: [] } }
   ];
 
   let passed = 0;
