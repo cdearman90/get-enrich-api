@@ -22,7 +22,7 @@ const domainCache = new Map();
 const KNOWN_NAMES = new Map([
   ["patmillikenford.com", "Pat Milliken"],
   ["duvalauto.com", "Duval"],
-  ["mclartydanielford.com", "McLarty Daniel"],
+  ["mclartydanielford.com", "McLarty Daniel"]
 ]);
 
 const COMMON_WORDS = [
@@ -207,7 +207,7 @@ export default async function handler(req, res) {
 
     const chunkResults = await Promise.all(
       chunk.map(lead => limit(async () => {
-        const { domain, rowNum } = lead;
+        const { domain, rowNum, email, phone, firstName, lastName } = lead;
         if (!domain) {
           console.error(`Row ${rowNum}: Missing domain`);
           return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum };
@@ -238,7 +238,6 @@ export default async function handler(req, res) {
           console.error(`Row ${rowNum}: GPT failed - ${error}`);
         }
 
-        // Flag for review if confidence is low or problematic
         if (finalResult.confidenceScore < 30 || 
             finalResult.flags.includes("TooGeneric") || 
             (finalResult.flags.includes("BrandIncluded") && finalResult.name.split(/\s+/).length === 2) ||
@@ -250,7 +249,11 @@ export default async function handler(req, res) {
             flags: finalResult.flags, 
             rowNum,
             reason: finalResult.flags.includes("PossessiveAmbiguity") ? "Name ends in 's', possessive form unclear" : 
-                    finalResult.flags.includes("BrandIncluded") ? "Possible city-brand combo" : "Low confidence or generic"
+                    finalResult.flags.includes("BrandIncluded") ? "Possible city-brand combo" : "Low confidence or generic",
+            email,
+            phone,
+            firstName,
+            lastName
           });
           finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], rowNum };
         }
@@ -279,8 +282,8 @@ function runUnitTests() {
   const tests = [
     { input: { name: "Pat Milliken Ford", domain: "patmillikenford.com" }, expected: { name: "Pat Milliken", confidenceScore: 100, flags: [] } },
     { input: { name: "Duval LLC", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } },
-    { input: { name: "Crossroads Ford", domain: "crossroadsford.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } }, // Flagged for review
-    { input: { name: "Stans Chevy", domain: "stanschevy.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } }, // Flagged for review
+    { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
+    { input: { name: "Crossroads Ford", domain: "crossroadsford.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
     { input: { name: "McLarty Daniel Ford", domain: "mclartydanielford.com" }, expected: { name: "McLarty Daniel", confidenceScore: 100, flags: [] } }
   ];
 
