@@ -1,4 +1,3 @@
-// Rate-limiting
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
@@ -28,11 +27,17 @@ const KNOWN_NAMES = new Map([
 const COMMON_WORDS = [
   "llc", "inc", "corporation", "corp",
   "plaza", "superstore", "mall", "center", "group", "dealership", "sales",
-  "auto", "motors"
+  "auto", "motors", "motor", "automotive", "shop"
 ];
 
 const CAR_BRANDS = [
-  "ford", "toyota", "bmw", "chevrolet", "gmc", "lexus", "mercedes", "benz"
+  "ford", "toyota", "bmw", "chevrolet", "gmc", "lexus", "mercedes", "benz",
+  "honda", "nissan", "hyundai", "kia", "volkswagen", "audi", "porsche", "subaru"
+];
+
+// List of known proper nouns (e.g., cities) that should not be flagged for PossessiveAmbiguity
+const KNOWN_PROPER_NOUNS = [
+  "athens", "crossroads", "dallas", "houston", "paris", "memphis", "nashville"
 ];
 
 // Normalize text
@@ -94,8 +99,9 @@ const humanizeName = (inputName, domain) => {
   let words = normalizeText(inputName || domain);
   const domainWords = extractDomainWords(domain);
   
-  // Remove car brands explicitly
+  console.log(`Before brand removal for ${domain}: ${words.join(" ")}`);
   words = removeCarBrands(words);
+  console.log(`After brand removal for ${domain}: ${words.join(" ")}`);
   
   words = words.filter(word => word.length > 2 || /^[A-Z]{2,}$/.test(word));
   if (words.length > 3) words = words.slice(0, 3);
@@ -107,7 +113,7 @@ const humanizeName = (inputName, domain) => {
   if (words.length === 1 && words[0].length <= 3) flags.push("TooGeneric");
   if (/^[A-Z]{2,}$/.test(words[0])) flags.push("Unexpanded");
   if (containsCarBrand(name)) flags.push("BrandIncluded");
-  if (endsWithS(name)) flags.push("PossessiveAmbiguity");
+  if (endsWithS(name) && !KNOWN_PROPER_NOUNS.includes(name.toLowerCase())) flags.push("PossessiveAmbiguity");
 
   const confidenceScore = computeConfidenceScore(name, domain, flags);
   return { name, confidenceScore, flags };
@@ -183,6 +189,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
 
 // Main handler
 export default async function handler(req, res) {
+  console.log("batch-enrich.js Version 1.4 - Updated 2025-04-03");
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "Missing OpenAI API key" });
 
@@ -258,10 +265,10 @@ export default async function handler(req, res) {
           console.error(`Row ${rowNum}: GPT failed - ${error}`);
         }
 
-        // Only flag for review if truly ambiguous
         if (finalResult.confidenceScore < 30 || 
             finalResult.flags.includes("TooGeneric") || 
-            finalResult.flags.includes("PossessiveAmbiguity")) {
+            (finalResult.flags.includes("PossessiveAmbiguity") && finalResult.confidenceScore < 80)) {
+          console.log(`Row ${rowNum} flagged for review: ${JSON.stringify(finalResult)} - Reason: ${finalResult.flags.includes("PossessiveAmbiguity") ? "Name ends in 's'" : "Low confidence or generic"}`);
           manualReviewQueue.push({ 
             domain, 
             name: finalResult.name, 
@@ -305,7 +312,9 @@ function runUnitTests() {
     { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "Redlands", confidenceScore: 70, flags: [] } },
     { input: { name: "Crossroads Ford", domain: "crossroadsford.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
     { input: { name: "Duval Ford", domain: "duvalford.com" }, expected: { name: "Duval", confidenceScore: 70, flags: [] } },
-    { input: { name: "Athens Ford", domain: "athensford.com" }, expected: { name: "Athens", confidenceScore: 70, flags: [] } }
+    { input: { name: "Athens Ford", domain: "athensford.com" }, expected: { name: "Athens", confidenceScore: 70, flags: [] } },
+    { input: { name: "Team Ford", domain: "teamford.com" }, expected: { name: "Team", confidenceScore: 70, flags: [] } },
+    { input: { name: "Smith Motor Shop", domain: "smithmotorshop.com" }, expected: { name: "Smith", confidenceScore: 70, flags: [] } }
   ];
 
   let passed = 0;
