@@ -145,17 +145,34 @@ const decompressDomain = (words, domain) => {
 
 // --- Remove common filler words ---
 const cleanupFillers = (words) => {
-  const fillers = ["motors", "llc", "inc", "enterprise", "group", "dealership", "sales"];
+  const fillers = ["motors", "llc", "inc", "enterprise", "group", "dealership", "sales", "plaza", "gallery", "center", "superstore"];
   return words.filter(word => !fillers.includes(word.toLowerCase())).map(word => word.replace(/^-/, ""));
 };
 
-// --- Remove unnecessary trailing 'auto' unless it's a well-known phrase ---
+// --- Check if the name has a possessive form or unique dealership identifier ---
+const hasPossessiveFormOrIdentifier = (words) => {
+  // A name has a possessive form if it has more than one word or doesn't end in a word that makes possessive form awkward
+  if (words.length > 1) return true;
+
+  // A name has a unique dealership identifier if it contains words like "plaza", "gallery", etc., but we've already removed them in cleanupFillers
+  // So, if the name is a single word and not a filler, it’s likely a possessive form (e.g., "Duval")
+  const lastWord = words[words.length - 1].toLowerCase();
+  const unsuitableForPossessive = ["motors", "auto"];
+  return !unsuitableForPossessive.includes(lastWord);
+};
+
+// --- Remove unnecessary trailing 'auto' unless the name needs it ---
 const removeUnnecessaryAuto = (words) => {
-  const last = words[words.length - 1];
+  const last = words[words.length - 1].toLowerCase();
   const base = words.slice(0, -1).join(" ").toLowerCase();
   const preserve = ["penske auto", "tasca auto", "union park", "jt auto", "suntrup auto"];
-  if (last === "auto" && words.length > 1 && !preserve.includes(base + " auto")) {
-    return words.slice(0, -1);
+  
+  // Remove "auto" if the name already has a possessive form or unique identifier
+  if (last === "auto" && words.length > 1) {
+    const baseWords = words.slice(0, -1);
+    if (hasPossessiveFormOrIdentifier(baseWords) && !preserve.includes(base + " auto")) {
+      return baseWords;
+    }
   }
   return words;
 };
@@ -175,14 +192,9 @@ const removePossessiveForms = (words) => {
 
 // --- Ensure the name is suitable for possessive use ---
 const ensurePossessiveSuitability = (words) => {
-  // Remove words that don't fit possessive form (e.g., "sales")
-  const unsuitableWords = ["sales"];
+  // Remove words that don't fit possessive form (e.g., "sales", "motors")
+  const unsuitableWords = ["sales", "motors"];
   words = words.filter(word => !unsuitableWords.includes(word.toLowerCase()));
-
-  // If "auto" is the last word and the name has more than two words, remove it for better possessive form
-  if (words.length > 2 && words[words.length - 1].toLowerCase() === "auto") {
-    words = words.slice(0, -1);
-  }
 
   // If the name is empty after removing unsuitable words, try to use a distinguishing word from the domain
   if (words.length === 0) {
@@ -218,7 +230,7 @@ const applyMinimalFormatting = (name) => {
 };
 
 // --- Confidence Score Calculation ---
-const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation, isGptResponse = false) => {
+const computeConfidenceScore = (words, domain, hasAbbreviation, isGptResponse = false) => {
   let score = 0;
   const domainWords = splitDomainIntoWords(domain).map(w => w.toLowerCase());
   const nameWords = words.map(w => w.toLowerCase());
@@ -226,7 +238,6 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation, isGptR
   let hasDomainMatch = false;
   let partialMatchScore = 0;
 
-  // Check for domain match
   for (const nameWord of nameWords) {
     for (const domainWord of domainWords) {
       if (nameWord === domainWord && nameWord.length > 3) {
@@ -240,45 +251,26 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation, isGptR
     if (hasDomainMatch) break;
   }
 
-  score += hasDomainMatch ? 40 : partialMatchScore; // +40 for full match, +20 for partial
-  score += hasAbbreviation ? 0 : 20; // +20 if no abbreviation
+  score += hasDomainMatch ? 40 : partialMatchScore;
+  score += hasAbbreviation ? 0 : 20;
 
-  // Boost for known dealership patterns
-  const extraSafeWords = ["plaza", "gallery", "center", "superstore", "auto"];
-  if (words.some(w => extraSafeWords.includes(w.toLowerCase()))) {
-    score += 20; // Higher boost to ensure 50+
+  const boostedWords = ["plaza", "gallery", "center", "superstore"];
+  if (words.some(w => boostedWords.includes(w.toLowerCase()))) {
+    score += 20;
   }
 
-  // Boost for distinguishing words
-  const distinguishingWords = ["team", "family", "group", "superstore"];
-  if (words.some(w => distinguishingWords.includes(w.toLowerCase()))) {
-    score += 15; // Boost for specific words
-  }
+  if (isGptResponse) score += 10;
+  if (words.length > 1) score += 10;
 
-  // Boost for valid GPT response
-  if (isGptResponse) {
-    score += 10; // Add 10 for a clean GPT match
-  }
-
-  // Boost for known good names
-  const nameStr = nameWords.join(" ");
-  if (["pat milliken", "union park", "tasca auto", "jt auto"].includes(nameStr)) {
-    score += 10;
-  }
-
-  // Boost for name length (more specific names)
-  if (words.length > 1) {
-    score += 10; // Boost for multi-word names
-  }
-
-  // Removed penalty for short names
   return Math.min(score, 100);
 };
 
 // --- Fallback Cleanup + Scoring + Flagging ---
 const humanizeName = (name, domain) => {
   let words = normalizeText(name);
-  const { hasBrand, brand } = detectBrand(words);
+  words = removePossessiveForms(words);
+  words = removeCarBrands(words); // Moved before detectBrand
+  const { hasBrand, brand } = detectBrand(words); // AFTER brand removal
 
   // Trusted names (without brands)
   const knownGood = ["pat milliken", "union park", "tasca auto", "jt auto"];
@@ -291,23 +283,22 @@ const humanizeName = (name, domain) => {
     };
   }
 
-  // Clean up sequence
   words = decompressDomain(words, domain);
   words = [...new Set(words)];
   words = correctTypos(words);
-  words = removePossessiveForms(words); // Remove possessive forms
-  words = removeCarBrands(words); // Remove car brand names
-  words = ensurePossessiveSuitability(words); // Ensure the name fits possessive form
+  words = ensurePossessiveSuitability(words);
   const hasAbbreviation = detectAbbreviation(words);
   words = cleanupFillers(words);
   words = removeUnnecessaryAuto(words);
   words = adjustForPossessiveFlow(words);
 
-  // Trim long names
+  // Double-check: Ensure no car brand names remain in the final output
+  words = removeCarBrands(words);
+
   const flags = [];
   if (words.length > 4) {
     flags.push("TooLong");
-    const brandIndex = words.findIndex(word => detectBrand([word]).hasBrand);
+    const brandIndex = words.findIndex(w => BRANDS.includes(w.toLowerCase()));
     if (brandIndex !== -1) {
       const brand = words[brandIndex];
       const otherWords = words.filter((_, i) => i !== brandIndex).slice(0, 3);
@@ -317,14 +308,11 @@ const humanizeName = (name, domain) => {
     }
   }
 
-  const formattedName = words.join(" ").trim();
-  const confidenceScore = computeConfidenceScore(words, domain, hasBrand, hasAbbreviation, true); // Pass true for GPT response
   if (hasAbbreviation) flags.push("Unexpanded");
+  if (words.length <= 1) flags.push("TooGeneric");
 
-  // Flag if the name is too generic or short
-  if (words.length <= 1) {
-    flags.push("TooGeneric");
-  }
+  const formattedName = words.join(" ").trim();
+  const confidenceScore = computeConfidenceScore(words, domain, hasAbbreviation, true);
 
   return {
     name: applyMinimalFormatting(formattedName),
@@ -459,7 +447,7 @@ export default async function handler(req, res) {
             return { ...domainCache.get(domain), rowNum };
           }
 
-          const prompt = `Given the dealership domain "${domain}", return a clean, human-friendly dealership name as of April 2025.\nRespond only with:\n##Name: Clean Name`;
+          const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use. Do not invent or add suffixes like "Plaza", "Gallery", "Superstore", "Mall", or "Center" unless they are actually part of the business name. Respond only with: ##Name: Clean Name`;
 
           const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
           totalTokens += tokens;
@@ -541,12 +529,12 @@ function runUnitTests() {
     {
       name: "Generic name with sales",
       input: { name: "Ford Auto Sales", domain: "teamfordauto.com" },
-      expected: { name: "Team Auto", confidenceScore: 85, flags: [] }
+      expected: { name: "Team", confidenceScore: 70, flags: [] }
     },
     {
       name: "Name with auto in the middle",
       input: { name: "Athens Family Auto Ford", domain: "athensfamilyauto.com" },
-      expected: { name: "Athens Family", confidenceScore: 85, flags: [] }
+      expected: { name: "Athens Family", confidenceScore: 80, flags: [] }
     }
   ];
 
