@@ -3,7 +3,8 @@ export const COMMON_WORDS = [
   "llc", "inc", "corporation", "corp",
   "plaza", "superstore", "mall", "center", "group", "dealership", "sales",
   "auto", "motors", "motor", "automotive", "shop",
-  "classic", "prime", "elite", "premier", "luxury", "select", "pro", "top", "best", "first", "great", "new", "used"
+  "classic", "prime", "elite", "premier", "luxury", "select", "pro", "top", "best", "first", "great", "new", "used",
+  "com" // Add "com" to common words to strip it
 ];
 
 export const CAR_BRANDS = [
@@ -221,6 +222,7 @@ export const KNOWN_CITIES_SET = new Set([
 const normalizeText = (name) => {
   if (!name || typeof name !== "string") return [];
   return name
+    .replace(/\.com$/, "") // Explicitly strip .com
     .replace(/['".,-]+/g, '')
     .toLowerCase()
     .trim()
@@ -241,7 +243,9 @@ const capitalizeName = (words) => {
 
 const extractDomainWords = (domain) => {
   let base = domain.replace(/\.com$/, '');
+  // First, try camelCase splitting
   let words = base.split(/([a-z])([A-Z])/g).filter(word => word && !COMMON_WORDS.includes(word.toLowerCase()));
+  // If no camelCase split (e.g., "duvalford"), try splitting by known car brands
   if (words.length === 1) {
     let word = words[0];
     for (let brand of CAR_BRANDS) {
@@ -250,6 +254,22 @@ const extractDomainWords = (domain) => {
         break;
       }
     }
+  }
+  // If still a single word, try splitting by common patterns (e.g., "duvalford" → ["duval", "ford"])
+  if (words.length === 1) {
+    let word = words[0];
+    let splitWords = [];
+    let currentWord = "";
+    for (let i = 0; i < word.length; i++) {
+      currentWord += word[i];
+      // Check if the current substring matches a car brand or common word
+      if (CAR_BRANDS.includes(currentWord.toLowerCase()) || COMMON_WORDS.includes(currentWord.toLowerCase())) {
+        splitWords.push(currentWord);
+        currentWord = "";
+      }
+    }
+    if (currentWord) splitWords.push(currentWord);
+    words = splitWords.filter(w => w && !COMMON_WORDS.includes(w.toLowerCase()));
   }
   return words;
 };
@@ -293,7 +313,8 @@ const isPossessiveFriendly = (name) => {
   return !/^[A-Z]{2,5}$/.test(name) && // Not all uppercase
          !nameLower.endsWith("group") && // Avoid "Group" endings
          !nameLower.endsWith("auto") && // Avoid "Auto" endings
-         name.split(/\s+/).length >= 2; // Prefer multi-word names
+         !nameLower.endsWith("com") && // Avoid "com" endings
+         name.split(/\s+/).length >= 1; // Relaxed to allow single-word names
 };
 
 const isProperName = (words) => {
@@ -330,7 +351,7 @@ const computeConfidenceScore = (name, domain, flags) => {
     if (matchesDomain && !isDomainMatch) score += 30;
     if (isDomainMatch && hasCarBrand) score -= 20;
     if (isGenericWithCarBrand && hasCarBrand) score += 20;
-    if (nameWords.length === 1) score -= 20;
+    if (nameWords.length === 1) score -= 10; // Reduced penalty for single-word names
     else if (nameWords.length === 2) score += 10;
     else if (nameWords.length > 3) score -= 10;
     if (!hasCarBrand) score += 10;
@@ -343,7 +364,7 @@ const computeConfidenceScore = (name, domain, flags) => {
     if (flags.includes("BrandIncluded")) score -= 40;
     if (flags.includes("PossessiveAmbiguity")) score -= 20;
     if (flags.includes("CityNameOnly")) score -= 40;
-    if (flags.includes("NotPossessiveFriendly")) score -= 20;
+    if (flags.includes("NotPossessiveFriendly")) score -= 10; // Reduced penalty
 
     if (isProperName(nameWords)) score += 20;
 
@@ -364,7 +385,13 @@ export const humanizeName = (inputName, domain) => {
 
     words = words.filter(word => word.length > 2 || /^[A-Z]{2,}$/.test(word));
     if (words.length > 3) words = words.slice(0, 3);
-    if (words.length === 0) words = extractDomainWords(domain).slice(0, 2);
+    if (words.length === 0 || words.every(w => w.endsWith("com"))) {
+      const fallback = domain.replace(".com", "").replace(/[^a-zA-Z]/g, " ");
+      words = normalizeText(fallback).slice(0, 2);
+    }
+    if (words.length === 0) {
+      words = extractDomainWords(domain).slice(0, 2);
+    }
 
     let name = capitalizeName(words);
     if (!name) {
