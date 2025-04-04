@@ -1,4 +1,4 @@
-// batch-enrich.js (Version 2.9 - Updated 2025-04-04)
+/ batch-enrich.js (Version 3.0 - Updated 2025-04-05)
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
 
@@ -249,6 +249,29 @@ const KNOWN_CITIES_SET = new Set([
   "cody", "rawlins", "lander", "torrington", "douglas", "powell", "worland", "buffalo", "wheatland", "newcastle",
   "thermopolis", "kemmerer", "glenrock", "lovell", "lyman"
 ]);
+
+// Normalize domain for matching
+const normalizeDomain = (domain) => {
+  return domain
+    .replace(/\.com$/, "")
+    .replace(/(ford|auto|chevrolet|toyota|bmw)/gi, "")
+    .toLowerCase()
+    .trim();
+};
+
+// Fuzzy match domain against known domains
+const fuzzyMatchDomain = (inputDomain, knownDomains) => {
+  const normalizedInput = normalizeDomain(inputDomain);
+  for (const knownDomain of knownDomains) {
+    const normalizedKnown = normalizeDomain(knownDomain);
+    if (normalizedInput === normalizedKnown) return knownDomain;
+    // Simple fuzzy match: check if one is a substring of the other
+    if (normalizedInput.includes(normalizedKnown) || normalizedKnown.includes(normalizedInput)) {
+      return knownDomain;
+    }
+  }
+  return null;
+};
 
 // Normalize text
 const normalizeText = (name) => {
@@ -618,7 +641,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
 
 // Main handler
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.0 - Updated 2025-04-04");
+  console.log("batch-enrich.js Version 3.0 - Updated 2025-04-05");
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) return res.status(500).json({ error: "Missing OpenAI API key" });
 
@@ -662,9 +685,11 @@ export default async function handler(req, res) {
           return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum };
         }
 
-        if (KNOWN_NAMES.has(domain)) {
-          const entry = KNOWN_NAMES.get(domain);
-          console.log(`Row ${rowNum}: Library hit - ${entry.name}`);
+        // Normalize and fuzzy match domain
+        const matchedDomain = fuzzyMatchDomain(domain, KNOWN_NAMES.keys());
+        if (matchedDomain && KNOWN_NAMES.has(matchedDomain)) {
+          const entry = KNOWN_NAMES.get(matchedDomain);
+          console.log(`Row ${rowNum}: Library hit - ${entry.name} (matched ${domain} to ${matchedDomain})`);
           return { name: entry.name, confidenceScore: entry.confidenceScore, flags: [], rowNum };
         }
 
@@ -825,7 +850,7 @@ function runUnitTests() {
     { input: { name: "Duval LLC", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } },
     { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "Redlands", confidenceScore: 70, flags: [] } },
     { input: { name: "Crossroads Ford", domain: "crossroadsford.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
-    { input: { name: "Duval Ford", domain: "duvalford.com" }, expected: { name: "Duval", confidenceScore: 70, flags: [] } },
+    { input: { name: "Duval Ford", domain: "duvalford.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } },
     { input: { name: "Athens Ford", domain: "athensford.com" }, expected: { name: "Athens", confidenceScore: 70, flags: [] } },
     { input: { name: "Team Ford", domain: "teamford.com" }, expected: { name: "Team", confidenceScore: 70, flags: [] } },
     { input: { name: "Smith Motor Shop", domain: "smithmotorshop.com" }, expected: { name: "Smith", confidenceScore: 70, flags: [] } },
