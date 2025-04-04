@@ -23,7 +23,6 @@ const KNOWN_NAMES = new Map([
   ["patmillikenford.com", "Pat Milliken"],
   ["duvalauto.com", "Duval"],
   ["mclartydanielford.com", "McLarty Daniel"],
-  ["toyotaredlands.com", "Toyota Redlands"]
 ]);
 
 const COMMON_WORDS = [
