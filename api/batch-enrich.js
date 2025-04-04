@@ -1,4 +1,6 @@
-/ batch-enrich.js (Version 3.0 - Updated 2025-04-05)
+// batch-enrich.js (Version 3.2 - Updated 2025-04-05)
+const fetch = require('node-fetch'); // Ensure this dependency is installed
+
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
 
@@ -252,25 +254,34 @@ const KNOWN_CITIES_SET = new Set([
 
 // Normalize domain for matching
 const normalizeDomain = (domain) => {
-  return domain
-    .replace(/\.com$/, "")
-    .replace(/(ford|auto|chevrolet|toyota|bmw)/gi, "")
-    .toLowerCase()
-    .trim();
+  try {
+    return domain
+      .replace(/\.com$/, "")
+      .replace(/(ford|auto|chevrolet|toyota|bmw)/gi, "")
+      .toLowerCase()
+      .trim();
+  } catch (err) {
+    console.error(`Error normalizing domain ${domain}: ${err.message}`);
+    return domain.toLowerCase().replace(/\.com$/, "");
+  }
 };
 
 // Fuzzy match domain against known domains
 const fuzzyMatchDomain = (inputDomain, knownDomains) => {
-  const normalizedInput = normalizeDomain(inputDomain);
-  for (const knownDomain of knownDomains) {
-    const normalizedKnown = normalizeDomain(knownDomain);
-    if (normalizedInput === normalizedKnown) return knownDomain;
-    // Simple fuzzy match: check if one is a substring of the other
-    if (normalizedInput.includes(normalizedKnown) || normalizedKnown.includes(normalizedInput)) {
-      return knownDomain;
+  try {
+    const normalizedInput = normalizeDomain(inputDomain);
+    for (const knownDomain of knownDomains) {
+      const normalizedKnown = normalizeDomain(knownDomain);
+      if (normalizedInput === normalizedKnown) return knownDomain;
+      if (normalizedInput.includes(normalizedKnown) || normalizedKnown.includes(normalizedInput)) {
+        return knownDomain;
+      }
     }
+    return null;
+  } catch (err) {
+    console.error(`Error fuzzy matching domain ${inputDomain}: ${err.message}`);
+    return null;
   }
-  return null;
 };
 
 // Normalize text
@@ -378,87 +389,97 @@ const isPossibleAbbreviation = (word) => {
 
 // Humanize name
 const humanizeName = (inputName, domain) => {
-  let words = normalizeText(inputName || domain);
-  console.log(`Before brand removal for ${domain}: ${words.join(" ")}`);
-  const originalWords = [...words];
-  words = removeCarBrands(words);
-  console.log(`After brand removal for ${domain}: ${words.join(" ")}`);
+  try {
+    let words = normalizeText(inputName || domain);
+    console.log(`Before brand removal for ${domain}: ${words.join(" ")}`);
+    const originalWords = [...words];
+    words = removeCarBrands(words);
+    console.log(`After brand removal for ${domain}: ${words.join(" ")}`);
 
-  words = words.filter(word => word.length > 2 || /^[A-Z]{2,}$/.test(word));
-  if (words.length > 3) words = words.slice(0, 3);
-  if (words.length === 0) words = extractDomainWords(domain).slice(0, 2);
+    words = words.filter(word => word.length > 2 || /^[A-Z]{2,}$/.test(word));
+    if (words.length > 3) words = words.slice(0, 3);
+    if (words.length === 0) words = extractDomainWords(domain).slice(0, 2);
 
-  let name = capitalizeName(words);
-  if (!name) {
-    name = capitalizeName(extractDomainWords(domain).slice(0, 2));
-  }
-  const flags = [];
+    let name = capitalizeName(words);
+    if (!name) {
+      name = capitalizeName(extractDomainWords(domain).slice(0, 2));
+    }
+    const flags = [];
 
-  const nameLower = name.toLowerCase();
-  const isGenericWithCarBrand = originalWords.length === 2 && 
-                               originalWords.some(word => CAR_BRANDS.includes(word.toLowerCase())) && 
-                               originalWords.some(word => COMMON_WORDS.includes(word.toLowerCase()));
-  if (words.length === 1 && (words[0].length <= 4 || COMMON_WORDS.includes(words[0].toLowerCase())) && !isGenericWithCarBrand) {
-    flags.push("TooGeneric");
-  }
-  if (words.every(word => COMMON_WORDS.includes(word.toLowerCase())) && !isGenericWithCarBrand) {
-    flags.push("TooGeneric");
-  }
-  if (words.some(isPossibleAbbreviation)) flags.push("PossibleAbbreviation");
-  if (/^[A-Z]{2,}$/.test(words[0])) flags.push("Unexpanded");
-  if (containsCarBrand(name) || originalWords.some(word => CAR_BRANDS.includes(word.toLowerCase()))) {
-    flags.push("BrandIncluded");
-  }
-  if (endsWithS(name) && !KNOWN_PROPER_NOUNS.includes(nameLower)) flags.push("PossessiveAmbiguity");
-  if (words.length === 1 && KNOWN_CITIES_SET.has(nameLower)) {
-    flags.push("CityNameOnly");
-  } else if (words.length === 2 && KNOWN_CITIES_SET.has(words.join(" ").toLowerCase())) {
-    flags.push("CityNameOnly");
-  }
-  if (!isPossessiveFriendly(name)) flags.push("NotPossessiveFriendly");
+    const nameLower = name.toLowerCase();
+    const isGenericWithCarBrand = originalWords.length === 2 && 
+                                 originalWords.some(word => CAR_BRANDS.includes(word.toLowerCase())) && 
+                                 originalWords.some(word => COMMON_WORDS.includes(word.toLowerCase()));
+    if (words.length === 1 && (words[0].length <= 4 || COMMON_WORDS.includes(words[0].toLowerCase())) && !isGenericWithCarBrand) {
+      flags.push("TooGeneric");
+    }
+    if (words.every(word => COMMON_WORDS.includes(word.toLowerCase())) && !isGenericWithCarBrand) {
+      flags.push("TooGeneric");
+    }
+    if (words.some(isPossibleAbbreviation)) flags.push("PossibleAbbreviation");
+    if (/^[A-Z]{2,}$/.test(words[0])) flags.push("Unexpanded");
+    if (containsCarBrand(name) || originalWords.some(word => CAR_BRANDS.includes(word.toLowerCase()))) {
+      flags.push("BrandIncluded");
+    }
+    if (endsWithS(name) && !KNOWN_PROPER_NOUNS.includes(nameLower)) flags.push("PossessiveAmbiguity");
+    if (words.length === 1 && KNOWN_CITIES_SET.has(nameLower)) {
+      flags.push("CityNameOnly");
+    } else if (words.length === 2 && KNOWN_CITIES_SET.has(words.join(" ").toLowerCase())) {
+      flags.push("CityNameOnly");
+    }
+    if (!isPossessiveFriendly(name)) flags.push("NotPossessiveFriendly");
 
-  let confidenceScore = computeConfidenceScore(name, domain, flags);
-  if (isProperName(words)) confidenceScore += 20;
-  return { name, confidenceScore, flags };
+    let confidenceScore = computeConfidenceScore(name, domain, flags);
+    if (isProperName(words)) confidenceScore += 20;
+    return { name, confidenceScore, flags };
+  } catch (err) {
+    console.error(`Error in humanizeName for domain ${domain}: ${err.message}`);
+    return { name: "", confidenceScore: 0, flags: ["ProcessingError"] };
+  }
 };
 
 // Confidence scoring
 const computeConfidenceScore = (name, domain, flags) => {
-  let score = 50;
-  const domainWords = extractDomainWords(domain).map(w => w.toLowerCase());
-  const nameWords = name.toLowerCase().split(/\s+/);
+  try {
+    let score = 50;
+    const domainWords = extractDomainWords(domain).map(w => w.toLowerCase());
+    const nameWords = name.toLowerCase().split(/\s+/);
 
-  const domainBase = domain.replace(/\.com$/, "").toLowerCase();
-  const nameLower = name.toLowerCase();
-  const matchesDomain = domainWords.some(dw => nameWords.some(nw => nw.includes(dw) && nw.length > 3));
-  const isDomainMatch = nameLower === domainBase;
-  const hasCarBrand = containsCarBrand(name);
-  const allCommonWords = nameWords.every(word => COMMON_WORDS.includes(word));
-  const isGenericWithCarBrand = domainWords.length === 2 && 
-                               domainWords.some(word => CAR_BRANDS.includes(word)) && 
-                               domainWords.some(word => COMMON_WORDS.includes(word));
+    const domainBase = domain.replace(/\.com$/, "").toLowerCase();
+    const nameLower = name.toLowerCase();
+    const matchesDomain = domainWords.some(dw => nameWords.some(nw => nw.includes(dw) && nw.length > 3));
+    const isDomainMatch = nameLower === domainBase;
+    const hasCarBrand = containsCarBrand(name);
+    const allCommonWords = nameWords.every(word => COMMON_WORDS.includes(word));
+    const isGenericWithCarBrand = domainWords.length === 2 && 
+                                 domainWords.some(word => CAR_BRANDS.includes(word)) && 
+                                 domainWords.some(word => COMMON_WORDS.includes(word));
 
-  if (matchesDomain && !isDomainMatch) score += 30;
-  if (isDomainMatch && hasCarBrand) score -= 20;
-  if (isGenericWithCarBrand && hasCarBrand) score += 20;
-  if (nameWords.length === 1) score -= 20;
-  else if (nameWords.length === 2) score += 10;
-  else if (nameWords.length > 3) score -= 10;
-  if (!hasCarBrand) score += 10;
-  if (fitsPossessive(name)) score += 10;
-  if (allCommonWords) score -= 30;
+    if (matchesDomain && !isDomainMatch) score += 30;
+    if (isDomainMatch && hasCarBrand) score -= 20;
+    if (isGenericWithCarBrand && hasCarBrand) score += 20;
+    if (nameWords.length === 1) score -= 20;
+    else if (nameWords.length === 2) score += 10;
+    else if (nameWords.length > 3) score -= 10;
+    if (!hasCarBrand) score += 10;
+    if (fitsPossessive(name)) score += 10;
+    if (allCommonWords) score -= 30;
 
-  if (flags.includes("TooGeneric")) score -= 40;
-  if (flags.includes("PossibleAbbreviation")) score -= 30;
-  if (flags.includes("Unexpanded")) score -= 10;
-  if (flags.includes("BrandIncluded")) score -= 40;
-  if (flags.includes("PossessiveAmbiguity")) score -= 20;
-  if (flags.includes("CityNameOnly")) score -= 40;
-  if (flags.includes("NotPossessiveFriendly")) score -= 20;
+    if (flags.includes("TooGeneric")) score -= 40;
+    if (flags.includes("PossibleAbbreviation")) score -= 30;
+    if (flags.includes("Unexpanded")) score -= 10;
+    if (flags.includes("BrandIncluded")) score -= 40;
+    if (flags.includes("PossessiveAmbiguity")) score -= 20;
+    if (flags.includes("CityNameOnly")) score -= 40;
+    if (flags.includes("NotPossessiveFriendly")) score -= 20;
 
-  if (isProperName(nameWords)) score += 20;
+    if (isProperName(nameWords)) score += 20;
 
-  return Math.max(10, Math.min(100, score));
+    return Math.max(10, Math.min(100, score));
+  } catch (err) {
+    console.error(`Error in computeConfidenceScore for domain ${domain}: ${err.message}`);
+    return 0;
+  }
 };
 
 // Fetch website metadata
@@ -641,204 +662,213 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
 
 // Main handler
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.0 - Updated 2025-04-05");
-  const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) return res.status(500).json({ error: "Missing OpenAI API key" });
-
-  let leads;
+  console.log("batch-enrich.js Version 3.2 - Updated 2025-04-05");
   try {
-    const buffers = [];
-    for await (const chunk of req) buffers.push(chunk);
-    leads = JSON.parse(Buffer.concat(buffers).toString("utf-8"));
-  } catch (err) {
-    console.error(`JSON parse error: ${err.message}`);
-    return res.status(400).json({ error: "Invalid JSON", details: err.message });
-  }
-
-  if (!Array.isArray(leads) || leads.length === 0) {
-    return res.status(400).json({ error: "Missing or invalid lead list" });
-  }
-
-  const startTime = Date.now();
-  const limit = pLimit(1);
-  const results = [];
-  const manualReviewQueue = [];
-  let totalTokens = 0;
-  const fallbackTriggers = [];
-
-  const BATCH_SIZE = 3;
-  const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
-    leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
-  );
-
-  for (const chunk of leadChunks) {
-    if (Date.now() - startTime > 30000) {
-      console.log("Partial response due to timeout");
-      return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      console.error("Missing OpenAI API key");
+      return res.status(500).json({ error: "Missing OpenAI API key" });
     }
 
-    const chunkResults = await Promise.all(
-      chunk.map(lead => limit(async () => {
-        const { domain, rowNum, email, phone, firstName, lastName } = lead;
-        if (!domain) {
-          console.error(`Row ${rowNum}: Missing domain`);
-          return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum };
-        }
+    let leads;
+    try {
+      const buffers = [];
+      for await (const chunk of req) buffers.push(chunk);
+      leads = JSON.parse(Buffer.concat(buffers).toString("utf-8"));
+    } catch (err) {
+      console.error(`JSON parse error: ${err.message}`);
+      return res.status(400).json({ error: "Invalid JSON", details: err.message });
+    }
 
-        // Normalize and fuzzy match domain
-        const matchedDomain = fuzzyMatchDomain(domain, KNOWN_NAMES.keys());
-        if (matchedDomain && KNOWN_NAMES.has(matchedDomain)) {
-          const entry = KNOWN_NAMES.get(matchedDomain);
-          console.log(`Row ${rowNum}: Library hit - ${entry.name} (matched ${domain} to ${matchedDomain})`);
-          return { name: entry.name, confidenceScore: entry.confidenceScore, flags: [], rowNum };
-        }
+    if (!Array.isArray(leads) || leads.length === 0) {
+      console.error("Missing or invalid lead list");
+      return res.status(400).json({ error: "Missing or invalid lead list" });
+    }
 
-        if (domainCache.has(domain)) {
-          console.log(`Row ${rowNum}: Cache hit for ${domain}`);
-          return { ...domainCache.get(domain), rowNum };
-        }
+    const startTime = Date.now();
+    const limit = pLimit(1);
+    const results = [];
+    const manualReviewQueue = [];
+    let totalTokens = 0;
+    const fallbackTriggers = [];
 
-        const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use.`;
-        let finalResult;
-        let tokensUsed = 0;
+    const BATCH_SIZE = 3;
+    const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
+      leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+    );
 
-        const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
-        tokensUsed += tokens;
-        totalTokens += tokens;
+    for (const chunk of leadChunks) {
+      if (Date.now() - startTime > 30000) {
+        console.log("Partial response due to timeout");
+        return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
+      }
 
-        if (gptNameRaw && !error) {
-          const nameWords = normalizeText(gptNameRaw);
-          console.log(`GPT raw name for ${domain}: ${gptNameRaw}, normalized: ${nameWords}`);
-          const lastWord = nameWords[nameWords.length - 1]?.toLowerCase();
-          const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto"];
-          if (forbiddenSuffixes.includes(lastWord) && !KNOWN_NAMES.has(domain)) {
-            nameWords.pop();
-            console.log(`Removed forbidden suffix: ${lastWord}, new words: ${nameWords}`);
+      const chunkResults = await Promise.all(
+        chunk.map(lead => limit(async () => {
+          const { domain, rowNum, email, phone, firstName, lastName } = lead;
+          if (!domain) {
+            console.error(`Row ${rowNum}: Missing domain`);
+            return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum };
           }
-          const gptName = nameWords.join(" ");
-          console.log(`Joined GPT name: ${gptName}`);
-          finalResult = humanizeName(gptName, domain);
-          console.log(`Row ${rowNum}: GPT result - ${JSON.stringify(finalResult)}`);
-        } else {
-          finalResult = humanizeName(domain, domain);
-          finalResult.flags.push("GPTFailed");
-          console.error(`Row ${rowNum}: GPT failed - ${error}`);
-        }
 
-        const needsMetaFallback = finalResult.confidenceScore < 60 || 
-                                 finalResult.flags.includes("CityNameOnly") || 
-                                 finalResult.flags.includes("TooGeneric") || 
-                                 finalResult.flags.includes("BrandIncluded") || 
-                                 finalResult.flags.includes("Unexpanded") || 
-                                 finalResult.flags.includes("PossibleAbbreviation") || 
-                                 finalResult.flags.includes("NotPossessiveFriendly") || 
-                                 finalResult.flags.includes("GPTFailed") || 
-                                 (finalResult.flags.includes("PossessiveAmbiguity") && finalResult.confidenceScore < 80) ||
-                                 (finalResult.name.split(/\s+/).length === 1) ||
-                                 (finalResult.name.length <= 5 && COMMON_WORDS.includes(finalResult.name.toLowerCase())) ||
-                                 CAR_BRANDS.includes(finalResult.name.toLowerCase()) ||
-                                 finalResult.name.toLowerCase().split(/\s+/).every(word => COMMON_WORDS.includes(word));
-
-        if (needsMetaFallback) {
-          const reason = finalResult.flags.includes("CityNameOnly") ? "CityNameOnly" :
-                        finalResult.flags.includes("TooGeneric") ? "TooGeneric" :
-                        finalResult.flags.includes("BrandIncluded") ? "BrandIncluded" :
-                        finalResult.flags.includes("PossibleAbbreviation") ? "PossibleAbbreviation" :
-                        finalResult.flags.includes("NotPossessiveFriendly") ? "NotPossessiveFriendly" :
-                        finalResult.flags.includes("GPTFailed") ? "GPTFailed" :
-                        "LowConfidence";
-          console.log(`Row ${rowNum}: Triggering meta fallback - Reason: ${reason}`);
-          const metaStartTime = Date.now();
-          const metadata = await fetchWebsiteMetadata(domain);
-          const logoText = await extractLogoText(domain, metadata.html);
-          const metaResult = await callOpenAIForMeta(domain, metadata, logoText, apiKey);
-          const metaDuration = Date.now() - metaStartTime;
-          const accepted = !!metaResult.result && metaResult.result !== finalResult.name;
-          tokensUsed += metaResult.tokens;
-          totalTokens += metaResult.tokens;
-
-          let sourcePreference = "unknown";
-          if (metaResult.result && metaResult.result.toLowerCase().includes(logoText.toLowerCase())) {
-            sourcePreference = "logo";
-            finalResult.confidenceScore += 10;
-          } else if (metaResult.result && metaResult.result.toLowerCase() === domain.replace(/\.com$/, "").toLowerCase()) {
-            sourcePreference = "metaTitle";
-            finalResult.confidenceScore -= 10;
+          // Normalize and fuzzy match domain
+          const matchedDomain = fuzzyMatchDomain(domain, KNOWN_NAMES.keys());
+          if (matchedDomain && KNOWN_NAMES.has(matchedDomain)) {
+            const entry = KNOWN_NAMES.get(matchedDomain);
+            console.log(`Row ${rowNum}: Library hit - ${entry.name} (matched ${domain} to ${matchedDomain})`);
+            return { name: entry.name, confidenceScore: entry.confidenceScore, flags: [], rowNum };
           }
-          fallbackTriggers.push({ rowNum, domain, reason, sourcePreference, duration: metaDuration, success: accepted });
 
-          if (metadata.error || metadata.sslError) {
-            console.log(`Row ${rowNum}: Failed to fetch metadata for ${domain}, sending to manual review`);
-            manualReviewQueue.push({
-              domain,
-              name: finalResult.name,
-              confidenceScore: finalResult.confidenceScore,
-              flags: [...finalResult.flags, "MetaFetchFailed"],
+          if (domainCache.has(domain)) {
+            console.log(`Row ${rowNum}: Cache hit for ${domain}`);
+            return { ...domainCache.get(domain), rowNum };
+          }
+
+          const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use.`;
+          let finalResult;
+          let tokensUsed = 0;
+
+          const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
+          tokensUsed += tokens;
+          totalTokens += tokens;
+
+          if (gptNameRaw && !error) {
+            const nameWords = normalizeText(gptNameRaw);
+            console.log(`GPT raw name for ${domain}: ${gptNameRaw}, normalized: ${nameWords}`);
+            const lastWord = nameWords[nameWords.length - 1]?.toLowerCase();
+            const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto"];
+            if (forbiddenSuffixes.includes(lastWord) && !KNOWN_NAMES.has(domain)) {
+              nameWords.pop();
+              console.log(`Removed forbidden suffix: ${lastWord}, new words: ${nameWords}`);
+            }
+            const gptName = nameWords.join(" ");
+            console.log(`Joined GPT name: ${gptName}`);
+            finalResult = humanizeName(gptName, domain);
+            console.log(`Row ${rowNum}: GPT result - ${JSON.stringify(finalResult)}`);
+          } else {
+            finalResult = humanizeName(domain, domain);
+            finalResult.flags.push("GPTFailed");
+            console.error(`Row ${rowNum}: GPT failed - ${error}`);
+          }
+
+          const needsMetaFallback = finalResult.confidenceScore < 60 || 
+                                   finalResult.flags.includes("CityNameOnly") || 
+                                   finalResult.flags.includes("TooGeneric") || 
+                                   finalResult.flags.includes("BrandIncluded") || 
+                                   finalResult.flags.includes("Unexpanded") || 
+                                   finalResult.flags.includes("PossibleAbbreviation") || 
+                                   finalResult.flags.includes("NotPossessiveFriendly") || 
+                                   finalResult.flags.includes("GPTFailed") || 
+                                   (finalResult.flags.includes("PossessiveAmbiguity") && finalResult.confidenceScore < 80) ||
+                                   (finalResult.name.split(/\s+/).length === 1) ||
+                                   (finalResult.name.length <= 5 && COMMON_WORDS.includes(finalResult.name.toLowerCase())) ||
+                                   CAR_BRANDS.includes(finalResult.name.toLowerCase()) ||
+                                   finalResult.name.toLowerCase().split(/\s+/).every(word => COMMON_WORDS.includes(word));
+
+          if (needsMetaFallback) {
+            const reason = finalResult.flags.includes("CityNameOnly") ? "CityNameOnly" :
+                          finalResult.flags.includes("TooGeneric") ? "TooGeneric" :
+                          finalResult.flags.includes("BrandIncluded") ? "BrandIncluded" :
+                          finalResult.flags.includes("PossibleAbbreviation") ? "PossibleAbbreviation" :
+                          finalResult.flags.includes("NotPossessiveFriendly") ? "NotPossessiveFriendly" :
+                          finalResult.flags.includes("GPTFailed") ? "GPTFailed" :
+                          "LowConfidence";
+            console.log(`Row ${rowNum}: Triggering meta fallback - Reason: ${reason}`);
+            const metaStartTime = Date.now();
+            const metadata = await fetchWebsiteMetadata(domain);
+            const logoText = await extractLogoText(domain, metadata.html);
+            const metaResult = await callOpenAIForMeta(domain, metadata, logoText, apiKey);
+            const metaDuration = Date.now() - metaStartTime;
+            const accepted = !!metaResult.result && metaResult.result !== finalResult.name;
+            tokensUsed += metaResult.tokens;
+            totalTokens += metaResult.tokens;
+
+            let sourcePreference = "unknown";
+            if (metaResult.result && metaResult.result.toLowerCase().includes(logoText.toLowerCase())) {
+              sourcePreference = "logo";
+              finalResult.confidenceScore += 10;
+            } else if (metaResult.result && metaResult.result.toLowerCase() === domain.replace(/\.com$/, "").toLowerCase()) {
+              sourcePreference = "metaTitle";
+              finalResult.confidenceScore -= 10;
+            }
+            fallbackTriggers.push({ rowNum, domain, reason, sourcePreference, duration: metaDuration, success: accepted });
+
+            if (metadata.error || metadata.sslError) {
+              console.log(`Row ${rowNum}: Failed to fetch metadata for ${domain}, sending to manual review`);
+              manualReviewQueue.push({
+                domain,
+                name: finalResult.name,
+                confidenceScore: finalResult.confidenceScore,
+                flags: [...finalResult.flags, "MetaFetchFailed"],
+                rowNum,
+                reason: metadata.sslError ? "SSL certificate error" : "Failed to fetch metadata",
+                email,
+                phone,
+                firstName,
+                lastName
+              });
+              finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], rowNum };
+            } else if (metaResult.result && accepted) {
+              let nameWords = normalizeText(metaResult.result);
+              const lastWord = nameWords[nameWords.length - 1]?.toLowerCase();
+              const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto"];
+              if (forbiddenSuffixes.includes(lastWord) && !KNOWN_NAMES.has(domain)) {
+                nameWords.pop();
+                console.log(`Removed forbidden suffix from fallback: ${lastWord}, new words: ${nameWords}`);
+              }
+              finalResult = humanizeName(nameWords.join(" "), domain);
+              finalResult.flags.push("FallbackUsed");
+              console.log(`Row ${rowNum}: Meta fallback result - ${JSON.stringify(finalResult)}`);
+            } else {
+              finalResult.flags.push("MetaFallbackFailed");
+              console.error(`Row ${rowNum}: Meta fallback failed`);
+            }
+          }
+
+          if (finalResult.confidenceScore < 50 || 
+              finalResult.flags.includes("TooGeneric") || 
+              finalResult.flags.includes("PossibleAbbreviation") || 
+              finalResult.flags.includes("NotPossessiveFriendly") || 
+              (finalResult.flags.includes("PossessiveAmbiguity") && finalResult.confidenceScore < 80) ||
+              finalResult.flags.includes("CityNameOnly")) {
+            console.log(`Row ${rowNum} flagged for review: ${JSON.stringify(finalResult)} - Reason: ${finalResult.flags.includes("PossessiveAmbiguity") ? "Name ends in 's'" : finalResult.flags.includes("CityNameOnly") ? "City name only" : "Low confidence or generic"}`);
+            manualReviewQueue.push({ 
+              domain, 
+              name: finalResult.name, 
+              confidenceScore: finalResult.confidenceScore, 
+              flags: finalResult.flags, 
               rowNum,
-              reason: metadata.sslError ? "SSL certificate error" : "Failed to fetch metadata",
+              reason: finalResult.flags.includes("PossessiveAmbiguity") ? "Name ends in 's', possessive form unclear" : 
+                      finalResult.flags.includes("CityNameOnly") ? "City name only, needs verification" :
+                      finalResult.flags.includes("BrandIncluded") ? "Possible city-brand combo" : "Low confidence or generic",
               email,
               phone,
               firstName,
               lastName
             });
             finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], rowNum };
-          } else if (metaResult.result && accepted) {
-            let nameWords = normalizeText(metaResult.result);
-            const lastWord = nameWords[nameWords.length - 1]?.toLowerCase();
-            const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto"];
-            if (forbiddenSuffixes.includes(lastWord) && !KNOWN_NAMES.has(domain)) {
-              nameWords.pop();
-              console.log(`Removed forbidden suffix from fallback: ${lastWord}, new words: ${nameWords}`);
-            }
-            finalResult = humanizeName(nameWords.join(" "), domain);
-            finalResult.flags.push("FallbackUsed");
-            console.log(`Row ${rowNum}: Meta fallback result - ${JSON.stringify(finalResult)}`);
-          } else {
-            finalResult.flags.push("MetaFallbackFailed");
-            console.error(`Row ${rowNum}: Meta fallback failed`);
           }
-        }
 
-        if (finalResult.confidenceScore < 50 || 
-            finalResult.flags.includes("TooGeneric") || 
-            finalResult.flags.includes("PossibleAbbreviation") || 
-            finalResult.flags.includes("NotPossessiveFriendly") || 
-            (finalResult.flags.includes("PossessiveAmbiguity") && finalResult.confidenceScore < 80) ||
-            finalResult.flags.includes("CityNameOnly")) {
-          console.log(`Row ${rowNum} flagged for review: ${JSON.stringify(finalResult)} - Reason: ${finalResult.flags.includes("PossessiveAmbiguity") ? "Name ends in 's'" : finalResult.flags.includes("CityNameOnly") ? "City name only" : "Low confidence or generic"}`);
-          manualReviewQueue.push({ 
-            domain, 
-            name: finalResult.name, 
-            confidenceScore: finalResult.confidenceScore, 
-            flags: finalResult.flags, 
-            rowNum,
-            reason: finalResult.flags.includes("PossessiveAmbiguity") ? "Name ends in 's', possessive form unclear" : 
-                    finalResult.flags.includes("CityNameOnly") ? "City name only, needs verification" :
-                    finalResult.flags.includes("BrandIncluded") ? "Possible city-brand combo" : "Low confidence or generic",
-            email,
-            phone,
-            firstName,
-            lastName
+          domainCache.set(domain, {
+            name: finalResult.name,
+            confidenceScore: finalResult.confidenceScore,
+            flags: finalResult.flags
           });
-          finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], rowNum };
-        }
 
-        domainCache.set(domain, {
-          name: finalResult.name,
-          confidenceScore: finalResult.confidenceScore,
-          flags: finalResult.flags
-        });
+          console.log(`Final result for ${domain}: ${JSON.stringify(finalResult)}`);
+          return { ...finalResult, rowNum, tokens: tokensUsed };
+        }))
+      );
 
-        console.log(`Final result for ${domain}: ${JSON.stringify(finalResult)}`);
-        return { ...finalResult, rowNum, tokens: tokensUsed };
-      }))
-    );
+      results.push(...chunkResults);
+    }
 
-    results.push(...chunkResults);
+    console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review, ${fallbackTriggers.length} meta fallbacks triggered`);
+    return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
+  } catch (err) {
+    console.error(`Handler error: ${err.message}`);
+    return res.status(500).json({ error: "Server error", details: err.message });
   }
-
-  console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review, ${fallbackTriggers.length} meta fallbacks triggered`);
-  return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
 };
 
 export const config = { api: { bodyParser: false } };
