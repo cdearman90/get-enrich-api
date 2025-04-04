@@ -1,7 +1,7 @@
 // api/batch-enrich-company-name-fallback.js
 // Version: 3.3.1 - Clean Fallback Handler
 
-import { humanizeName } from "../lib/humanize.js"; // Adjusted path
+import { humanizeName } from "./lib/humanize.js"; // Updated path
 
 export default async function handler(req, res) {
   try {
