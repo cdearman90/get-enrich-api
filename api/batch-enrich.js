@@ -225,11 +225,20 @@ export default async function handler(req, res) {
         }
 
         const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use.`;
-        const { result: gptName, error, tokens } = await callOpenAI(prompt, apiKey);
+        const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
         totalTokens += tokens;
 
         let finalResult;
-        if (gptName && !error) {
+        if (gptNameRaw && !error) {
+          // Hallucination guard
+          const nameWords = normalizeText(gptNameRaw);
+          const lastWord = nameWords[nameWords.length - 1]?.toLowerCase();
+          const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership"];
+          if (forbiddenSuffixes.includes(lastWord)) {
+            console.warn(`⚠️ GPT added forbidden suffix in "${gptNameRaw}": ${lastWord} → removing`);
+            nameWords.pop();
+          }
+          const gptName = nameWords.join(" ");
           finalResult = humanizeName(gptName, domain);
           console.log(`Row ${rowNum}: GPT result - ${JSON.stringify(finalResult)}`);
         } else {
@@ -284,7 +293,7 @@ function runUnitTests() {
     { input: { name: "Duval LLC", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } },
     { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
     { input: { name: "Crossroads Ford", domain: "crossroadsford.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
-    { input: { name: "McLarty Daniel Ford", domain: "mclartydanielford.com" }, expected: { name: "McLarty Daniel", confidenceScore: 100, flags: [] } }
+    { input: { name: "Duval Auto Mall", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } } // Hallucination test
   ];
 
   let passed = 0;
