@@ -61,6 +61,11 @@ const detectBrand = (words) => {
   return { hasBrand: !!brand, brand };
 };
 
+// --- Remove car brand names from the list of words ---
+const removeCarBrands = (words) => {
+  return words.filter(word => !BRANDS.includes(word.toLowerCase()));
+};
+
 // --- Levenshtein Distance with memoization for typo correction ---
 const levenshteinDistance = (a, b, cache = new Map()) => {
   const key = `${a}|${b}`;
@@ -140,7 +145,7 @@ const decompressDomain = (words, domain) => {
 
 // --- Remove common filler words ---
 const cleanupFillers = (words) => {
-  const fillers = ["motors", "llc", "inc", "enterprise", "group", "dealership", "team"];
+  const fillers = ["motors", "llc", "inc", "enterprise", "group", "dealership", "sales"];
   return words.filter(word => !fillers.includes(word.toLowerCase())).map(word => word.replace(/^-/, ""));
 };
 
@@ -160,6 +165,25 @@ const adjustForPossessiveFlow = (words) => {
   if (words.length > 1 && words[1].toLowerCase().endsWith("s") && words[1].toLowerCase() !== "cars") {
     words[1] = words[1].replace(/s$/, "");
   }
+  return words;
+};
+
+// --- Remove possessive forms (e.g., Ford's → Ford) ---
+const removePossessiveForms = (words) => {
+  return words.map(word => word.replace(/'s$/i, ""));
+};
+
+// --- Ensure the name is suitable for possessive use ---
+const ensurePossessiveSuitability = (words) => {
+  // Remove words that don't fit possessive form (e.g., "sales")
+  const unsuitableWords = ["sales"];
+  words = words.filter(word => !unsuitableWords.includes(word.toLowerCase()));
+
+  // If the name is empty after removing unsuitable words, try to use a distinguishing word from the domain
+  if (words.length === 0) {
+    return ["Unknown"];
+  }
+
   return words;
 };
 
@@ -215,7 +239,7 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation, isGptR
   score += hasAbbreviation ? 0 : 20;
 
   // Boost for known dealership patterns
-  const extraSafeWords = ["plaza", "gallery", "center", "superstore", "auto", "sales", "motors"];
+  const extraSafeWords = ["plaza", "gallery", "center", "superstore", "auto"];
   if (words.some(w => extraSafeWords.includes(w.toLowerCase()))) {
     score += 20; // Higher boost to ensure 50+
   }
@@ -230,15 +254,20 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation, isGptR
     score += 10;
   }
 
+  // Penalize if the name is too short or generic
+  if (words.length <= 1) {
+    score -= 20;
+  }
+
   return Math.min(score, 100);
 };
 
 // --- Fallback Cleanup + Scoring + Flagging ---
 const humanizeName = (name, domain) => {
   let words = normalizeText(name);
-  const { hasBrand } = detectBrand(words);
+  const { hasBrand, brand } = detectBrand(words);
 
-  // Trusted names
+  // Trusted names (without brands)
   const knownGood = ["pat milliken", "union park", "tasca auto", "jt auto"];
   const normalized = words.join(" ").toLowerCase();
   if (knownGood.includes(normalized) && !hasBrand) {
@@ -253,6 +282,9 @@ const humanizeName = (name, domain) => {
   words = decompressDomain(words, domain);
   words = [...new Set(words)];
   words = correctTypos(words);
+  words = removePossessiveForms(words); // Remove possessive forms
+  words = removeCarBrands(words); // Remove car brand names
+  words = ensurePossessiveSuitability(words); // Ensure the name fits possessive form
   const hasAbbreviation = detectAbbreviation(words);
   words = cleanupFillers(words);
   words = removeUnnecessaryAuto(words);
@@ -275,6 +307,11 @@ const humanizeName = (name, domain) => {
   const formattedName = words.join(" ").trim();
   const confidenceScore = computeConfidenceScore(words, domain, hasBrand, hasAbbreviation, true); // Pass true for GPT response
   if (hasAbbreviation) flags.push("Unexpanded");
+
+  // Flag if the name is too generic or short
+  if (words.length <= 1) {
+    flags.push("TooGeneric");
+  }
 
   return {
     name: applyMinimalFormatting(formattedName),
@@ -419,7 +456,7 @@ export default async function handler(req, res) {
             : { name: "", confidenceScore: 0, flags: [], reason: error || "Timeout" };
 
           const finalResult = {
-            name: fallback.name, // Use the sanitized name from humanizeName
+            name: fallback.name,
             confidenceScore: fallback.confidenceScore,
             flags: fallback.flags,
             reason: fallback.confidenceScore >= 80 && fallback.flags.length === 0
@@ -471,22 +508,27 @@ function runUnitTests() {
     {
       name: "Abbreviation detection",
       input: { name: "CZAG", domain: "czag.com" },
-      expected: { name: "CZAG Auto", confidenceScore: 50, flags: ["Unexpanded"] }
+      expected: { name: "CZAG", confidenceScore: 50, flags: ["Unexpanded"] }
     },
     {
       name: "Domain mismatch",
       input: { name: "Crossroads Auto", domain: "newhollandauto.com" },
-      expected: { name: "New Holland Auto", confidenceScore: 50, flags: [] }
+      expected: { name: "New Holland", confidenceScore: 50, flags: [] }
     },
     {
       name: "Typo correction",
       input: { name: "Sanleandroford", domain: "sanleandroford.com" },
-      expected: { name: "San Leandro Ford", confidenceScore: 80, flags: [] }
+      expected: { name: "San Leandro", confidenceScore: 80, flags: [] }
     },
     {
       name: "Too many words fallback",
       input: { name: "Jack Powell Chrysler Dodge Jeep Ram", domain: "jackpowell.com" },
-      expected: { name: "Jack Powell Chrysler", confidenceScore: 70, flags: ["TooLong"] }
+      expected: { name: "Jack Powell", confidenceScore: 70, flags: ["TooLong"] }
+    },
+    {
+      name: "Generic name with sales",
+      input: { name: "Ford Auto Sales", domain: "teamfordauto.com" },
+      expected: { name: "Team Auto", confidenceScore: 50, flags: [] }
     }
   ];
 
