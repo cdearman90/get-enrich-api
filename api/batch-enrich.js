@@ -1,5 +1,3 @@
-// ✅ FULL VERSION: Company Name Cleaning Only (includes fallbacks, typo correction, JSON resilience, brand detection, review queue, timeout guard)
-
 // --- Simple rate-limiting (p-limit style) ---
 const pLimit = (concurrency) => {
   let active = 0;
@@ -226,6 +224,7 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation, isGptR
   let hasDomainMatch = false;
   let partialMatchScore = 0;
 
+  // Check for domain match
   for (const nameWord of nameWords) {
     for (const domainWord of domainWords) {
       if (nameWord === domainWord && nameWord.length > 3) {
@@ -239,9 +238,8 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation, isGptR
     if (hasDomainMatch) break;
   }
 
-  score += hasDomainMatch ? 50 : partialMatchScore;
-  score += hasBrand ? 30 : 0;
-  score += hasAbbreviation ? 0 : 20;
+  score += hasDomainMatch ? 40 : partialMatchScore; // +40 for full match, +20 for partial
+  score += hasAbbreviation ? 0 : 20; // +20 if no abbreviation
 
   // Boost for known dealership patterns
   const extraSafeWords = ["plaza", "gallery", "center", "superstore", "auto"];
@@ -249,21 +247,29 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation, isGptR
     score += 20; // Higher boost to ensure 50+
   }
 
+  // Boost for distinguishing words
+  const distinguishingWords = ["team", "family", "group", "superstore"];
+  if (words.some(w => distinguishingWords.includes(w.toLowerCase()))) {
+    score += 15; // Boost for specific words
+  }
+
   // Boost for valid GPT response
   if (isGptResponse) {
     score += 10; // Add 10 for a clean GPT match
   }
 
+  // Boost for known good names
   const nameStr = nameWords.join(" ");
   if (["pat milliken", "union park", "tasca auto", "jt auto"].includes(nameStr)) {
     score += 10;
   }
 
-  // Penalize if the name is too short or generic
-  if (words.length <= 1) {
-    score -= 20;
+  // Boost for name length (more specific names)
+  if (words.length > 1) {
+    score += 10; // Boost for multi-word names
   }
 
+  // Removed penalty for short names
   return Math.min(score, 100);
 };
 
@@ -513,12 +519,12 @@ function runUnitTests() {
     {
       name: "Abbreviation detection",
       input: { name: "CZAG", domain: "czag.com" },
-      expected: { name: "CZAG", confidenceScore: 50, flags: ["Unexpanded"] }
+      expected: { name: "CZAG", confidenceScore: 70, flags: ["Unexpanded"] }
     },
     {
       name: "Domain mismatch",
       input: { name: "Crossroads Auto", domain: "newhollandauto.com" },
-      expected: { name: "New Holland", confidenceScore: 50, flags: [] }
+      expected: { name: "New Holland", confidenceScore: 70, flags: [] }
     },
     {
       name: "Typo correction",
@@ -528,17 +534,17 @@ function runUnitTests() {
     {
       name: "Too many words fallback",
       input: { name: "Jack Powell Chrysler Dodge Jeep Ram", domain: "jackpowell.com" },
-      expected: { name: "Jack Powell", confidenceScore: 70, flags: ["TooLong"] }
+      expected: { name: "Jack Powell", confidenceScore: 80, flags: ["TooLong"] }
     },
     {
       name: "Generic name with sales",
       input: { name: "Ford Auto Sales", domain: "teamfordauto.com" },
-      expected: { name: "Team Auto", confidenceScore: 50, flags: [] }
+      expected: { name: "Team Auto", confidenceScore: 85, flags: [] }
     },
     {
       name: "Name with auto in the middle",
       input: { name: "Athens Family Auto Ford", domain: "athensfamilyauto.com" },
-      expected: { name: "Athens Family", confidenceScore: 60, flags: [] }
+      expected: { name: "Athens Family", confidenceScore: 85, flags: [] }
     }
   ];
 
