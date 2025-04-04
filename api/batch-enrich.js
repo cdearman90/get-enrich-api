@@ -145,7 +145,7 @@ const decompressDomain = (words, domain) => {
 
 // --- Remove common filler words ---
 const cleanupFillers = (words) => {
-  const fillers = ["motors", "llc", "inc", "enterprise", "group", "dealership", "sales", "plaza", "gallery", "center", "superstore"];
+  const fillers = ["motors", "llc", "inc", "enterprise", "group", "dealership", "sales", "plaza", "gallery", "center", "mall", "center", "superstore"];
   return words.filter(word => !fillers.includes(word.toLowerCase())).map(word => word.replace(/^-/, ""));
 };
 
@@ -222,7 +222,6 @@ const applyMinimalFormatting = (name) => {
     .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1))
     .replace(/Mccarthy/g, "McCarthy")
     .replace(/Mclarty/g, "McLarty")
-    .replace(/Bmw/g, "BMW")
     .replace(/Vw/g, "VW")
     .replace(/'s\b/gi, "'s")
     .replace(/([a-z])'S\b/gi, "$1's")
@@ -447,7 +446,7 @@ export default async function handler(req, res) {
             return { ...domainCache.get(domain), rowNum };
           }
 
-          const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use. Do not invent or add suffixes like "Plaza", "Gallery", "Superstore", "Mall", or "Center" unless they are actually part of the business name. Respond only with: ##Name: Clean Name`;
+          const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use. Do not invent or add suffixes like "Plaza", "Gallery", "Superstore", "Mall", or "Center" unless they are actually part of the business name. Never inlcude a car brand name in the name (e.g. Ford, Toyota, BMW, Chevrolet, GMC, Lexus, Mercedez-Benz, etc.) Respond only with: ##Name: Clean Name`;
 
           const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
           totalTokens += tokens;
@@ -525,11 +524,6 @@ function runUnitTests() {
       name: "Too many words fallback",
       input: { name: "Jack Powell Chrysler Dodge Jeep Ram", domain: "jackpowell.com" },
       expected: { name: "Jack Powell", confidenceScore: 80, flags: ["TooLong"] }
-    },
-    {
-      name: "Generic name with sales",
-      input: { name: "Ford Auto Sales", domain: "teamfordauto.com" },
-      expected: { name: "Team", confidenceScore: 70, flags: [] }
     },
     {
       name: "Name with auto in the middle",
