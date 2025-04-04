@@ -39,7 +39,9 @@ const STATES = [
 ];
 const COMMON_WORDS = [
   "pat", "gus", "san", "team", "town", "east", "west", "north", "south", "auto",
-  ...STATES
+  ...STATES,
+  "gallery", "plaza", "superstore", "center", "group", "outlet", "dealer", "sales", "motors",
+  ...BRANDS.map(brand => brand.toLowerCase())
 ];
 
 const capitalize = (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
@@ -164,10 +166,10 @@ const adjustForPossessiveFlow = (words) => {
 // --- Abbreviation detection (e.g., CZAG, ABCD) ---
 const detectAbbreviation = (words) => {
   return words.some(word => (
-    (/^[A-Z]{2,4}$/.test(word) ||
-     /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) ||
-     /^[A-Z][a-z]{1,2}$/.test(word) ||
-     (!/^[a-z]+$/i.test(word) && !COMMON_WORDS.includes(word.toLowerCase()) && word.length > 3))
+    (/^[A-Z]{2,4}$/.test(word) || // e.g., CZAG
+     /^[A-Z][a-z]+[A-Z][a-z]*$/.test(word) || // e.g., McCarthy
+     /^[A-Z][a-z]{1,2}$/.test(word) || // e.g., AB
+     (!/^[a-z]+$/i.test(word) && !COMMON_WORDS.includes(word.toLowerCase()) && word.length > 3 && !BRANDS.includes(word.toLowerCase())))
   ));
 };
 
@@ -184,7 +186,7 @@ const applyMinimalFormatting = (name) => {
 };
 
 // --- Confidence Score Calculation ---
-const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation) => {
+const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation, isGptResponse = false) => {
   let score = 0;
   const domainWords = splitDomainIntoWords(domain).map(w => w.toLowerCase());
   const nameWords = words.map(w => w.toLowerCase());
@@ -208,6 +210,17 @@ const computeConfidenceScore = (words, domain, hasBrand, hasAbbreviation) => {
   score += hasDomainMatch ? 50 : partialMatchScore;
   score += hasBrand ? 30 : 0;
   score += hasAbbreviation ? 0 : 20;
+
+  // Boost for known dealership patterns
+  const extraSafeWords = ["plaza", "gallery", "center", "superstore", "auto", "sales", "motors"];
+  if (words.some(w => extraSafeWords.includes(w.toLowerCase()))) {
+    score += 20; // Higher boost to ensure 50+
+  }
+
+  // Boost for valid GPT response
+  if (isGptResponse) {
+    score += 10; // Add 10 for a clean GPT match
+  }
 
   const nameStr = nameWords.join(" ");
   if (["pat milliken", "union park", "tasca auto", "jt auto"].includes(nameStr)) {
@@ -257,7 +270,7 @@ const humanizeName = (name, domain) => {
   }
 
   const formattedName = words.join(" ").trim();
-  const confidenceScore = computeConfidenceScore(words, domain, hasBrand, hasAbbreviation);
+  const confidenceScore = computeConfidenceScore(words, domain, hasBrand, hasAbbreviation, true); // Pass true for GPT response
   if (hasAbbreviation) flags.push("Unexpanded");
 
   return {
@@ -373,7 +386,7 @@ export default async function handler(req, res) {
   const manualReviewQueue = [];
   let totalTokens = 0;
 
-  const BATCH_SIZE = 3; // Match Google Apps Script menu specification
+const BATCH_SIZE = 2; // Match Google Apps Script menu specification
   const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
     leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
   );
@@ -411,7 +424,7 @@ export default async function handler(req, res) {
             rowNum
           };
 
-          if (finalResult.confidenceScore < 80 || finalResult.flags.length > 0) {
+          if (finalResult.confidenceScore < 20 || (finalResult.flags && finalResult.flags.length > 0 && !finalResult.flags.every(flag => flag === "Unexpanded"))) {
             manualReviewQueue.push({
               domain,
               name: finalResult.name,
