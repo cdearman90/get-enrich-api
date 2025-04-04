@@ -1,5 +1,5 @@
-// batch-enrich.js (Version 3.2 - Updated 2025-04-05)
-const fetch = require('node-fetch'); // Ensure this dependency is installed
+// batch-enrich.js (Version 3.3 - Updated 2025-04-05)
+import fetch from 'node-fetch'; // Use ES module import syntax
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
@@ -662,7 +662,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
 
 // Main handler
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.2 - Updated 2025-04-05");
+  console.log("batch-enrich.js Version 3.3 - Updated 2025-04-05");
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
