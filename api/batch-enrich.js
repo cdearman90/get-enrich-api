@@ -1,3 +1,5 @@
+// ✅ FULL VERSION: Company Name Cleaning Only (includes fallbacks, typo correction, JSON resilience, brand detection, review queue, timeout guard)
+
 // --- Simple rate-limiting (p-limit style) ---
 const pLimit = (concurrency) => {
   let active = 0;
