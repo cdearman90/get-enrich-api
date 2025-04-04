@@ -1,6 +1,6 @@
 // batch-enrich.js (Version 3.4 - Updated 2025-04-05)
 import fetch from 'node-fetch';
-import { humanizeName, CAR_BRANDS, COMMON_WORDS } from "../lib/humanize.js";
+import { humanizeName, CAR_BRANDS, COMMON_WORDS } from "./lib/humanize.js"; // Updated path
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
