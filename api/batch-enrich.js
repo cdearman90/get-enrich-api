@@ -143,7 +143,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
           messages: [
             {
               role: "system",
-              content: "You are a dealership naming expert. Respond only in this format:\n##Name: Clean Name\nGiven the dealership domain \"${domain}\", return the clean, natural dealership name already in use. Do not invent or add suffixes like \"Plaza\", \"Gallery\", \"Superstore\", \"Mall\", or \"Center\" unless they are actually part of the business name. Never include a car brand name in the name (e.g., Ford, Toyota, BMW, Chevrolet, GMC, Lexus, Mercedes-Benz, etc.) unless unavoidable and the only identifiers are a city and car brand. For names ending in 's', prefer the singular form (e.g., 'Stan' over 'Stans') unless the plural is clearly intentional (e.g., 'Crossroads')."
+              content: "You are a dealership naming expert. Respond only in this format:\n##Name: Clean Name\nGiven the dealership domain \"${domain}\", return the clean, natural dealership name already in use. A short name used like a dealer insider speaking to another dealer insider in a casual conversation. Do not invent or add suffixes like \"Plaza\", \"Gallery\", \"Superstore\", \"Mall\", or \"Center\" unless they are actually part of the business name. Never include a car brand name in the name (e.g., Ford, Toyota, BMW, Chevrolet, GMC, Lexus, Mercedes-Benz, etc.) unless unavoidable and the only identifiers are a city and car brand. For names ending in 's', prefer the singular form (e.g., 'Stan' over 'Stans') unless the plural is clearly intentional (e.g., 'Crossroads')."
             },
             { role: "user", content: prompt }
           ]
@@ -200,7 +200,7 @@ export default async function handler(req, res) {
   );
 
   for (const chunk of leadChunks) {
-    if (Date.now() - startTime > 30000) { // Adjusted to 30 seconds for 3-row batch
+    if (Date.now() - startTime > 30000) {
       console.log("Partial response due to timeout");
       return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
     }
@@ -224,7 +224,7 @@ export default async function handler(req, res) {
           return { ...domainCache.get(domain), rowNum };
         }
 
-        const prompt = `Given the dealership domain "${ DOMAIN }", return the clean, natural dealership name already in use.`;
+        const prompt = `Given the dealership domain "${domain}", return the clean, natural dealership name already in use.`; // Fixed typo: DOMAIN → domain
         const { result: gptNameRaw, error, tokens } = await callOpenAI(prompt, apiKey);
         totalTokens += tokens;
 
