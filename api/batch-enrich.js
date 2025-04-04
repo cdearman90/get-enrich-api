@@ -49,7 +49,7 @@ const capitalize = (word) => word.charAt(0).toUpperCase() + word.slice(1).toLowe
 // --- Normalize & clean incoming name ---
 const normalizeText = (name) => {
   if (!name || typeof name !== "string") return [];
-  let result = name.replace(/^"|"$/g, '');
+  let result = name.replace(/^"|"$/g, ''); // Strip wrapping quotes from input
   let words = result.toLowerCase().trim().split(/\s+/);
   if (words[0] === "the") words.shift();
   return words;
@@ -176,13 +176,16 @@ const detectAbbreviation = (words) => {
 // --- Final formatting for output ---
 const applyMinimalFormatting = (name) => {
   return name
+    .replace(/^"|"$/g, '') // Strip wrapping quotes
+    .replace(/",$/g, '')   // Strip trailing comma and quote
     .replace(/\b\w+/g, w => w.charAt(0).toUpperCase() + w.slice(1))
     .replace(/Mccarthy/g, "McCarthy")
     .replace(/Mclarty/g, "McLarty")
     .replace(/Bmw/g, "BMW")
     .replace(/Vw/g, "VW")
     .replace(/'s\b/gi, "'s")
-    .replace(/([a-z])'S\b/gi, "$1's");
+    .replace(/([a-z])'S\b/gi, "$1's")
+    .trim();
 };
 
 // --- Confidence Score Calculation ---
@@ -386,7 +389,7 @@ export default async function handler(req, res) {
   const manualReviewQueue = [];
   let totalTokens = 0;
 
-const BATCH_SIZE = 2; // Match Google Apps Script menu specification
+  const BATCH_SIZE = 2; // Match Google Apps Script menu specification
   const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
     leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
   );
@@ -416,11 +419,12 @@ const BATCH_SIZE = 2; // Match Google Apps Script menu specification
             : { name: "", confidenceScore: 0, flags: [], reason: error || "Timeout" };
 
           const finalResult = {
-            ...fallback,
-            reason:
-              fallback.confidenceScore >= 80 && fallback.flags.length === 0
-                ? "GPT name used directly (high confidence)"
-                : "Used fallback",
+            name: fallback.name, // Use the sanitized name from humanizeName
+            confidenceScore: fallback.confidenceScore,
+            flags: fallback.flags,
+            reason: fallback.confidenceScore >= 80 && fallback.flags.length === 0
+              ? "GPT name used directly (high confidence)"
+              : "Used fallback",
             rowNum
           };
 
