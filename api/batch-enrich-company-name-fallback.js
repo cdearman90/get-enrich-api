@@ -1,27 +1,26 @@
+// api/batch-enrich-company-name-fallback.js
+// Version: 3.3.1 - Clean Fallback Handler
+
+import { humanizeName } from "../lib/humanize.js"; // Adjusted path
+
 export default async function handler(req, res) {
   try {
-    const leads = req.body;
+    const buffers = [];
+    for await (const chunk of req) buffers.push(chunk);
+    const leads = JSON.parse(Buffer.concat(buffers).toString("utf-8"));
+
     if (!Array.isArray(leads)) {
       return res.status(400).json({ error: "Invalid request body: leads must be an array" });
     }
 
     const results = leads.map(lead => {
-      const domain = lead.domain.split(".")[0];
-      // Remove common suffixes and car brands
-      let name = domain
-        .replace(/(ford|auto|chevrolet|toyota|bmw)/gi, "")
-        .replace(/(dealership|motors|sales|group)/gi, "")
-        .trim();
-      // Capitalize each word
-      name = name
-        .split(/([a-z])([A-Z])/g)
-        .filter(word => word)
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-        .join(" ");
+      const domain = (lead.domain || "").toLowerCase().trim();
+      const cleaned = humanizeName(domain, domain);
+
       return {
-        name: name || "Unknown Dealership",
-        confidenceScore: 85,
-        flags: ["FallbackUsed"],
+        name: cleaned.name,
+        confidenceScore: cleaned.confidenceScore,
+        flags: [...(cleaned.flags || []), "FallbackUsed"],
         rowNum: lead.rowNum
       };
     });
@@ -29,7 +28,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       results,
       manualReviewQueue: [],
-      totalTokens: 37,
+      totalTokens: 37, // static fallback value
       partial: false
     });
   } catch (err) {
@@ -37,3 +36,5 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Fallback endpoint failed", details: err.message });
   }
 }
+
+export const config = { api: { bodyParser: false } };
