@@ -1,4 +1,4 @@
-// api/batch-enrich.js (Version 3.4.2 - Optimized 2025-04-05)
+// api/batch-enrich.js (Version 3.4.4 - Optimized 2025-04-07)
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText } from "./lib/humanize.js";
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
@@ -85,10 +85,10 @@ const extractLogoText = async (domain, html) => {
 
 const callOpenAIForMeta = async (domain, metadata, logoText, apiKey) => {
   const prompt = `Domain: ${domain}, Redirected: ${metadata.redirectedDomain}, Title: ${metadata.title}, Description: ${metadata.description}, Logo: ${logoText}. Extract the dealership name.`;
-  for (let attempt = 1; attempt <= 2; attempt++) { // Reduced to 2 attempts
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // Reduced to 4 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -109,10 +109,10 @@ const callOpenAIForMeta = async (domain, metadata, logoText, apiKey) => {
 };
 
 const callOpenAI = async (prompt, apiKey) => {
-  for (let attempt = 1; attempt <= 2; attempt++) { // Reduced to 2 attempts
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // Reduced to 4 seconds
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
@@ -194,8 +194,18 @@ export default async function handler(req, res) {
             const { result: gptName, tokens } = await callOpenAI(`Domain: ${domain}, extract dealership name.`, apiKey);
             tokensUsed += tokens;
             totalTokens += tokens;
-            if (gptName) finalResult = humanizeName(gptName, domain, false);
-            else finalResult.flags.push("GPTFailed");
+            if (gptName) {
+              finalResult = humanizeName(gptName, domain, false);
+              finalResult.flags.push("GPTFallbackUsed");
+            } else {
+              finalResult.flags.push("GPTFailed");
+            }
+          }
+
+          // Score City + Brand properly
+          if (Array.isArray(finalResult.flags) && finalResult.flags.includes("CarBrandCityException")) {
+            finalResult.confidenceScore = 100;
+            finalResult.flags = [...new Set([...finalResult.flags, "Scored100FromPattern"])];
           }
 
           if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => ["TooGeneric", "PossibleAbbreviation", "NotPossessiveFriendly", "CityNameOnly"].includes(f))) {
@@ -206,7 +216,7 @@ export default async function handler(req, res) {
             totalTokens += tokens;
             if (metaName && metaName !== finalResult.name) {
               finalResult = humanizeName(metaName, domain, false);
-              finalResult.flags.push("FallbackUsed");
+              finalResult.flags.push("MetaFallbackUsed");
             } else {
               finalResult.flags.push("MetaFallbackFailed");
             }
