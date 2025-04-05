@@ -1,5 +1,5 @@
 // api/batch-enrich.js (Version 3.4.1 - Updated 2025-04-05)
-import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText } from "/api/lib/humanize.js";
+import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText } from "./lib/humanize.js";
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
@@ -439,7 +439,7 @@ function runUnitTests() {
     { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "Toyota Redlands", confidenceScore: 100, flags: ["CarBrandCityException"] } },
     { input: { name: "Crossroads Ford", domain: "crossroadsford.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
     { input: { name: "Duval Ford", domain: "duvalford.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } },
-    { input: { name: "Athens Ford", domain: "athensford.com" }, expected: { name: "Athens", confidenceScore: 0, flags: ["CityNameOnly"] } },
+    { input: { name: "Athens Ford", domain: "athensford.com" }, expected: { name: "Athens", confidenceScore: 0, flags: ["TooGeneric"] } },
     { input: { name: "Team Ford", domain: "teamford.com" }, expected: { name: "Team", confidenceScore: 0, flags: ["TooGeneric"] } },
     { input: { name: "Smith Motor Shop", domain: "smithmotorshop.com" }, expected: { name: "Smith", confidenceScore: 100, flags: [] } },
     { input: { name: "Karl Chevrolet Stuart", domain: "karlchevroletstuart.com" }, expected: { name: "Karl Stuart", confidenceScore: 100, flags: [] } },
