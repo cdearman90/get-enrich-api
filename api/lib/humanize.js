@@ -354,13 +354,14 @@ const isPossibleAbbreviation = (word) => {
          wordLower.includes("bhm"); // Known Birmingham abbreviation
 };
 
-export const humanizeName = (inputName, domain) => {
+// Update humanizeName in lib/humanize.js
+export const humanizeName = (inputName, domain, addPossessiveFlag = true) => {
   try {
     let words = normalizeText(inputName || domain);
     console.log(`Before brand removal for ${domain}: ${words.join(" ")}`);
     const originalWords = [...words];
 
-    // Check for car brand + city pattern
+    // Existing car brand + city logic
     let hasCarBrand = false;
     let hasCity = false;
     let carBrandFound = "";
@@ -381,16 +382,17 @@ export const humanizeName = (inputName, domain) => {
       let finalName = `${capitalizedBrand} ${capitalizedCity}`;
       finalName = finalName.replace("Mercedes-Benz", "MB");
       return {
-        name: finalName,
+        name: addPossessiveFlag ? addPossessive(finalName) : finalName,
         confidenceScore: 100,
         flags: ["CarBrandCityException"],
         reason: "CarBrandCityPattern"
       };
     }
 
-    if (words.length === 1 && words[0].length > 12) {
+    // Early compound split if single word and not a known proper noun
+    if (words.length === 1 && !KNOWN_PROPER_NOUNS.includes(words[0].toLowerCase())) {
       words = words[0].match(/[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)/g) || words;
-      console.log(`Detected compound blob for ${domain}: ${words[0]}, split into: ${words}`);
+      console.log(`Early compound split for ${domain}: ${words[0]} → ${words}`);
     }
 
     words = removeForbiddenWords(words);
@@ -424,29 +426,22 @@ export const humanizeName = (inputName, domain) => {
     const name = capitalizeName(words);
     if (!name) {
       console.log(`Empty name after humanization for ${domain}`);
-      return { name: "", confidenceScore: 0, flags: ["EmptyAfterHumanization"] };
+      return { name: originalWords.join(" "), confidenceScore: 50, flags: ["EmptyFallbackUsed"] };
     }
 
     const finalName = name.replace("Mercedes-Benz", "MB");
-    const nameLower = finalName.toLowerCase();
-    const lastWordLower = words[words.length - 1]?.toLowerCase();
-    const possessiveAmbiguity = lastWordLower && lastWordLower.endsWith("s") && !["sales"].includes(lastWordLower);
-    const flags = [];
-    if (possessiveAmbiguity) {
-      flags.push("PossessiveAmbiguity");
-    }
-
-    const notPossessiveFriendly = words.some(word => forbiddenSuffixes.includes(word.toLowerCase()));
-    if (notPossessiveFriendly) {
-      flags.push("NotPossessiveFriendly");
-    }
-
     let confidenceScore = 100;
-    if (flags.includes("PossessiveAmbiguity")) confidenceScore -= 20;
-    if (flags.includes("NotPossessiveFriendly")) confidenceScore -= 20;
+    const flags = [];
+    const possessiveName = addPossessiveFlag ? addPossessive(finalName) : finalName;
 
+    if (addPossessiveFlag && isPossessiveFriendly(finalName) && !isPossessiveFriendly(possessiveName)) {
+      confidenceScore -= 20;
+      flags.push("PossessiveAdjustment");
+    }
+
+    console.log({ inputName, domain, finalName: possessiveName, confidenceScore, flags }); // Per-row logging
     return {
-      name: finalName,
+      name: possessiveName,
       confidenceScore: Math.max(confidenceScore, 0),
       flags
     };
