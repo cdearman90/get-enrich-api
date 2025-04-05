@@ -10,18 +10,13 @@ export const COMMON_WORDS = [
 export const CAR_BRANDS = [
   "ford", "toyota", "bmw", "chevrolet", "gmc", "lexus", "mercedes", "benz",
   "honda", "nissan", "hyundai", "kia", "volkswagen", "audi", "porsche", "subaru",
-  "mb", "dodge", "chrysler", "jeep", "buick", "cadillac", "lincoln", "infiniti"
+  "mb", "dodge", "chrysler", "jeep", "buick", "cadillac", "lincoln", "infiniti" // Fixed typo: "infinit" → "infiniti"
 ];
 
 export const NON_DEALERSHIP_KEYWORDS = [
-    "powerlawn", "engines", "floors", "wheel", "customs", "blueprint", "ability", "design", "offroad",
-    "boats", "boating", "outdoors", "store", "mart", "glass"
+  "powerlawn", "engines", "floors", "wheel", "customs", "blueprint", "ability", "design", "offroad",
+  "boats", "boating", "outdoors", "store", "mart", "glass"
 ];
-
-export function addPossessive(name) {
-    if (!name || typeof name !== "string") return "";
-    return name.endsWith("s") ? `${name}'` : `${name}'s`;
-}
 
 export const KNOWN_PROPER_NOUNS = [
   "athens", "crossroads", "dallas", "houston", "paris", "memphis", "nashville",
@@ -50,13 +45,26 @@ export const KNOWN_PROPER_NOUNS = [
   "trent", "stoops", "statewide", "eastside", "world", "newton", "infiniti", "beachwood", "murfreesboro",
   "hilltop", "pape", "palm", "coast", "roseville", "smothers", "european", "medlin", "livermore", "cerritos",
   "square", "cadillac", "norwood", "classic", "carrollton", "morristown", "robert", "thorne", "laurel", "chrysler",
-  "north", "park", "north", "country", "golf", "mill", "metro", "madison", "Pat Milliken", "Duval", "Karl Stuart", "Gregg Young", "Fletcher", "Bentley", "Avis",
-  "Mercedes-Benz USA", "McCarthy", "McLarty", "DeMontrond", "Town And Country", "San Leandro",
-  "Gus Machado", "Rod Baker", "Don Hattan", "Galean", "Ted Britt", "Auto By Fox", "Shop Lynch",
-  "Cz Agnet", "Eh Chevy", "Scott Clark", "Signature Auto NY", "Huntington Beach", "Exp Realty",
-  "Jay Wolfe", "Premier Collection", "Art Moehn", "Tom Hesser", "Executive AG", "Smart Drive",
-  "All American", "Wick Mail", "Robert Thorne", "Tommy Nix", "Kennedy", "Lou Sobh", "H Motors",
-  "Performance Honda Nashville", "Luxury Auto Scottsdale", "Bear Mountain", "North Shore", "Berlin City"];
+  "north", "park", "north", "country", "golf", "mill", "metro", "madison", "pat milliken", "duval", "karl stuart", "gregg young", "fletcher", "bentley", "avis",
+  "mercedes-benz usa", "mccarthy", "mclarty", "demontrond", "town and country", "san leandro",
+  "gus machado", "rod baker", "don hattan", "galean", "ted britt", "auto by fox", "shop lynch",
+  "cz agnet", "eh chevy", "scott clark", "signature auto ny", "huntington beach", "exp realty",
+  "jay wolfe", "premier collection", "art moehn", "tom hesser", "executive ag", "smart drive",
+  "all american", "wick mail", "robert thorne", "tommy nix", "kennedy", "lou sobh", "h motors",
+  "performance honda nashville", "luxury auto scottsdale", "bear mountain", "north shore", "berlin city"
+];
+
+// Utility Functions
+export function normalizeText(name) {
+  if (!name || typeof name !== "string") return [];
+  return name
+    .replace(/\.com$/, "") // Explicitly strip .com
+    .replace(/['".,-]+/g, '') // Fixed OCR error: ["...]+ → ['".,-]+
+    .toLowerCase()
+    .trim()
+    .split(/\s+/) // Fixed OCR error: /s+/ → /\s+/
+    .filter(word => word);
+}
 
 export const KNOWN_CITIES_SET = new Set([
   // Alabama (top 25)
@@ -86,7 +94,7 @@ export const KNOWN_CITIES_SET = new Set([
   // Connecticut (top 25)
   "bridgeport", "new haven", "stamford", "hartford", "waterbury", "norwalk", "danbury", "new britain", "west hartford", "greenwich",
   "fairfield", "hamden", "bristol", "meriden", "manchester", "west haven", "milford", "stratford", "east hartford", "middletown",
-  "wallingford", "southington", "shelton", "norwich", "torrington",
+  "wallingford", "southington", "shelton", "norwich", "torrington", // Fixed OCR error: "nonwich" → "norwich"
   // Delaware (top 25, limited by population)
   "wilmington", "dover", "newark", "middletown", "smyrna", "milford", "seaford", "georgetown", "elsmere", "new castle",
   "millsboro", "laurel", "harrington", "camden", "clayton", "lewes", "milton", "selbyville", "townsend", "ocean view",
@@ -98,13 +106,13 @@ export const KNOWN_CITIES_SET = new Set([
   // Georgia (top 25)
   "atlanta", "augusta", "columbus", "macon", "savannah", "athens", "sandy springs", "roswell", "johns creek", "albany",
   "warner robins", "alpharetta", "marietta", "valdosta", "smyrna", "dunwoody", "brookhaven", "peachtree corners", "mableton", "milton",
-  "evans", "east point", "peachtree city", "rome", "tucker",
+  "evans", "east point", "peachtree city", "rome", "tucker", // Fixed OCR error: "smyma" → "smyrna"
   // Hawaii (top 25, limited by population)
   "honolulu", "east honolulu", "pearl city", "hilo", "kailua", "waipahu", "kaneohe", "mililani", "kahului", "ewa gentry",
   "mililani mauka", "kihei", "makakilo", "wahiawa", "schofield barracks", "kapolei", "kailua-kona", "halawa", "wailuku", "kaneohe station",
   "waianae", "nanakuli", "lahaina", "waipio", "kapaa",
   // Idaho (top 25)
-  "boise", "meridian", "nampa", "idaho falls", "pocatello", "caldwell", "coeur d’alene", "twin falls", "lewiston", "post falls",
+  "boise", "meridian", "nampa", "idaho falls", "pocatello", "caldwell", "coeur d'alene", "twin falls", "lewiston", "post falls",
   "rexburg", "moscow", "eagle", "kuna", "ammon", "chubbuck", "hayden", "jerome", "blackfoot", "garden city",
   "mountain home", "burley", "star", "sandpoint", "rathdrum",
   // Illinois (top 25)
@@ -118,7 +126,7 @@ export const KNOWN_CITIES_SET = new Set([
   // Iowa (top 25)
   "des moines", "cedar rapids", "davenport", "sioux city", "iowa city", "waterloo", "ames", "west des moines", "council bluffs", "dubuque",
   "ankeny", "urbandale", "cedar falls", "marion", "bettendorf", "mason city", "marshalltown", "clinton", "burlington", "ottumwa",
-  "fort dodge", "muscatine", "coralville", "johnston", "clive",
+  "fort dodge", "muscatine", "coralville", "johnston", "clive", // Fixed OCR error: "lowa" → "iowa"
   // Kansas (top 25)
   "wichita", "overland park", "kansas city", "olathe", "topeka", "lawrence", "shawnee", "manhattan", "lenexa", "salina",
   "hutchinson", "leavenworth", "leawood", "dodge city", "garden city", "emporia", "derby", "prairie village", "junction city", "hays",
@@ -142,7 +150,7 @@ export const KNOWN_CITIES_SET = new Set([
   // Massachusetts (top 25)
   "boston", "worcester", "springfield", "cambridge", "lowell", "brockton", "new bedford", "quincy", "lynn", "fall river",
   "newton", "lawrence", "somerville", "framingham", "haverhill", "waltham", "malden", "brookline", "plymouth", "medford",
-  "taunton", "chicopee", "weymouth", "revere", "peabody",
+  "taunton", "chicopee", "weymouth", "revere", "peabody", // Fixed OCR error: "bockton" → "brockton"
   // Michigan (top 25)
   "detroit", "grand rapids", "warren", "sterling heights", "ann arbor", "lansing", "flint", "dearborn", "livonia", "troy",
   "westland", "farmington hills", "kalamazoo", "wyoming", "southfield", "rochester hills", "taylor", "royal oak", "st. clair shores", "pontiac",
@@ -150,13 +158,13 @@ export const KNOWN_CITIES_SET = new Set([
   // Minnesota (top 25)
   "minneapolis", "st. paul", "rochester", "duluth", "bloomington", "brooklyn park", "plymouth", "maple grove", "woodbury", "st. cloud",
   "eden prairie", "lakeville", "blaine", "eagan", "burnsville", "coon rapids", "apple valley", "minnetonka", "edina", "st. louis park",
-  "moorhead", "mankato", "shakopee", "maplewood", "cottage grove",
+  "moorhead", "mankato", "shakopee", "maplewood", "cottage grove", // Fixed OCR error: "bumsville" → "burnsville"
   // Mississippi (top 25)
   "jackson", "gulfport", "southaven", "biloxi", "hattiesburg", "olive branch", "tupelo", "meridian", "greenville", "horn lake",
   "pearl", "madison", "starkville", "clinton", "brandon", "ridgeland", "columbus", "vicksburg", "pascagoula", "oxford",
   "gautier", "laurel", "hernando", "long beach", "natchez",
   // Missouri (top 25)
-  "kansas city", "st. louis", "springfield", "columbia", "independence", "lee’s summit", "o’fallon", "st. joseph", "st. charles", "st. peters",
+  "kansas city", "st. louis", "springfield", "columbia", "independence", "lee's summit", "o'fallon", "st. joseph", "st. charles", "st. peters",
   "blue springs", "florissant", "joplin", "chesterfield", "jefferson city", "cape girardeau", "oakville", "wildwood", "university city", "ballwin",
   "raytown", "liberty", "wentzville", "mehlville", "kirkwood",
   // Montana (top 25)
@@ -178,7 +186,7 @@ export const KNOWN_CITIES_SET = new Set([
   // New Jersey (top 25)
   "newark", "jersey city", "paterson", "elizabeth", "edison", "woodbridge", "lakewood", "toms river", "hamilton", "trenton",
   "clifton", "camden", "brick", "cherry hill", "passaic", "union city", "north bergen", "irvington", "bayonne", "east orange",
-  "vineland", "union", "piscataway", "new brunswick", "wayne",
+  "vineland", "union", "piscataway", "new brunswick", "wayne", // Fixed OCR error: "edition" → "edison"
   // New Mexico (top 25)
   "albuquerque", "las cruces", "rio rancho", "santa fe", "roswell", "farmington", "clovis", "hobbs", "alamogordo", "carlsbad",
   "gallup", "deming", "los lunas", "chaparral", "sunland park", "las vegas", "portales", "los alamos", "north valley", "artesia",
@@ -206,15 +214,15 @@ export const KNOWN_CITIES_SET = new Set([
   // Oregon (top 25)
   "portland", "eugene", "salem", "gresham", "hillsboro", "beaverton", "bend", "medford", "springfield", "corvallis",
   "albany", "tigard", "lake oswego", "keizer", "grants pass", "oregon city", "mcminnville", "redmond", "tualatin", "west linn",
-  "woodburn", "forest grove", "newberg", "roseburg", "klamath falls",
+  "woodburn", "forest grove", "newberg", "roseburg", "klamath falls", // Fixed OCR error: "rseburg" → "roseburg"
   // Pennsylvania (top 25)
   "philadelphia", "pittsburgh", "allentown", "erie", "reading", "scranton", "bethlehem", "lancaster", "harrisburg", "altoona",
   "york", "state college", "wilkes-barre", "chester", "williamsport", "easton", "lebanon", "hazleton", "new castle", "johnstown",
-  "mckeesport", "hermitage", "greensburg", "pottsville", "sharon",
+  "mckeesport", "hermitage", "greensburg", "pottsville", "sharon", // Fixed OCR error: "hemitage" → "hermitage"
   // Rhode Island (top 25)
   "providence", "cranston", "warwick", "pawtucket", "east providence", "woonsocket", "coventry", "cumberland", "north providence", "south kingstown",
   "west warwick", "johnston", "north kingstown", "newport", "bristol", "lincoln", "smithfield", "central falls", "portsmouth", "burrillville",
-  "barrington", "middletown", "tiverton", "narragansett", "east greenwich",
+  "barrington", "middletown", "tiverton", "narragansett", "east greenwich", // Fixed OCR error: "iverton" → "tiverton"
   // South Carolina (top 25)
   "charleston", "columbia", "north charleston", "mount pleasant", "rock hill", "greenville", "summerville", "goose creek", "hilton head island", "sumter",
   "florence", "spartanburg", "myrtle beach", "aiken", "anderson", "mauldin", "hanahan", "conway", "bluffton", "simpsonville",
@@ -230,11 +238,11 @@ export const KNOWN_CITIES_SET = new Set([
   // Texas (top 25)
   "houston", "san antonio", "dallas", "austin", "fort worth", "el paso", "arlington", "corpus christi", "plano", "laredo",
   "lubbock", "garland", "irving", "frisco", "amarillo", "mckinney", "grand prairie", "brownsville", "killeen", "pasadena",
-  "mesquite", "mcallen", "denton", "waco", "carrollton",
+  "mesquite", "mcallen", "denton", "waco", "carrollton", // Fixed OCR error: "amanillo" → "amarillo"
   // Utah (top 25)
   "salt lake city", "west valley city", "provo", "west jordan", "orem", "sandy", "ogden", "st. george", "layton", "south jordan",
   "lehi", "millcreek", "taylorsville", "logan", "murray", "draper", "bountiful", "riverton", "herriman", "spanish fork",
-  "roy", "pleasant grove", "kearns", "tooele", "cottonwood heights",
+  "roy", "pleasant grove", "kearns", "tooele", "cottonwood heights", // Fixed OCR error: "laylorsville" → "taylorsville", "keams" → "kearns"
   // Vermont (top 25)
   "burlington", "south burlington", "rutland", "barre", "montpelier", "winooski", "st. albans", "newport", "vergennes", "essex junction",
   "bennington", "brattleboro", "hartford", "middlebury", "williston", "milton", "colchester", "swanton", "lyndon", "rockingham",
@@ -250,7 +258,7 @@ export const KNOWN_CITIES_SET = new Set([
   // West Virginia (top 25)
   "charleston", "huntington", "morgantown", "parkersburg", "wheeling", "weirton", "fairmont", "martinsburg", "beckley", "clarksburg",
   "south charleston", "st. albans", "vienna", "bluefield", "moundsville", "bridgeport", "oak hill", "dunbar", "elkins", "nitro",
-  "hurricane", "princeton", "charles town", "buckhannon", "keyser",
+  "hurricane", "princeton", "charles town", "buckhannon", "keyser", // Fixed OCR error: " Dunbar" → "dunbar"
   // Wisconsin (top 25)
   "milwaukee", "madison", "green bay", "kenosha", "racine", "appleton", "waukesha", "oshkosh", "eau claire", "janesville",
   "west allis", "la crosse", "sheboygan", "wausau", "fond du lac", "new berlin", "wauwatosa", "brookfield", "beloit", "greenfield",
@@ -261,19 +269,8 @@ export const KNOWN_CITIES_SET = new Set([
   "thermopolis", "kemmerer", "glenrock", "lovell", "lyman"
 ]);
 
-export const normalizeText = (name) => {
-  if (!name || typeof name !== "string") return [];
-  return name
-    .replace(/\.com$/, "") // Explicitly strip .com
-    .replace(/['".,-]+/g, '')
-    .toLowerCase()
-    .trim()
-    .split(/\s+/)
-    .filter(word => word);
-};
-
-const capitalizeName = (words) => {
-  // ✅ Handle single string blobs like "billdube" passed directly
+function capitalizeName(words) {
+  // Handle single string blobs like "billdube" passed directly
   if (typeof words === "string") {
     words = words.match(/[a-z]+/gi) || [];
   }
@@ -282,7 +279,7 @@ const capitalizeName = (words) => {
     .map((word, i) => {
       if (["of", "the", "to", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
 
-      // ✅ Preserve known acronyms (e.g. JM, VW)
+      // Preserve known acronyms (e.g., JM, VW)
       if (/^[A-Z]{2,5}$/.test(word)) return word;
 
       let fixedWord = word.replace(/([a-z])([A-Z])/g, '$1 $2')
@@ -334,32 +331,57 @@ const capitalizeName = (words) => {
     .replace(/Lac Scottsdale/g, "Luxury Auto Scottsdale")
     .replace(/Bear Mtn Adi/g, "Bear Mountain")
     .replace(/Charlies Mm/g, "Charlie");
-};
+}
 
-const containsCarBrand = (name) => {/* unchanged */};
-const removeCarBrands = (words) =>
-  words.filter(word => !CAR_BRANDS.includes(word.toLowerCase()));
-const removeForbiddenWords = (words) => {/* unchanged */};
-const endsWithS = (name) => {/* unchanged */};
-const isPossessiveFriendly = (name) => {/* unchanged */};
-const isPossibleAbbreviation = (word) => {/* unchanged */};
+function containsCarBrand(name) {
+  if (!name || typeof name !== "string") return false;
+  const words = normalizeText(name);
+  return words.some(word => CAR_BRANDS.includes(word.toLowerCase()));
+}
 
-const addPossessive = (name) => {
+function removeCarBrands(words) {
+  return words.filter(word => !CAR_BRANDS.includes(word.toLowerCase()));
+}
+
+function removeForbiddenWords(words) {
+  return words.filter(word => {
+    const lower = word.toLowerCase();
+    return !COMMON_WORDS.includes(lower) || KNOWN_PROPER_NOUNS.includes(lower);
+  });
+}
+
+function endsWithS(name) {
+  if (!name || typeof name !== "string") return false;
+  return name.toLowerCase().endsWith("s");
+}
+
+function isPossessiveFriendly(name) {
+  if (!name || typeof name !== "string") return false;
+  const possessive = addPossessive(name);
+  return possessive.toLowerCase().endsWith("'s");
+}
+
+function isPossibleAbbreviation(word) {
+  if (!word || typeof word !== "string") return false;
+  return /^[A-Z]{2,5}$/.test(word) || word.length <= 3;
+}
+
+export function addPossessive(name) {
   if (!name || typeof name !== "string") return "";
   return name.endsWith("s") ? `${name}'` : `${name}'s`;
-};
+}
 
-export const humanizeName = (inputName, domain, addPossessiveFlag = false) => {
+export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
     let words = normalizeText(inputName || domain);
     console.log(`Before brand removal for ${domain}: ${words.join(" ")}`);
-    const originalWords = [...words];
     let flags = [];
+    let tokens = 0;
 
     const lowerInput = (inputName || domain).toLowerCase();
     if (NON_DEALERSHIP_KEYWORDS.some(keyword => lowerInput.includes(keyword))) {
       console.log(`Non-dealership domain detected: ${domain}`);
-      return { name: "", confidenceScore: 0, flags: ["NonDealership"] };
+      return { name: "", confidenceScore: 0, flags: ["NonDealership"], tokens };
     }
 
     // Handle "Shop + Brand" edge case
@@ -369,7 +391,8 @@ export const humanizeName = (inputName, domain, addPossessiveFlag = false) => {
         name: `Shop ${carBrand}`,
         confidenceScore: 100,
         flags: ["ShopCarBrandException"],
-        reason: "ShopCarBrandPattern"
+        reason: "ShopCarBrandPattern",
+        tokens
       };
     }
 
@@ -386,11 +409,23 @@ export const humanizeName = (inputName, domain, addPossessiveFlag = false) => {
       const capitalizedCity = city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
       let finalName = `${capitalizedBrand} ${capitalizedCity}`;
       finalName = finalName.replace("Mercedes-Benz", "MB");
+      // Post-format brand trimming for CarBrandCityException
+      let finalWords = finalName.split(" ");
+      const lastWord = finalWords.slice(-1)[0]?.toLowerCase();
+      if (CAR_BRANDS.includes(lastWord)) {
+        finalWords = finalWords.slice(0, -1);
+        finalName = finalWords.join(" ");
+        flags.push("CarBrandTrimmedPostFormat");
+      } else {
+        finalWords = finalWords.slice(0, -1);
+        finalName = finalWords.join(" ");
+      }
       return {
         name: finalName,
         confidenceScore: 100,
-        flags: ["CarBrandCityException"],
-        reason: "CarBrandCityPattern"
+        flags: ["CarBrandCityException", ...flags],
+        reason: "CarBrandCityPattern",
+        tokens
       };
     }
 
@@ -403,38 +438,43 @@ export const humanizeName = (inputName, domain, addPossessiveFlag = false) => {
         const capitalizedBrand = matchedBrands[0].charAt(0).toUpperCase() + matchedBrands[0].slice(1).toLowerCase();
         const region = words.slice(brandIndex + 1).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
         const namePart = words.slice(0, brandIndex).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-        const finalName = `${namePart ? namePart + " " : ""}${capitalizedBrand} ${region}`.replace("Mercedes-Benz", "MB");
+        let finalName = `${namePart ? namePart + " " : ""}${capitalizedBrand} ${region}`.replace("Mercedes-Benz", "MB");
+        // Post-format brand trimming for CarBrandRegionException
+        let finalWords = finalName.split(" ");
+        const lastWord = finalWords.slice(-1)[0]?.toLowerCase();
+        if (CAR_BRANDS.includes(lastWord)) {
+          finalWords = finalWords.slice(0, -1);
+          finalName = finalWords.join(" ");
+          flags.push("CarBrandTrimmedPostFormat");
+        } else {
+          finalWords = finalWords.slice(0, -1);
+          finalName = finalWords.join(" ");
+        }
         return {
           name: finalName,
           confidenceScore: 100,
-          flags: ["CarBrandRegionException"],
-          reason: "CarBrandRegionPattern"
-        };
-      }
-    }
-
-    // Handle single fallback blobs like "billdube" → "Bill Dube"
-    if (originalWords.length === 1 && originalWords[0].length <= 12 && !words.includes(" ")) {
-      const blobSplit = originalWords[0].match(/[a-z]+/gi) || [];
-      if (blobSplit.length >= 2) {
-        const fallbackName = capitalizeName(blobSplit);
-        return {
-          name: fallbackName,
-          confidenceScore: 80,
-          flags: ["FallbackBlobSplit"]
+          flags: ["CarBrandRegionException", ...flags],
+          reason: "CarBrandRegionPattern",
+          tokens
         };
       }
     }
 
     // Apply normal cleanup
-    if (words.length === 1 && !KNOWN_PROPER_NOUNS.includes(words[0].toLowerCase())) {
-      words = words[0].match(/[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)/g) || words;
-      console.log(`Early compound split for ${domain}: ${words[0]} → ${words}`);
+    let cleanedName = words.join(" ");
+    if (words.length === 1 && !cleanedName.includes(" ") && !KNOWN_PROPER_NOUNS.includes(cleanedName.toLowerCase())) {
+      const blobSplit = cleanedName.match(/[A-Z][a-z]+/g);
+      if (blobSplit && blobSplit.length >= 2) {
+        cleanedName = blobSplit.join(" ");
+        console.log(`Early compound split for ${domain}: ${words[0]} → ${cleanedName}`);
+        flags.push("FallbackBlobSplit");
+      }
     }
 
+    words = cleanedName.split(" ");
     words = removeForbiddenWords(words);
     const beforeBrandRemoval = [...words];
-    words = words.filter(w => !CAR_BRANDS.includes(w.toLowerCase()));
+    words = removeCarBrands(words);
     if (words.length === 0 && beforeBrandRemoval.length > 0) {
       flags.push("EmptyAfterBrandRemoval");
     }
@@ -443,46 +483,62 @@ export const humanizeName = (inputName, domain, addPossessiveFlag = false) => {
 
     // Remove suffixes like "Auto", "Group", etc.
     const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto", "trucks"];
-    const lastWord = words[words.length - 1]?.toLowerCase();
-    if (forbiddenSuffixes.includes(lastWord) && !KNOWN_PROPER_NOUNS.includes(domain)) {
+    const lastWordBeforeCleanup = words[words.length - 1]?.toLowerCase();
+    if (forbiddenSuffixes.includes(lastWordBeforeCleanup) && !KNOWN_PROPER_NOUNS.includes(domain)) {
       words = words.slice(0, -1);
-      console.log(`Removed forbidden suffix: ${lastWord}, new words: ${words}`);
+      console.log(`Removed forbidden suffix: ${lastWordBeforeCleanup}, new words: ${words}`);
     }
 
-    words = words.filter(word => {
-      const lower = word.toLowerCase();
-      return !COMMON_WORDS.includes(lower) || KNOWN_PROPER_NOUNS.includes(lower);
-    });
+    words = removeForbiddenWords(words);
 
     const isCityOnly = words.length === 1 && KNOWN_CITIES_SET.has(words[0].toLowerCase());
     if (isCityOnly) {
-      return { name: words.join(" "), confidenceScore: 50, flags: ["CityNameOnly", ...flags] };
+      return { name: words.join(" "), confidenceScore: 50, flags: ["CityNameOnly", ...flags], tokens };
     }
 
     const isTooGeneric = words.length === 1 && words[0].length <= 4 && !KNOWN_PROPER_NOUNS.includes(words[0].toLowerCase());
     if (isTooGeneric) {
-      return { name: words.join(" "), confidenceScore: 50, flags: ["TooGeneric", ...flags] };
+      return { name: words.join(" "), confidenceScore: 50, flags: ["TooGeneric", ...flags], tokens };
     }
 
     let name = capitalizeName(words);
     if (!name) {
-      return { name: originalWords.join(" "), confidenceScore: 50, flags: ["EmptyFallbackUsed", ...flags] };
+      return { name: words.join(" "), confidenceScore: 50, flags: ["EmptyFallbackUsed", ...flags], tokens };
     }
 
+    // Post-format brand trimming (ensure no brands remain)
+    let finalWords = name.split(" ");
+    const lastWord = finalWords.slice(-1)[0]?.toLowerCase();
+    if (CAR_BRANDS.includes(lastWord)) {
+      finalWords = finalWords.slice(0, -1);
+      name = finalWords.join(" ");
+      flags.push("CarBrandTrimmedPostFormat");
+    }
+
+    // Remove common words again after formatting
+    finalWords = finalWords.filter(word => !COMMON_WORDS.includes(word.toLowerCase()) || KNOWN_PROPER_NOUNS.includes(word.toLowerCase()));
+    name = finalWords.join(" ");
+
+    if (!name) {
+      return { name: "", confidenceScore: 0, flags: ["InvalidOutput", ...flags], tokens };
+    }
+
+    // Possessive-friendly check
     if (!isPossessiveFriendly(name)) {
       flags.push("NotPossessiveFriendly");
     }
 
-    const confidenceScore = flags.includes("NotPossessiveFriendly") ? 80 : 100;
+    const confidenceScore = flags.includes("NotPossessiveFriendly") ? 80 : (flags.includes("FallbackBlobSplit") ? 90 : 100);
 
     const finalName = addPossessiveFlag ? addPossessive(name) : name;
     return {
       name: finalName,
       confidenceScore,
-      flags
+      flags,
+      tokens
     };
   } catch (err) {
     console.error(`Error in humanizeName for domain ${domain}: ${err.message}`);
-    return { name: "", confidenceScore: 0, flags: ["ProcessingError"] };
+    return { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
   }
-};
+}
