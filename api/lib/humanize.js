@@ -298,7 +298,7 @@ const capitalizeName = (words) => {
     .replace(/Hmtrs/g, "H Motors")
     .replace(/Ph Nash/g, "Performance Honda Nashville")
     .replace(/Lac Scottsdale/g, "Luxury Auto Scottsdale")
-    .relate(/Bear Mtn Adi/g, "Bear Mountain")
+    .replace(/Bear Mtn Adi/g, "Bear Mountain")
     .replace(/Charlies Mm/g, "Charlie");
 };
 
