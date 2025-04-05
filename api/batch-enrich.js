@@ -1,9 +1,10 @@
-// api/batch-enrich.js (Version 3.4.4 - Optimized 2025-04-07)
+// api/batch-enrich.js (Version 3.4.5 - Optimized 2025-04-08)
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText } from "./lib/humanize.js";
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
 
+// Concurrency limiter
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
@@ -133,7 +134,7 @@ const callOpenAI = async (prompt, apiKey) => {
 };
 
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.4.4 - Optimized 2025-04-07");
+  console.log("batch-enrich.js Version 3.4.5 - Optimized 2025-04-08");
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "Missing OpenAI API key" });
@@ -199,6 +200,7 @@ export default async function handler(req, res) {
               finalResult.flags.push("GPTFallbackUsed");
             } else {
               finalResult.flags.push("GPTFailed");
+              fallbackTriggers.push({ domain, reason: "GPTFailed" });
             }
           }
 
@@ -219,6 +221,7 @@ export default async function handler(req, res) {
               finalResult.flags.push("MetaFallbackUsed");
             } else {
               finalResult.flags.push("MetaFallbackFailed");
+              fallbackTriggers.push({ domain, reason: "MetaFallbackFailed" });
             }
           }
 
@@ -233,15 +236,17 @@ export default async function handler(req, res) {
         }))
       );
 
+      // Ensure results array is always defined before pushing
+      if (!results) throw new Error('Results array is undefined');
       results.push(...chunkResults);
     }
 
     console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review`);
-    return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers: [], partial: false });
+    return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
   } catch (err) {
     console.error(`Handler error: ${err.message}`, err.stack);
     return res.status(500).json({ error: "Server error", details: err.message });
   }
-};
+}
 
 export const config = { api: { bodyParser: false } };
