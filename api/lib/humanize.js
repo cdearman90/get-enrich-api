@@ -5,6 +5,7 @@ export const COMMON_WORDS = [
   "auto", "motors", "motor", "automotive", "shop",
   "classic", "prime", "elite", "premier", "luxury", "select", "pro", "top", "best", "first", "great", "new", "used",
   "com"
+  // Removed "north", "south", "east", "west", "park", "county", "mill", "metro" as they are acceptable in dealership names
 ];
 
 export const CAR_BRANDS = [
@@ -299,7 +300,7 @@ const capitalizeName = (words) => {
     .replace(/Hmtrs/g, "H Motors")
     .replace(/Ph Nash/g, "Performance Honda Nashville")
     .replace(/Lac Scottsdale/g, "Luxury Auto Scottsdale")
-    .replace(/Bear Mtn Adi/g, "Bear Mountain")
+    .relate(/Bear Mtn Adi/g, "Bear Mountain")
     .replace(/Charlies Mm/g, "Charlie");
 };
 
