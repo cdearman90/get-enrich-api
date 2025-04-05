@@ -261,7 +261,13 @@ const capitalizeName = (words) => {
   return words
     .map((word, i) => {
       if (["of", "the", "to", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      // Regex fix for compound cases
+      let fixedWord = word.replace(/([a-z])([A-Z])/g, '$1 $2') // Split camelCase
+        .replace(/(GarlynShelton|McCarthy|McLarty|DeMontrond|TownAndCountry|SanLeandro|GusMachado|RodBaker|DonHattan|Galean|TedBritt|AutoByFox|ShopLynch|CzAgnet|EhChevy|ScottClark|SignatureAutoNY|HuntingtonBeach|ExpRealty|JayWolfe|PremierCollection|ArtMoehn|TomHesser|ExecutiveAG|SmartDrive|AllAmerican|WickMail|RobertThorne|TommyNix|Kennedy|LouSobh|H Motors|PerformanceHondaNashville|LuxuryAutoScottsdale|BearMountain|Charlie)/gi, match => {
+          const known = KNOWN_PROPER_NOUNS.find(n => n.toLowerCase() === match.toLowerCase());
+          return known ? known : match.split(/(?=[A-Z][a-z])|(?<=[a-z])(?=[A-Z])/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+        });
+      return fixedWord.charAt(0).toUpperCase() + fixedWord.slice(1).toLowerCase();
     })
     .join(" ")
     .replace(/Mccarthy/g, "McCarthy")
@@ -292,7 +298,6 @@ const capitalizeName = (words) => {
     .replace(/Wickmail/g, "Wick Mail")
     .replace(/Roberthorne/g, "Robert Thorne")
     .replace(/Tommynixautogroup/g, "Tommy Nix")
-    .replace(/Mccarthyautogroup/g, "McCarthy")
     .replace(/Kennedyauto/g, "Kennedy")
     .replace(/Lousobh/g, "Lou Sobh")
     .replace(/Hmtrs/g, "H Motors")
