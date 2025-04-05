@@ -263,16 +263,29 @@ export const normalizeText = (name) => {
 };
 
 const capitalizeName = (words) => {
+  // ✅ Handle single string blobs like "billdube" passed directly
+  if (typeof words === "string") {
+    words = words.match(/[a-z]+/gi) || [];
+  }
+
   return words
     .map((word, i) => {
       if (["of", "the", "to", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
+
+      // ✅ Preserve known acronyms (e.g. JM, VW)
+      if (/^[A-Z]{2,5}$/.test(word)) return word;
+
       let fixedWord = word.replace(/([a-z])([A-Z])/g, '$1 $2')
-        .replace(/(GarlynShelton|McCarthy|McLarty|DeMontrond|TownAndCountry|SanLeandro|GusMachado|RodBaker|DonHattan|Galean|TedBritt|AutoByFox|ShopLynch|CzAgnet|EhChevy|ScottClark|SignatureAutoNY|HuntingtonBeach|ExpRealty|JayWolfe|PremierCollection|ArtMoehn|TomHesser|ExecutiveAG|SmartDrive|AllAmerican|WickMail|RobertThorne|TommyNix|Kennedy|LouSobh|HMotors|PerformanceHondaNashville|LuxuryAutoScottsdale|BearMountain|Charlie|University)/gi, match => {
+        .replace(/(GarlynShelton|McCarthy|McLarty|DeMontrond|TownAndCountry|SanLeandro|GusMachado|RodBaker|DonHattan|Galean|TedBritt|ShopLynch|ScottClark|HuntingtonBeach|JayWolfe|PremierCollection|ArtMoehn|TomHesser|ExecutiveAG|SmartDrive|AllAmerican|WickMail|RobertThorne|TommyNix|Kennedy|LouSobh|HMotors|LuxuryAutoScottsdale|BearMountain|Charlie|University)/gi, match => {
           const known = KNOWN_PROPER_NOUNS.find(n => n.toLowerCase() === match.toLowerCase());
-          return known ? known : match.split(/(?=[A-Z][a-z])|(?<=[a-z])(?=[A-Z])/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+          return known ? known : match
+            .split(/(?=[A-Z][a-z])|(?<=[a-z])(?=[A-Z])/)
+            .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+            .join(" ");
         })
         .replace(/Cjd/g, "Chrysler Jeep Dodge")
         .replace(/Uv(w)?/g, "University");
+
       return fixedWord.charAt(0).toUpperCase() + fixedWord.slice(1).toLowerCase();
     })
     .join(" ")
