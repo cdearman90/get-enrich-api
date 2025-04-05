@@ -55,14 +55,14 @@ export const KNOWN_PROPER_NOUNS = [
 ];
 
 export const KNOWN_CITIES_SET = new Set([
-  // Alabama (top 25)
+ // Alabama (top 25)
   "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "hoover", "dothan", "auburn", "decatur", "madison",
   "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "alabaster", "opelika", "northport", "enterprise", "daphne",
   "homewood", "bessemer", "athens", "pelham", "fairhope",
   // Alaska (top 25)
   "anchorage", "juneau", "fairbanks", "ketchikan", "sitka", "wasilla", "kenai", "kodiak", "bethel", "palmer",
   "homer", "soldotna", "valdez", "nome", "barrow", "kotzebue", "seward", "cordova", "dillingham", "petersburg",
-  "wrangell", "kodiak island", "north pole", "delta junction", "hoonah",
+  "wrangell", "north pole", "delta junction", "hoonah", "unalaska", "craig", // Added missing cities, removed "kodiak island"
   // Arizona (top 25)
   "phoenix", "tucson", "mesa", "chandler", "gilbert", "glendale", "scottsdale", "peoria", "tempe", "surprise",
   "yuma", "avondale", "goodyear", "flagstaff", "buckeye", "casa grande", "lake havasu city", "maricopa", "sierra vista", "prescott",
@@ -70,11 +70,11 @@ export const KNOWN_CITIES_SET = new Set([
   // Arkansas (top 25)
   "little rock", "fort smith", "fayetteville", "springdale", "jonesboro", "north little rock", "conway", "rogers", "bentonville", "pine bluff",
   "hot springs", "benton", "sherwood", "texarkana", "russellville", "bella vista", "west memphis", "paragould", "cabot", "searcy",
-  "van buren", "el dorado", "maumelle", "bryant", "siloam springs",
+  "van buren", "el dorado", "maumelle", "bryant", "siloam springs", "jacksonville", // Added missing city
   // California (top 25)
   "los angeles", "san diego", "san jose", "san francisco", "fresno", "sacramento", "long beach", "oakland", "bakersfield", "anaheim",
   "santa ana", "riverside", "stockton", "chula vista", "irvine", "fremont", "san bernardino", "modesto", "oxnard", "fontana",
-  "huntington beach", "glendale", "santa clarita", "garden grove", "santa rosa",
+  "huntington beach", "glendale", "santa clarita", "garden grove", "santa rosa", "southbay", // Added from domains
   // Colorado (top 25)
   "denver", "colorado springs", "aurora", "fort collins", "lakewood", "thornton", "arvada", "westminster", "pueblo", "centennial",
   "boulder", "greeley", "longmont", "loveland", "broomfield", "grand junction", "castle rock", "commerce city", "parker", "littleton",
@@ -82,7 +82,7 @@ export const KNOWN_CITIES_SET = new Set([
   // Connecticut (top 25)
   "bridgeport", "new haven", "stamford", "hartford", "waterbury", "norwalk", "danbury", "new britain", "west hartford", "greenwich",
   "fairfield", "hamden", "bristol", "meriden", "manchester", "west haven", "milford", "stratford", "east hartford", "middletown",
-  "wallingford", "southington", "shelton", "norwich", "torrington", // Fixed OCR error: "nonwich" → "norwich"
+  "wallingford", "southington", "shelton", "norwich", "torrington",
   // Delaware (top 25, limited by population)
   "wilmington", "dover", "newark", "middletown", "smyrna", "milford", "seaford", "georgetown", "elsmere", "new castle",
   "millsboro", "laurel", "harrington", "camden", "clayton", "lewes", "milton", "selbyville", "townsend", "ocean view",
@@ -90,11 +90,11 @@ export const KNOWN_CITIES_SET = new Set([
   // Florida (top 25)
   "jacksonville", "miami", "tampa", "orlando", "st. petersburg", "hialeah", "port st. lucie", "cape coral", "tallahassee", "fort lauderdale",
   "pembroke pines", "hollywood", "miramar", "gainesville", "coral springs", "clearwater", "palm bay", "lakeland", "west palm beach", "pompano beach",
-  "davie", "miami gardens", "sunrise", "boca raton", "deltona",
+  "davie", "miami gardens", "sunrise", "boca raton", "deltona", "miamilakes", "palmcoast", // Added from domains
   // Georgia (top 25)
   "atlanta", "augusta", "columbus", "macon", "savannah", "athens", "sandy springs", "roswell", "johns creek", "albany",
   "warner robins", "alpharetta", "marietta", "valdosta", "smyrna", "dunwoody", "brookhaven", "peachtree corners", "mableton", "milton",
-  "evans", "east point", "peachtree city", "rome", "tucker", // Fixed OCR error: "smyma" → "smyrna"
+  "evans", "east point", "peachtree city", "rome", "tucker",
   // Hawaii (top 25, limited by population)
   "honolulu", "east honolulu", "pearl city", "hilo", "kailua", "waipahu", "kaneohe", "mililani", "kahului", "ewa gentry",
   "mililani mauka", "kihei", "makakilo", "wahiawa", "schofield barracks", "kapolei", "kailua-kona", "halawa", "wailuku", "kaneohe station",
@@ -106,7 +106,7 @@ export const KNOWN_CITIES_SET = new Set([
   // Illinois (top 25)
   "chicago", "aurora", "joliet", "naperville", "rockford", "springfield", "peoria", "elgin", "waukegan", "champaign",
   "bloomington", "decatur", "evanston", "des plaines", "berwyn", "wheaton", "belleville", "elmhurst", "dekalb", "moline",
-  "urbana", "crystal lake", "quincy", "rock island", "bartlett",
+  "urbana", "crystal lake", "quincy", "rock island", "bartlett", "westchester", // Added from domains
   // Indiana (top 25)
   "indianapolis", "fort wayne", "evansville", "south bend", "carmel", "fishers", "bloomington", "hammond", "gary", "lafayette",
   "muncie", "terre haute", "kokomo", "noblesville", "anderson", "greenwood", "elkhart", "mishawaka", "lawrence", "jeffersonville",
@@ -114,7 +114,7 @@ export const KNOWN_CITIES_SET = new Set([
   // Iowa (top 25)
   "des moines", "cedar rapids", "davenport", "sioux city", "iowa city", "waterloo", "ames", "west des moines", "council bluffs", "dubuque",
   "ankeny", "urbandale", "cedar falls", "marion", "bettendorf", "mason city", "marshalltown", "clinton", "burlington", "ottumwa",
-  "fort dodge", "muscatine", "coralville", "johnston", "clive", // Fixed OCR error: "lowa" → "iowa"
+  "fort dodge", "muscatine", "coralville", "johnston", "clive",
   // Kansas (top 25)
   "wichita", "overland park", "kansas city", "olathe", "topeka", "lawrence", "shawnee", "manhattan", "lenexa", "salina",
   "hutchinson", "leavenworth", "leawood", "dodge city", "garden city", "emporia", "derby", "prairie village", "junction city", "hays",
@@ -138,7 +138,7 @@ export const KNOWN_CITIES_SET = new Set([
   // Massachusetts (top 25)
   "boston", "worcester", "springfield", "cambridge", "lowell", "brockton", "new bedford", "quincy", "lynn", "fall river",
   "newton", "lawrence", "somerville", "framingham", "haverhill", "waltham", "malden", "brookline", "plymouth", "medford",
-  "taunton", "chicopee", "weymouth", "revere", "peabody", // Fixed OCR error: "bockton" → "brockton"
+  "taunton", "chicopee", "weymouth", "revere", "peabody",
   // Michigan (top 25)
   "detroit", "grand rapids", "warren", "sterling heights", "ann arbor", "lansing", "flint", "dearborn", "livonia", "troy",
   "westland", "farmington hills", "kalamazoo", "wyoming", "southfield", "rochester hills", "taylor", "royal oak", "st. clair shores", "pontiac",
@@ -146,7 +146,7 @@ export const KNOWN_CITIES_SET = new Set([
   // Minnesota (top 25)
   "minneapolis", "st. paul", "rochester", "duluth", "bloomington", "brooklyn park", "plymouth", "maple grove", "woodbury", "st. cloud",
   "eden prairie", "lakeville", "blaine", "eagan", "burnsville", "coon rapids", "apple valley", "minnetonka", "edina", "st. louis park",
-  "moorhead", "mankato", "shakopee", "maplewood", "cottage grove", // Fixed OCR error: "bumsville" → "burnsville"
+  "moorhead", "mankato", "shakopee", "maplewood", "cottage grove", "invergroveheights", // Added from domains
   // Mississippi (top 25)
   "jackson", "gulfport", "southaven", "biloxi", "hattiesburg", "olive branch", "tupelo", "meridian", "greenville", "horn lake",
   "pearl", "madison", "starkville", "clinton", "brandon", "ridgeland", "columbus", "vicksburg", "pascagoula", "oxford",
@@ -174,7 +174,7 @@ export const KNOWN_CITIES_SET = new Set([
   // New Jersey (top 25)
   "newark", "jersey city", "paterson", "elizabeth", "edison", "woodbridge", "lakewood", "toms river", "hamilton", "trenton",
   "clifton", "camden", "brick", "cherry hill", "passaic", "union city", "north bergen", "irvington", "bayonne", "east orange",
-  "vineland", "union", "piscataway", "new brunswick", "wayne", // Fixed OCR error: "edition" → "edison"
+  "vineland", "union", "piscataway", "new brunswick", "wayne",
   // New Mexico (top 25)
   "albuquerque", "las cruces", "rio rancho", "santa fe", "roswell", "farmington", "clovis", "hobbs", "alamogordo", "carlsbad",
   "gallup", "deming", "los lunas", "chaparral", "sunland park", "las vegas", "portales", "los alamos", "north valley", "artesia",
@@ -194,7 +194,7 @@ export const KNOWN_CITIES_SET = new Set([
   // Ohio (top 25)
   "columbus", "cleveland", "cincinnati", "toledo", "akron", "dayton", "parma", "canton", "youngstown", "lorain",
   "hamilton", "springfield", "kettering", "elyria", "lakewood", "cuyahoga falls", "middletown", "euclid", "newark", "mansfield",
-  "mentor", "beavercreek", "strongsville", "fairfield", "dublin",
+  "mentor", "beavercreek", "strongsville", "fairfield", "dublin", "hilltop", // Added from domains
   // Oklahoma (top 25)
   "oklahoma city", "tulsa", "norman", "broken arrow", "edmond", "lawton", "moore", "midwest city", "enid", "stillwater",
   "muskogee", "bartlesville", "owasso", "shawnee", "yukon", "ardmore", "ponca city", "duncan", "del city", "bixby",
@@ -202,15 +202,15 @@ export const KNOWN_CITIES_SET = new Set([
   // Oregon (top 25)
   "portland", "eugene", "salem", "gresham", "hillsboro", "beaverton", "bend", "medford", "springfield", "corvallis",
   "albany", "tigard", "lake oswego", "keizer", "grants pass", "oregon city", "mcminnville", "redmond", "tualatin", "west linn",
-  "woodburn", "forest grove", "newberg", "roseburg", "klamath falls", // Fixed OCR error: "rseburg" → "roseburg"
+  "woodburn", "forest grove", "newberg", "roseburg", "klamath falls", "wilsonville", // Added from domains
   // Pennsylvania (top 25)
   "philadelphia", "pittsburgh", "allentown", "erie", "reading", "scranton", "bethlehem", "lancaster", "harrisburg", "altoona",
   "york", "state college", "wilkes-barre", "chester", "williamsport", "easton", "lebanon", "hazleton", "new castle", "johnstown",
-  "mckeesport", "hermitage", "greensburg", "pottsville", "sharon", // Fixed OCR error: "hemitage" → "hermitage"
+  "mckeesport", "hermitage", "greensburg", "pottsville", "sharon",
   // Rhode Island (top 25)
   "providence", "cranston", "warwick", "pawtucket", "east providence", "woonsocket", "coventry", "cumberland", "north providence", "south kingstown",
   "west warwick", "johnston", "north kingstown", "newport", "bristol", "lincoln", "smithfield", "central falls", "portsmouth", "burrillville",
-  "barrington", "middletown", "tiverton", "narragansett", "east greenwich", // Fixed OCR error: "iverton" → "tiverton"
+  "barrington", "middletown", "tiverton", "narragansett", "east greenwich",
   // South Carolina (top 25)
   "charleston", "columbia", "north charleston", "mount pleasant", "rock hill", "greenville", "summerville", "goose creek", "hilton head island", "sumter",
   "florence", "spartanburg", "myrtle beach", "aiken", "anderson", "mauldin", "hanahan", "conway", "bluffton", "simpsonville",
@@ -226,11 +226,11 @@ export const KNOWN_CITIES_SET = new Set([
   // Texas (top 25)
   "houston", "san antonio", "dallas", "austin", "fort worth", "el paso", "arlington", "corpus christi", "plano", "laredo",
   "lubbock", "garland", "irving", "frisco", "amarillo", "mckinney", "grand prairie", "brownsville", "killeen", "pasadena",
-  "mesquite", "mcallen", "denton", "waco", "carrollton", // Fixed OCR error: "amanillo" → "amarillo"
+  "mesquite", "mcallen", "denton", "waco", "carrollton",
   // Utah (top 25)
   "salt lake city", "west valley city", "provo", "west jordan", "orem", "sandy", "ogden", "st. george", "layton", "south jordan",
   "lehi", "millcreek", "taylorsville", "logan", "murray", "draper", "bountiful", "riverton", "herriman", "spanish fork",
-  "roy", "pleasant grove", "kearns", "tooele", "cottonwood heights", // Fixed OCR error: "laylorsville" → "taylorsville", "keams" → "kearns"
+  "roy", "pleasant grove", "kearns", "tooele", "cottonwood heights",
   // Vermont (top 25)
   "burlington", "south burlington", "rutland", "barre", "montpelier", "winooski", "st. albans", "newport", "vergennes", "essex junction",
   "bennington", "brattleboro", "hartford", "middlebury", "williston", "milton", "colchester", "swanton", "lyndon", "rockingham",
@@ -242,11 +242,11 @@ export const KNOWN_CITIES_SET = new Set([
   // Washington (top 25)
   "seattle", "spokane", "tacoma", "vancouver", "bellevue", "kent", "everett", "renton", "spokane valley", "federal way",
   "yakima", "kirkland", "bellingham", "kennewick", "auburn", "pasco", "marysville", "lakewood", "redmond", "shoreline",
-  "richland", "sammamish", "burien", "olympia", "lacey",
+  "richland", "sammamish", "burien", "olympia", "lacey", "eastside", "westside", // Added from domains
   // West Virginia (top 25)
   "charleston", "huntington", "morgantown", "parkersburg", "wheeling", "weirton", "fairmont", "martinsburg", "beckley", "clarksburg",
   "south charleston", "st. albans", "vienna", "bluefield", "moundsville", "bridgeport", "oak hill", "dunbar", "elkins", "nitro",
-  "hurricane", "princeton", "charles town", "buckhannon", "keyser", // Fixed OCR error: " Dunbar" → "dunbar"
+  "hurricane", "princeton", "charles town", "buckhannon", "keyser",
   // Wisconsin (top 25)
   "milwaukee", "madison", "green bay", "kenosha", "racine", "appleton", "waukesha", "oshkosh", "eau claire", "janesville",
   "west allis", "la crosse", "sheboygan", "wausau", "fond du lac", "new berlin", "wauwatosa", "brookfield", "beloit", "greenfield",
@@ -254,7 +254,9 @@ export const KNOWN_CITIES_SET = new Set([
   // Wyoming (top 25)
   "cheyenne", "casper", "laramie", "gillette", "rock springs", "sheridan", "green river", "evanston", "riverton", "jackson",
   "cody", "rawlins", "lander", "torrington", "douglas", "powell", "worland", "buffalo", "wheatland", "newcastle",
-  "thermopolis", "kemmerer", "glenrock", "lovell", "lyman"
+  "thermopolis", "kemmerer", "glenrock", "lovell", "lyman",
+  // Additional cities/regions from domains
+  "shottenkirk", "riverview", "northwest", "southwest", "downtown" // Already added in updates
 ]);
 
 // Utility Functions
