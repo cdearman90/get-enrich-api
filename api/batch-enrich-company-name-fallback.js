@@ -1,5 +1,5 @@
 // api/batch-enrich-company-name-fallback.js
-import { humanizeName } from "./lib/humanize.js"; // Revert to relative path
+import { humanizeName } from "./lib/humanize.js";
 
 export default async function handler(req, res) {
   console.log("batch-enrich-company-name-fallback.js - Starting");
@@ -22,15 +22,14 @@ export default async function handler(req, res) {
     const startTime = Date.now();
     const results = [];
     const manualReviewQueue = [];
-    let totalTokens = 0;
 
     for (const lead of leads) {
-      if (Date.now() - startTime > 8000) { // Leave 2 seconds buffer for Vercel 10-second timeout
+      if (Date.now() - startTime > 8000) {
         console.log("Partial response due to timeout");
-        return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
+        return res.status(200).json({ results, manualReviewQueue, partial: true });
       }
 
-      const { domain, rowNum, email, phone, firstName, lastName } = lead;
+      const { domain, rowNum } = lead;
       if (!domain) {
         console.error(`Row ${rowNum}: Missing domain`);
         results.push({ name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum });
@@ -39,29 +38,10 @@ export default async function handler(req, res) {
 
       let finalResult = humanizeName(domain, domain);
       finalResult.flags.push("FallbackUsed");
-      console.log(`Row ${rowNum}: Fallback result - ${JSON.stringify(finalResult)}`);
+      console.log(`Row ${rowNum}: ${JSON.stringify(finalResult)}`);
 
-      if (finalResult.confidenceScore < 50 || 
-          finalResult.flags.includes("TooGeneric") || 
-          finalResult.flags.includes("PossibleAbbreviation") || 
-          finalResult.flags.includes("NotPossessiveFriendly") || 
-          (finalResult.flags.includes("PossessiveAmbiguity") && finalResult.confidenceScore < 80) ||
-          finalResult.flags.includes("CityNameOnly")) {
-        console.log(`Row ${rowNum} flagged for review: ${JSON.stringify(finalResult)}`);
-        manualReviewQueue.push({ 
-          domain, 
-          name: finalResult.name, 
-          confidenceScore: finalResult.confidenceScore, 
-          flags: finalResult.flags, 
-          rowNum,
-          reason: finalResult.flags.includes("PossessiveAmbiguity") ? "Name ends in 's', possessive form unclear" : 
-                  finalResult.flags.includes("CityNameOnly") ? "City name only, needs verification" :
-                  finalResult.flags.includes("BrandIncluded") ? "Possible city-brand combo" : "Low confidence or generic",
-          email,
-          phone,
-          firstName,
-          lastName
-        });
+      if (finalResult.confidenceScore < 50 || finalResult.flags.some(f => ["TooGeneric", "PossibleAbbreviation", "NotPossessiveFriendly", "PossessiveAmbiguity", "CityNameOnly"].includes(f))) {
+        manualReviewQueue.push({ domain, name: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags, rowNum });
         finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], rowNum };
       }
 
@@ -69,9 +49,9 @@ export default async function handler(req, res) {
     }
 
     console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review`);
-    return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: false });
+    return res.status(200).json({ results, manualReviewQueue, partial: false });
   } catch (err) {
-    console.error(`Handler error: ${err.message}`);
+    console.error(`Handler error: ${err.message}`, err.stack);
     return res.status(500).json({ error: "Server error", details: err.message });
   }
 };
