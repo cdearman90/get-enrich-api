@@ -362,19 +362,19 @@ export const humanizeName = (inputName, domain, addPossessiveFlag = false) => {
         hasCity = true;
       }
     }
-    if (hasCarBrand && hasCity) {
-      const capitalizedBrand = carBrandFound.charAt(0).toUpperCase() + carBrandFound.slice(1).toLowerCase();
-      const city = words.find(word => KNOWN_CITIES_SET.has(word.toLowerCase()));
-      const capitalizedCity = city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
-      let finalName = `${capitalizedBrand} ${capitalizedCity}`;
-      finalName = finalName.replace("Mercedes-Benz", "MB");
-      return {
-        name: finalName,
-        confidenceScore: 100,
-        flags: ["CarBrandCityException"],
-        reason: "CarBrandCityPattern"
-      };
-    }
+    if (hasCarBrand && hasCity && carBrandCount === 1) {
+  const capitalizedBrand = carBrandFound.charAt(0).toUpperCase() + carBrandFound.slice(1).toLowerCase();
+  const city = words.find(word => KNOWN_CITIES_SET.has(word.toLowerCase()));
+  const capitalizedCity = city.charAt(0).toUpperCase() + city.slice(1).toLowerCase();
+  let finalName = `${capitalizedBrand} ${capitalizedCity}`;
+  finalName = finalName.replace("Mercedes-Benz", "MB");
+  return {
+    name: finalName,
+    confidenceScore: 100,
+    flags: ["CarBrandCityException"],
+    reason: "CarBrandCityPattern"
+  };
+}
 
     const regionPrefixes = ["north", "south", "east", "west", "central"];
     if (words.length >= 3 && CAR_BRANDS.includes(words[0].toLowerCase()) && regionPrefixes.includes(words[1].toLowerCase())) {
