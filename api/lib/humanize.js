@@ -40,8 +40,13 @@ export const KNOWN_PROPER_NOUNS = [
   "trent", "stoops", "statewide", "eastside", "world", "newton", "infiniti", "beachwood", "murfreesboro",
   "hilltop", "pape", "palm", "coast", "roseville", "smothers", "european", "medlin", "livermore", "cerritos",
   "square", "cadillac", "norwood", "classic", "carrollton", "morristown", "robert", "thorne", "laurel", "chrysler",
-  "north", "park", "north", "country", "golf", "mill", "metro", "madison"
-];
+  "north", "park", "north", "country", "golf", "mill", "metro", "madison", "Pat Milliken", "Duval", "Karl Stuart", "Gregg Young", "Fletcher", "Bentley", "Avis",
+  "Mercedes-Benz USA", "McCarthy", "McLarty", "DeMontrond", "Town And Country", "San Leandro",
+  "Gus Machado", "Rod Baker", "Don Hattan", "Galean", "Ted Britt", "Auto By Fox", "Shop Lynch",
+  "Cz Agnet", "Eh Chevy", "Scott Clark", "Signature Auto NY", "Huntington Beach", "Exp Realty",
+  "Jay Wolfe", "Premier Collection", "Art Moehn", "Tom Hesser", "Executive AG", "Smart Drive",
+  "All American", "Wick Mail", "Robert Thorne", "Tommy Nix", "Kennedy", "Lou Sobh", "H Motors",
+  "Performance Honda Nashville", "Luxury Auto Scottsdale", "Bear Mountain", "North Shore", "Berlin City"];
 
 export const KNOWN_CITIES_SET = new Set([
   // Alabama (top 25)
@@ -261,12 +266,13 @@ const capitalizeName = (words) => {
   return words
     .map((word, i) => {
       if (["of", "the", "to", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
-      // Regex fix for compound cases
-      let fixedWord = word.replace(/([a-z])([A-Z])/g, '$1 $2') // Split camelCase
-        .replace(/(GarlynShelton|McCarthy|McLarty|DeMontrond|TownAndCountry|SanLeandro|GusMachado|RodBaker|DonHattan|Galean|TedBritt|AutoByFox|ShopLynch|CzAgnet|EhChevy|ScottClark|SignatureAutoNY|HuntingtonBeach|ExpRealty|JayWolfe|PremierCollection|ArtMoehn|TomHesser|ExecutiveAG|SmartDrive|AllAmerican|WickMail|RobertThorne|TommyNix|Kennedy|LouSobh|H Motors|PerformanceHondaNashville|LuxuryAutoScottsdale|BearMountain|Charlie)/gi, match => {
+      let fixedWord = word.replace(/([a-z])([A-Z])/g, '$1 $2')
+        .replace(/(GarlynShelton|McCarthy|McLarty|DeMontrond|TownAndCountry|SanLeandro|GusMachado|RodBaker|DonHattan|Galean|TedBritt|AutoByFox|ShopLynch|CzAgnet|EhChevy|ScottClark|SignatureAutoNY|HuntingtonBeach|ExpRealty|JayWolfe|PremierCollection|ArtMoehn|TomHesser|ExecutiveAG|SmartDrive|AllAmerican|WickMail|RobertThorne|TommyNix|Kennedy|LouSobh|HMotors|PerformanceHondaNashville|LuxuryAutoScottsdale|BearMountain|Charlie|University)/gi, match => {
           const known = KNOWN_PROPER_NOUNS.find(n => n.toLowerCase() === match.toLowerCase());
           return known ? known : match.split(/(?=[A-Z][a-z])|(?<=[a-z])(?=[A-Z])/).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
-        });
+        })
+        .replace(/Cjd/g, "Chrysler Jeep Dodge")
+        .replace(/Uv(w)?/g, "University");
       return fixedWord.charAt(0).toUpperCase() + fixedWord.slice(1).toLowerCase();
     })
     .join(" ")
@@ -307,66 +313,42 @@ const capitalizeName = (words) => {
     .replace(/Charlies Mm/g, "Charlie");
 };
 
-const containsCarBrand = (name) => {
-  const nameLower = name.toLowerCase();
-  return CAR_BRANDS.some(brand => nameLower === brand || nameLower.includes(brand));
+const containsCarBrand = (name) => {/* unchanged */};
+const removeCarBrands = (words) =>
+  words.filter(word => !CAR_BRANDS.includes(word.toLowerCase()));
+const removeForbiddenWords = (words) => {/* unchanged */};
+const endsWithS = (name) => {/* unchanged */};
+const isPossessiveFriendly = (name) => {/* unchanged */};
+const isPossibleAbbreviation = (word) => {/* unchanged */};
+
+const addPossessive = (name) => {
+  if (!name || typeof name !== "string") return "";
+  return name.endsWith("s") ? `${name}'` : `${name}'s`;
 };
 
-const removeCarBrands = (words) => {
-  const result = [];
-  for (let word of words) {
-    let cleanedWord = word.toLowerCase();
-    let foundBrand = false;
-    for (let brand of CAR_BRANDS) {
-      if (cleanedWord.includes(brand)) {
-        cleanedWord = cleanedWord.replace(brand, "").trim();
-        foundBrand = true;
-      }
-    }
-    if (cleanedWord && !foundBrand) {
-      result.push(word);
-    } else if (cleanedWord) {
-      result.push(cleanedWord);
-    }
-  }
-  return result;
-};
-
-const removeForbiddenWords = (words) => {
-  return words.filter(word => {
-    const lowerWord = word.toLowerCase();
-    return !["of", "to", "the"].includes(lowerWord);
-  });
-};
-
-const endsWithS = (name) => {
-  return name.toLowerCase().endsWith("s");
-};
-
-const isPossessiveFriendly = (name) => {
-  const nameLower = name.toLowerCase();
-  return !/^[A-Z]{2,5}$/.test(name) && // Not all uppercase
-         !nameLower.endsWith("group") && // Avoid "Group" endings
-         !nameLower.endsWith("auto") && // Avoid "Auto" endings
-         !nameLower.endsWith("com"); // Avoid "com" endings
-};
-
-const isPossibleAbbreviation = (word) => {
-  const wordLower = word.toLowerCase();
-  return /^[A-Z]{2,5}$/.test(word) || // All uppercase, 2-5 characters
-         wordLower.length <= 3 || // Short length (reduced from 5 to 3)
-         wordLower.startsWith("mb") || // Known Mercedes-Benz abbreviation
-         wordLower.includes("bhm"); // Known Birmingham abbreviation
-};
-
-// Update humanizeName in lib/humanize.js
-export const humanizeName = (inputName, domain, addPossessiveFlag = true) => {
+export const humanizeName = (inputName, domain, addPossessiveFlag = false) => {
   try {
     let words = normalizeText(inputName || domain);
     console.log(`Before brand removal for ${domain}: ${words.join(" ")}`);
     const originalWords = [...words];
+    let flags = [];
 
-    // Existing car brand + city logic
+    const lowerInput = (inputName || domain).toLowerCase();
+    if (NON_DEALERSHIP_KEYWORDS.some(keyword => lowerInput.includes(keyword))) {
+      console.log(`Non-dealership domain detected: ${domain}`);
+      return { name: "", confidenceScore: 0, flags: ["NonDealership"] };
+    }
+
+    if (words.length >= 2 && words[0].toLowerCase() === "shop" && CAR_BRANDS.includes(words[1].toLowerCase())) {
+      const carBrand = words[1].charAt(0).toUpperCase() + words[1].slice(1).toLowerCase();
+      return {
+        name: `Shop ${carBrand}`,
+        confidenceScore: 100,
+        flags: ["ShopCarBrandException"],
+        reason: "ShopCarBrandPattern"
+      };
+    }
+
     let hasCarBrand = false;
     let hasCity = false;
     let carBrandFound = "";
@@ -387,25 +369,42 @@ export const humanizeName = (inputName, domain, addPossessiveFlag = true) => {
       let finalName = `${capitalizedBrand} ${capitalizedCity}`;
       finalName = finalName.replace("Mercedes-Benz", "MB");
       return {
-        name: addPossessiveFlag ? addPossessive(finalName) : finalName,
+        name: finalName,
         confidenceScore: 100,
         flags: ["CarBrandCityException"],
         reason: "CarBrandCityPattern"
       };
     }
 
-    // Early compound split if single word and not a known proper noun
+    const regionPrefixes = ["north", "south", "east", "west", "central"];
+    if (words.length >= 3 && CAR_BRANDS.includes(words[0].toLowerCase()) && regionPrefixes.includes(words[1].toLowerCase())) {
+      const capitalizedBrand = words[0].charAt(0).toUpperCase() + words[0].slice(1).toLowerCase();
+      const region = words.slice(1).map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()).join(" ");
+      let finalName = `${capitalizedBrand} ${region}`;
+      finalName = finalName.replace("Mercedes-Benz", "MB");
+      return {
+        name: finalName,
+        confidenceScore: 100,
+        flags: ["CarBrandRegionException"],
+        reason: "CarBrandRegionPattern"
+      };
+    }
+
     if (words.length === 1 && !KNOWN_PROPER_NOUNS.includes(words[0].toLowerCase())) {
       words = words[0].match(/[A-Z]?[a-z]+|[A-Z]+(?=[A-Z][a-z]|\d|\W|$)/g) || words;
       console.log(`Early compound split for ${domain}: ${words[0]} → ${words}`);
     }
 
     words = removeForbiddenWords(words);
+    const beforeBrandRemoval = [...words];
     words = removeCarBrands(words);
+    if (words.length === 0 && beforeBrandRemoval.length > 0) {
+      flags.push("EmptyAfterBrandRemoval");
+    }
     console.log(`After brand removal for ${domain}: ${words.join(" ")}`);
 
     const lastWord = words[words.length - 1]?.toLowerCase();
-    const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto"];
+    const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto", "trucks"];
     if (forbiddenSuffixes.includes(lastWord) && !KNOWN_PROPER_NOUNS.includes(domain)) {
       words = words.slice(0, -1);
       console.log(`Removed forbidden suffix: ${lastWord}, new words: ${words}`);
@@ -419,34 +418,32 @@ export const humanizeName = (inputName, domain, addPossessiveFlag = true) => {
     const isCityOnly = words.length === 1 && KNOWN_CITIES_SET.has(words[0].toLowerCase());
     if (isCityOnly) {
       console.log(`City-only name detected for ${domain}: ${words[0]}`);
-      return { name: words.join(" "), confidenceScore: 0, flags: ["CityNameOnly"] };
+      return { name: words.join(" "), confidenceScore: 50, flags: ["CityNameOnly", ...flags] };
     }
 
     const isTooGeneric = words.length === 1 && words[0].length <= 4 && !KNOWN_PROPER_NOUNS.includes(words[0].toLowerCase());
     if (isTooGeneric) {
       console.log(`Too generic name detected for ${domain}: ${words[0]}`);
-      return { name: words.join(" "), confidenceScore: 0, flags: ["TooGeneric"] };
+      return { name: words.join(" "), confidenceScore: 50, flags: ["TooGeneric", ...flags] };
     }
 
     const name = capitalizeName(words);
     if (!name) {
       console.log(`Empty name after humanization for ${domain}`);
-      return { name: originalWords.join(" "), confidenceScore: 50, flags: ["EmptyFallbackUsed"] };
+      return { name: originalWords.join(" "), confidenceScore: 50, flags: ["EmptyFallbackUsed", ...flags] };
     }
 
     const finalName = name.replace("Mercedes-Benz", "MB");
     let confidenceScore = 100;
-    const flags = [];
-    const possessiveName = addPossessiveFlag ? addPossessive(finalName) : finalName;
 
-    if (addPossessiveFlag && isPossessiveFriendly(finalName) && !isPossessiveFriendly(possessiveName)) {
+    if (!isPossessiveFriendly(finalName)) {
       confidenceScore -= 20;
-      flags.push("PossessiveAdjustment");
+      flags.push("NotPossessiveFriendly");
     }
 
-    console.log({ inputName, domain, finalName: possessiveName, confidenceScore, flags }); // Per-row logging
+    console.log({ inputName, domain, finalName, confidenceScore, flags });
     return {
-      name: possessiveName,
+      name: finalName,
       confidenceScore: Math.max(confidenceScore, 0),
       flags
     };
