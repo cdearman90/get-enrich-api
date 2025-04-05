@@ -1,5 +1,5 @@
-// batch-enrich.js (Version 3.4 - Updated 2025-04-05)
-import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText } from "./lib/humanize.js";
+// api/batch-enrich.js (Version 3.4.1 - Updated 2025-04-05)
+import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText } from "/api/lib/humanize.js";
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
@@ -68,7 +68,7 @@ const fetchWebsiteMetadata = async (domain) => {
   try {
     const response = await fetch(`https://${domain}`, {
       redirect: "follow",
-      timeout: 5000,
+      timeout: 3000, // Reduced timeout to 3 seconds to avoid Vercel timeout
       headers: {
         "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
       }
@@ -88,7 +88,7 @@ const fetchWebsiteMetadata = async (domain) => {
       try {
         const httpResponse = await fetch(`http://${domain}`, {
           redirect: "follow",
-          timeout: 5000,
+          timeout: 3000,
           headers: {
             "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)"
           }
@@ -145,7 +145,7 @@ const callOpenAIForMeta = async (domain, metadata, logoText, apiKey) => {
   for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 9000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000); // Reduced timeout to 6 seconds
 
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -192,7 +192,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 9000);
+      const timeoutId = setTimeout(() => controller.abort(), 6000); // Reduced timeout to 6 seconds
 
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -235,7 +235,7 @@ const callOpenAI = async (prompt, apiKey, retries = 3) => {
 
 // Main handler
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.4 - Updated 2025-04-05");
+  console.log("batch-enrich.js Version 3.4.1 - Updated 2025-04-05");
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
@@ -271,7 +271,7 @@ export default async function handler(req, res) {
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 30000) {
+      if (Date.now() - startTime > 8000) { // Leave 2 seconds buffer for Vercel 10-second timeout
         console.log("Partial response due to timeout");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
@@ -284,7 +284,6 @@ export default async function handler(req, res) {
             return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum };
           }
 
-          // Normalize and fuzzy match domain
           const matchedDomain = fuzzyMatchDomain(domain, KNOWN_NAMES.keys());
           if (matchedDomain && KNOWN_NAMES.has(matchedDomain)) {
             const entry = KNOWN_NAMES.get(matchedDomain);
@@ -308,15 +307,7 @@ export default async function handler(req, res) {
           if (gptNameRaw && !error) {
             const nameWords = normalizeText(gptNameRaw);
             console.log(`GPT raw name for ${domain}: ${gptNameRaw}, normalized: ${nameWords}`);
-            const lastWord = nameWords[nameWords.length - 1]?.toLowerCase();
-            const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto"];
-            if (forbiddenSuffixes.includes(lastWord) && !KNOWN_NAMES.has(domain)) {
-              nameWords.pop();
-              console.log(`Removed forbidden suffix: ${lastWord}, new words: ${nameWords}`);
-            }
-            const gptName = nameWords.join(" ");
-            console.log(`Joined GPT name: ${gptName}`);
-            finalResult = humanizeName(gptName, domain);
+            finalResult = humanizeName(gptNameRaw, domain);
             console.log(`Row ${rowNum}: GPT result - ${JSON.stringify(finalResult)}`);
           } else {
             finalResult = humanizeName(domain, domain);
@@ -383,12 +374,6 @@ export default async function handler(req, res) {
               finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], rowNum };
             } else if (metaResult.result && accepted) {
               let nameWords = normalizeText(metaResult.result);
-              const lastWord = nameWords[nameWords.length - 1]?.toLowerCase();
-              const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto"];
-              if (forbiddenSuffixes.includes(lastWord) && !KNOWN_NAMES.has(domain)) {
-                nameWords.pop();
-                console.log(`Removed forbidden suffix from fallback: ${lastWord}, new words: ${nameWords}`);
-              }
               finalResult = humanizeName(nameWords.join(" "), domain);
               finalResult.flags.push("FallbackUsed");
               console.log(`Row ${rowNum}: Meta fallback result - ${JSON.stringify(finalResult)}`);
@@ -451,28 +436,28 @@ function runUnitTests() {
   const tests = [
     { input: { name: "Pat Milliken Ford", domain: "patmillikenford.com" }, expected: { name: "Pat Milliken", confidenceScore: 100, flags: [] } },
     { input: { name: "Duval LLC", domain: "duvalauto.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } },
-    { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "Redlands", confidenceScore: 70, flags: [] } },
+    { input: { name: "Toyota Redlands", domain: "toyotaredlands.com" }, expected: { name: "Toyota Redlands", confidenceScore: 100, flags: ["CarBrandCityException"] } },
     { input: { name: "Crossroads Ford", domain: "crossroadsford.com" }, expected: { name: "", confidenceScore: 0, flags: ["Skipped"] } },
     { input: { name: "Duval Ford", domain: "duvalford.com" }, expected: { name: "Duval", confidenceScore: 100, flags: [] } },
-    { input: { name: "Athens Ford", domain: "athensford.com" }, expected: { name: "Athens", confidenceScore: 70, flags: [] } },
-    { input: { name: "Team Ford", domain: "teamford.com" }, expected: { name: "Team", confidenceScore: 70, flags: [] } },
-    { input: { name: "Smith Motor Shop", domain: "smithmotorshop.com" }, expected: { name: "Smith", confidenceScore: 70, flags: [] } },
-    { input: { name: "Karl Chevrolet Stuart", domain: "karlchevroletstuart.com" }, expected: { name: "Karl Stuart", confidenceScore: 90, flags: [] } },
-    { input: { name: "Gychevy", domain: "gychevy.com" }, expected: { name: "Gregg Young", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "Bentley Auto", domain: "bentleyauto.com" }, expected: { name: "Smith Auto", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "Bentley Automotive", domain: "bentleyautomotive.com" }, expected: { name: "Smith Automotive", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "Bentley Automotive Group", domain: "bentleyautomotivegroup.com" }, expected: { name: "Smith Automotive Group", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "Bentley Motors", domain: "bentleymotors.com" }, expected: { name: "Smith Motors", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "Mbbhm", domain: "mbbhm.com" }, expected: { name: "Mercedes-Benz Birmingham", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "Mbusa", domain: "mbusa.com" }, expected: { name: "Mercedes-Benz USA", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "Classic BMW", domain: "classicbmw.com" }, expected: { name: "Classic BMW", confidenceScore: 90, flags: [] } },
-    { input: { name: "Prime Honda", domain: "primehonda.com" }, expected: { name: "Prime Honda", confidenceScore: 90, flags: [] } },
-    { input: { name: "Elite Audi", domain: "eliteaudi.com" }, expected: { name: "Elite Audi", confidenceScore: 90, flags: [] } },
-    { input: { name: "Premier Toyota", domain: "premiertoyota.com" }, expected: { name: "Premier Toyota", confidenceScore: 90, flags: [] } },
-    { input: { name: "Huntington Beach Ford", domain: "huntingtonbeachford.com" }, expected: { name: "Bakhtiari", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "San Diego Ford", domain: "sandiegoford.com" }, expected: { name: "Smith Auto Group", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "Miami BMW", domain: "miamibmw.com" }, expected: { name: "Jones Dealership", confidenceScore: 90, flags: ["FallbackUsed"] } },
-    { input: { name: "Austin Toyota", domain: "austintoyota.com" }, expected: { name: "Brown Auto Group", confidenceScore: 90, flags: ["FallbackUsed"] } }
+    { input: { name: "Athens Ford", domain: "athensford.com" }, expected: { name: "Athens", confidenceScore: 0, flags: ["CityNameOnly"] } },
+    { input: { name: "Team Ford", domain: "teamford.com" }, expected: { name: "Team", confidenceScore: 0, flags: ["TooGeneric"] } },
+    { input: { name: "Smith Motor Shop", domain: "smithmotorshop.com" }, expected: { name: "Smith", confidenceScore: 100, flags: [] } },
+    { input: { name: "Karl Chevrolet Stuart", domain: "karlchevroletstuart.com" }, expected: { name: "Karl Stuart", confidenceScore: 100, flags: [] } },
+    { input: { name: "Gychevy", domain: "gychevy.com" }, expected: { name: "Gregg Young", confidenceScore: 100, flags: [] } },
+    { input: { name: "Bentley Auto", domain: "bentleyauto.com" }, expected: { name: "Smith Auto", confidenceScore: 100, flags: ["FallbackUsed"] } },
+    { input: { name: "Bentley Automotive", domain: "bentleyautomotive.com" }, expected: { name: "Smith Automotive", confidenceScore: 100, flags: ["FallbackUsed"] } },
+    { input: { name: "Bentley Automotive Group", domain: "bentleyautomotivegroup.com" }, expected: { name: "Smith Automotive Group", confidenceScore: 100, flags: ["FallbackUsed"] } },
+    { input: { name: "Bentley Motors", domain: "bentleymotors.com" }, expected: { name: "Smith Motors", confidenceScore: 100, flags: ["FallbackUsed"] } },
+    { input: { name: "Mbbhm", domain: "mbbhm.com" }, expected: { name: "Mercedes-Benz Birmingham", confidenceScore: 100, flags: ["FallbackUsed"] } },
+    { input: { name: "Mbusa", domain: "mbusa.com" }, expected: { name: "Mercedes-Benz USA", confidenceScore: 100, flags: ["FallbackUsed"] } },
+    { input: { name: "Classic BMW", domain: "classicbmw.com" }, expected: { name: "Classic BMW", confidenceScore: 100, flags: [] } },
+    { input: { name: "Prime Honda", domain: "primehonda.com" }, expected: { name: "Prime Honda", confidenceScore: 100, flags: [] } },
+    { input: { name: "Elite Audi", domain: "eliteaudi.com" }, expected: { name: "Elite Audi", confidenceScore: 100, flags: [] } },
+    { input: { name: "Premier Toyota", domain: "premiertoyota.com" }, expected: { name: "Premier Toyota", confidenceScore: 100, flags: [] } },
+    { input: { name: "Huntington Beach Ford", domain: "huntingtonbeachford.com" }, expected: { name: "Bakhtiari", confidenceScore: 100, flags: ["FallbackUsed"] } },
+    { input: { name: "San Diego Ford", domain: "sandiegoford.com" }, expected: { name: "Smith Auto Group", confidenceScore: 100, flags: ["FallbackUsed"] } },
+    { input: { name: "Miami BMW", domain: "miamibmw.com" }, expected: { name: "Jones Dealership", confidenceScore: 100, flags: ["FallbackUsed"] } },
+    { input: { name: "Austin Toyota", domain: "austintoyota.com" }, expected: { name: "Brown Auto Group", confidenceScore: 100, flags: ["FallbackUsed"] } }
   ];
 
   let passed = 0;
