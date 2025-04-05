@@ -133,7 +133,7 @@ const callOpenAI = async (prompt, apiKey) => {
 };
 
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.4.2 - Optimized 2025-04-05");
+  console.log("batch-enrich.js Version 3.4.4 - Optimized 2025-04-07");
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "Missing OpenAI API key" });
@@ -154,19 +154,19 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(2); // Increased concurrency to 2 for better throughput
+    const limit = pLimit(2);
     const results = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
     const fallbackTriggers = [];
 
-    const BATCH_SIZE = 5; // Increased batch size to 5 for efficiency
+    const BATCH_SIZE = 5;
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 8000) { // 2-second buffer for 10-second timeout
+      if (Date.now() - startTime > 8000) {
         console.log("Partial response due to timeout");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
@@ -187,34 +187,34 @@ export default async function handler(req, res) {
           const matchedDomain = fuzzyMatchDomain(domain, KNOWN_NAMES.keys());
           let finalResult = matchedDomain && KNOWN_NAMES.has(matchedDomain)
             ? { ...KNOWN_NAMES.get(matchedDomain), flags: [], rowNum }
-            : humanizeName(domain, domain);
+            : humanizeName(domain, domain, false);
 
           let tokensUsed = 0;
           if (!finalResult.name) {
             const { result: gptName, tokens } = await callOpenAI(`Domain: ${domain}, extract dealership name.`, apiKey);
             tokensUsed += tokens;
             totalTokens += tokens;
-            if (gptName) finalResult = humanizeName(gptName, domain);
+            if (gptName) finalResult = humanizeName(gptName, domain, false);
             else finalResult.flags.push("GPTFailed");
           }
 
-          if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => ["TooGeneric", "PossibleAbbreviation", "NotPossessiveFriendly", "PossessiveAmbiguity", "CityNameOnly"].includes(f))) {
+          if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => ["TooGeneric", "PossibleAbbreviation", "NotPossessiveFriendly", "CityNameOnly"].includes(f))) {
             const metadata = await fetchWebsiteMetadata(domain);
             const logoText = await extractLogoText(domain, metadata.html);
             const { result: metaName, tokens } = await callOpenAIForMeta(domain, metadata, logoText, apiKey);
             tokensUsed += tokens;
             totalTokens += tokens;
             if (metaName && metaName !== finalResult.name) {
-              finalResult = humanizeName(metaName, domain);
+              finalResult = humanizeName(metaName, domain, false);
               finalResult.flags.push("FallbackUsed");
             } else {
               finalResult.flags.push("MetaFallbackFailed");
             }
           }
 
-          if (finalResult.confidenceScore < 50 || finalResult.flags.some(f => ["TooGeneric", "PossibleAbbreviation", "NotPossessiveFriendly", "PossessiveAmbiguity", "CityNameOnly"].includes(f))) {
+          if (finalResult.confidenceScore < 50 || finalResult.flags.some(f => ["TooGeneric", "PossibleAbbreviation", "NotPossessiveFriendly", "CityNameOnly"].includes(f))) {
             manualReviewQueue.push({ domain, name: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags, rowNum });
-            finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], rowNum };
+            finalResult = { name: finalResult.name || "", confidenceScore: Math.max(finalResult.confidenceScore, 50), flags: [...finalResult.flags, "LowConfidence"], rowNum };
           }
 
           domainCache.set(domain, { name: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags });
