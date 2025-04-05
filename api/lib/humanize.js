@@ -13,6 +13,16 @@ export const CAR_BRANDS = [
   "mb", "dodge", "chrysler", "jeep", "buick", "cadillac", "lincoln", "infiniti"
 ];
 
+export const NON_DEALERSHIP_KEYWORDS = [
+    "powerlawn", "engines", "floors", "wheel", "customs", "blueprint", "ability", "design", "offroad",
+    "boats", "boating", "outdoors", "store", "mart", "glass"
+];
+
+export function addPossessive(name) {
+    if (!name || typeof name !== "string") return "";
+    return name.endsWith("s") ? `${name}'` : `${name}'s`;
+}
+
 export const KNOWN_PROPER_NOUNS = [
   "athens", "crossroads", "dallas", "houston", "paris", "memphis", "nashville",
   "pat", "milliken", "town", "country", "san", "leandro", "gus", "machado", "don", "hinds",
