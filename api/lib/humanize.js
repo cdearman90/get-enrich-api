@@ -54,18 +54,6 @@ export const KNOWN_PROPER_NOUNS = [
   "performance honda nashville", "luxury auto scottsdale", "bear mountain", "north shore", "berlin city"
 ];
 
-// Utility Functions
-export function normalizeText(name) {
-  if (!name || typeof name !== "string") return [];
-  return name
-    .replace(/\.com$/, "") // Explicitly strip .com
-    .replace(/['".,-]+/g, '') // Fixed OCR error: ["...]+ → ['".,-]+
-    .toLowerCase()
-    .trim()
-    .split(/\s+/) // Fixed OCR error: /s+/ → /\s+/
-    .filter(word => word);
-}
-
 export const KNOWN_CITIES_SET = new Set([
   // Alabama (top 25)
   "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "hoover", "dothan", "auburn", "decatur", "madison",
@@ -269,6 +257,18 @@ export const KNOWN_CITIES_SET = new Set([
   "thermopolis", "kemmerer", "glenrock", "lovell", "lyman"
 ]);
 
+// Utility Functions
+export function normalizeText(name) {
+  if (!name || typeof name !== "string") return [];
+  return name
+    .replace(/\.com$/, "") // Explicitly strip .com
+    .replace(/['".,-]+/g, '') // Remove special characters
+    .toLowerCase()
+    .trim()
+    .split(/\s+/) // Split on whitespace
+    .filter(word => word);
+}
+
 function capitalizeName(words) {
   // Handle single string blobs like "billdube" passed directly
   if (typeof words === "string") {
@@ -371,6 +371,19 @@ export function addPossessive(name) {
   return name.endsWith("s") ? `${name}'` : `${name}'s`;
 }
 
+function earlyCompoundSplit(name) {
+  const splitPoints = [
+    /(?=[A-Z][a-z])/g, // Split before a capital followed by lowercase (e.g., "SanLeandro" → "San Leandro")
+    /(?<=ford|chevrolet|honda|toyota|nissan|kia|bmw|subaru|infiniti|landrover|mazda|volkswagen|lexus|mercedes|audi)/gi, // Split after known brands
+    /(?=auto|motor|group|collection|automotive|cars|dealers|dealersgroup|autogroup|motorco)/gi, // Split before common suffixes
+  ];
+  let result = name;
+  for (const splitPoint of splitPoints) {
+    result = result.split(splitPoint).join(' ').trim();
+  }
+  return result.replace(/\s+/g, ' ');
+}
+
 export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
     let words = normalizeText(inputName || domain);
@@ -460,12 +473,12 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
       }
     }
 
-    // Apply normal cleanup
+    // Apply normal cleanup with early compound splitting
     let cleanedName = words.join(" ");
     if (words.length === 1 && !cleanedName.includes(" ") && !KNOWN_PROPER_NOUNS.includes(cleanedName.toLowerCase())) {
-      const blobSplit = cleanedName.match(/[A-Z][a-z]+/g);
-      if (blobSplit && blobSplit.length >= 2) {
-        cleanedName = blobSplit.join(" ");
+      const blobSplit = earlyCompoundSplit(cleanedName);
+      if (blobSplit.split(" ").length >= 2) {
+        cleanedName = blobSplit;
         console.log(`Early compound split for ${domain}: ${words[0]} → ${cleanedName}`);
         flags.push("FallbackBlobSplit");
       }
@@ -481,7 +494,7 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
 
     console.log(`After brand removal for ${domain}: ${words.join(" ")}`);
 
-    // Remove suffixes like "Auto", "Group", etc.
+    // Remove forbidden suffixes like "Auto", "Group", etc.
     const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto", "trucks"];
     const lastWordBeforeCleanup = words[words.length - 1]?.toLowerCase();
     if (forbiddenSuffixes.includes(lastWordBeforeCleanup) && !KNOWN_PROPER_NOUNS.includes(domain)) {
@@ -528,7 +541,18 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
       flags.push("NotPossessiveFriendly");
     }
 
-    const confidenceScore = flags.includes("NotPossessiveFriendly") ? 80 : (flags.includes("FallbackBlobSplit") ? 90 : 100);
+    // Check for possible abbreviations
+    if (finalWords.some(word => isPossibleAbbreviation(word))) {
+      flags.push("PossibleAbbreviation");
+    }
+
+    // Scoring
+    let confidenceScore = 100;
+    if (flags.includes("NotPossessiveFriendly")) confidenceScore = 80;
+    if (flags.includes("FallbackBlobSplit")) confidenceScore = Math.max(confidenceScore, 90);
+    if (flags.includes("TooGeneric") || flags.includes("CityNameOnly") || flags.includes("PossibleAbbreviation")) {
+      confidenceScore = 50;
+    }
 
     const finalName = addPossessiveFlag ? addPossessive(name) : name;
     return {
@@ -542,3 +566,29 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     return { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
   }
 }
+
+// Unit Tests
+function runUnitTests() {
+  const tests = [
+    { domain: 'athensford.com', expected: 'Athens' },
+    { domain: 'karlchevroletstuart.com', expected: 'Karl Stuart' },
+    { domain: 'gusmachadoford.com', expected: 'Gus Machado' },
+    { domain: 'duvalford.com', expected: 'Duval' },
+  ];
+
+  let passed = 0;
+  for (const test of tests) {
+    const result = humanizeName(test.domain, test.domain, false);
+    const finalName = KNOWN_OVERRIDES[test.domain] || result.name;
+    if (finalName === test.expected) {
+      console.log(`Test passed: ${test.domain} → ${finalName}`);
+      passed++;
+    } else {
+      console.log(`Test failed: ${test.domain} → ${finalName} (expected ${test.expected})`);
+    }
+  }
+  console.log(`Unit tests: ${passed}/${tests.length} passed`);
+}
+
+// Export for use in api/batch-enrich.js
+export { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText };
