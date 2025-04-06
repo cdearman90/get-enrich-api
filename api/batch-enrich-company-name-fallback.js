@@ -1,7 +1,8 @@
+// api/batch-enrich-company-name-fallback.js (Version 1.0.1 - Optimized 2025-04-10)
 import { humanizeName } from "./lib/humanize.js";
 
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js - Starting");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.1 - Optimized 2025-04-10");
 
   try {
     let leads;
@@ -32,19 +33,27 @@ export default async function handler(req, res) {
       const { domain, rowNum } = lead;
       if (!domain) {
         console.error(`Row ${rowNum}: Missing domain`);
-        results.push({ name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum });
+        results.push({ name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 });
         continue;
       }
 
       let finalResult;
       try {
-        finalResult = await humanizeName(domain, domain); // ✅ Added await for async compatibility
+        finalResult = await humanizeName(domain, domain, false); // Default call
       } catch (err) {
         console.error(`Row ${rowNum}: humanizeName threw error: ${err.message}`);
-        finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], rowNum };
+        // Fallback without OpenAI
+        try {
+          finalResult = await humanizeName(domain, domain, false, true); // Skip OpenAI
+          finalResult.flags = [...(finalResult.flags || []), "OpenAIFallbackUsed"];
+        } catch (fallbackErr) {
+          console.error(`Row ${rowNum}: Fallback humanizeName failed: ${fallbackErr.message}`);
+          finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
+        }
       }
 
-      finalResult.flags.push("FallbackUsed");
+      finalResult.flags = [...(finalResult.flags || []), "FallbackUsed"];
+      const tokensUsed = finalResult.tokens || 0;
 
       console.log(`Row ${rowNum}: ${JSON.stringify(finalResult)}`);
 
@@ -53,7 +62,9 @@ export default async function handler(req, res) {
         "PossibleAbbreviation",
         "NotPossessiveFriendly",
         "PossessiveAmbiguity",
-        "CityNameOnly"
+        "CityNameOnly",
+        "BadPrefixOf",           // Added from humanize.js
+        "CarBrandSuffixRemaining" // Added from humanize.js
       ];
 
       if (
@@ -67,11 +78,10 @@ export default async function handler(req, res) {
           flags: finalResult.flags,
           rowNum
         });
-
-        finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], rowNum };
+        finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], tokens: tokensUsed, rowNum };
       }
 
-      results.push({ ...finalResult, rowNum });
+      results.push({ ...finalResult, rowNum, tokens: tokensUsed });
     }
 
     console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review`);
