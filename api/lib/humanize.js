@@ -64,7 +64,6 @@ export const KNOWN_PROPER_NOUNS = [
 ];
 
 export const KNOWN_CITIES_SET = new Set([
- export const KNOWN_CITIES_SET = new Set([
   // Alabama (top 50)
   "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "hoover", "dothan", "auburn", "decatur", "madison",
   "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "alabaster", "opelika", "northport", "enterprise", "daphne",
