@@ -1,10 +1,10 @@
-// api/batch-enrich.js (Version 3.4.7 - Optimized 2025-04-09)
+// api/batch-enrich.js (Version 3.4.8 - Optimized 2025-04-10)
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES } from "./lib/humanize.js";
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
 
-// Concurrency limiter (unchanged)
+// Concurrency limiter
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
@@ -26,24 +26,11 @@ const pLimit = (concurrency) => {
 // Cache
 const domainCache = new Map();
 
-const normalizeDomain = (domain) => {
-  try {
-    return domain
-      .replace(/\.com$/, "")
-      .replace(/(ford|auto|chevrolet|toyota|bmw)/gi, "")
-      .toLowerCase()
-      .trim();
-  } catch (err) {
-    console.error(`Error normalizing domain ${domain}: ${err.message}`);
-    return domain.toLowerCase().replace(/\.com$/, "");
-  }
-};
-
 const fuzzyMatchDomain = (inputDomain, knownDomains) => {
   try {
-    const normalizedInput = normalizeDomain(inputDomain);
+    const normalizedInput = inputDomain.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "").trim();
     for (const knownDomain of knownDomains) {
-      const normalizedKnown = normalizeDomain(knownDomain);
+      const normalizedKnown = knownDomain.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "").trim();
       if (normalizedInput === normalizedKnown) return knownDomain;
       if (normalizedInput.includes(normalizedKnown) || normalizedKnown.includes(normalizedInput)) return knownDomain;
     }
@@ -56,11 +43,14 @@ const fuzzyMatchDomain = (inputDomain, knownDomains) => {
 
 const fetchWebsiteMetadata = async (domain) => {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
     const response = await fetch(`https://${domain}`, {
       redirect: "follow",
-      timeout: 2000,
-      headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" }
+      headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     const html = await response.text();
     const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
     const metaMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
@@ -104,7 +94,7 @@ const callOpenAIForMeta = async (domain, metadata, logoText, apiKey) => {
       const match = text.match(/##Name:\s*([^\n\r]+)/);
       return { result: match?.[1]?.trim() || "", tokens: Math.ceil(prompt.length / 4) };
     } catch (err) {
-      console.error(`OpenAI meta error for ${domain} (attempt ${attempt}): ${err.message}`);
+      console.error(`OpenAI meta error for ${domain} (attempt ${attempt}): ${err.message}, Stack: ${err.stack}`);
       if (attempt === 2) return { result: null, error: err.message, tokens: 0 };
       await new Promise(res => setTimeout(res, 500));
     }
@@ -128,7 +118,7 @@ const callOpenAI = async (prompt, apiKey) => {
       const match = text.match(/##Name:\s*([^\n\r]+)/);
       return { result: match?.[1]?.trim() || "", tokens: Math.ceil(prompt.length / 4) };
     } catch (err) {
-      console.error(`OpenAI error (attempt ${attempt}): ${err.message}`);
+      console.error(`OpenAI error (attempt ${attempt}): ${err.message}, Stack: ${err.stack}`);
       if (attempt === 2) return { result: null, error: err.message, tokens: 0 };
       await new Promise(res => setTimeout(res, 500));
     }
@@ -137,16 +127,20 @@ const callOpenAI = async (prompt, apiKey) => {
 
 const callFallbackAPI = async (domain, rowNum) => {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 4000);
     const response = await fetch(VERCEL_API_ENRICH_FALLBACK_URL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([{ domain, rowNum }])
+      body: JSON.stringify([{ domain, rowNum }]),
+      signal: controller.signal
     });
+    clearTimeout(timeoutId);
     const result = await response.json();
     if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
     return result.results[0] || { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"] };
   } catch (err) {
-    console.error(`Fallback API error for ${domain}: ${err.message}`);
+    console.error(`Fallback API error for ${domain}: ${err.message}, Stack: ${err.stack}`);
     return { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"], error: err.message };
   }
 };
@@ -163,7 +157,7 @@ export default async function handler(req, res) {
       for await (const chunk of req) buffers.push(chunk);
       leads = JSON.parse(Buffer.concat(buffers).toString("utf-8"));
     } catch (err) {
-      console.error(`JSON parse error: ${err.message}`);
+      console.error(`JSON parse error: ${err.message}, Stack: ${err.stack}`);
       return res.status(400).json({ error: "Invalid JSON", details: err.message });
     }
 
@@ -185,7 +179,7 @@ export default async function handler(req, res) {
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 8000) {
+      if (Date.now() - startTime > 9000) {
         console.log("Partial response due to timeout");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
@@ -212,7 +206,7 @@ export default async function handler(req, res) {
           try {
             finalResult = await humanizeName(domain, domain, false);
           } catch (err) {
-            console.error(`humanizeName failed for ${domain}: ${err.message}`);
+            console.error(`humanizeName failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
             finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
           }
           let tokensUsed = finalResult.tokens || 0;
@@ -254,7 +248,7 @@ export default async function handler(req, res) {
             }
           }
 
-           // Additional fallback to /api/batch-enrich-company-name-fallback
+          // Additional fallback to /api/batch-enrich-company-name-fallback
           if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const fallbackResult = await callFallbackAPI(domain, rowNum);
             if (fallbackResult.name && fallbackResult.confidenceScore >= 80) {
@@ -296,10 +290,10 @@ export default async function handler(req, res) {
       results.push(...chunkResults);
     }
 
-    console.log(`Completed: ${results.length} results, ${manual EsteReviewQueue.length} for review`);
+    console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review`);
     return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
   } catch (err) {
-    console.error(`Handler error: ${err.message}`, err.stack);
+    console.error(`Handler error: ${err.message}, Stack: ${err.stack}`);
     return res.status(500).json({ error: "Server error", details: err.message });
   }
 }
