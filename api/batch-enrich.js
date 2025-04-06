@@ -4,7 +4,7 @@ import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
 
-// Concurrency limiter
+// Concurrency limiter (unchanged)
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
@@ -152,7 +152,7 @@ const callFallbackAPI = async (domain, rowNum) => {
 };
 
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.4.7 - Optimized 2025-04-09");
+  console.log("batch-enrich.js Version 3.4.8 - Optimized 2025-04-10");
   try {
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) return res.status(500).json({ error: "Missing OpenAI API key" });
@@ -173,13 +173,13 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(2); // Reduced concurrency to prevent timeouts
+    const limit = pLimit(2);
     const results = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
     const fallbackTriggers = [];
 
-    const BATCH_SIZE = 3; // Reduced batch size for better reliability
+    const BATCH_SIZE = 3;
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
@@ -198,7 +198,6 @@ export default async function handler(req, res) {
             return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum };
           }
 
-          // Apply overrides first
           const domainLower = domain.toLowerCase();
           if (KNOWN_OVERRIDES[domainLower]) {
             return { name: KNOWN_OVERRIDES[domainLower], confidenceScore: 100, flags: ["OverrideApplied"], rowNum, tokens: 0 };
@@ -209,16 +208,22 @@ export default async function handler(req, res) {
             return { ...domainCache.get(domain), rowNum };
           }
 
-          let finalResult = await humanizeName(domain, domain, false);
-          let tokensUsed = 0;
+          let finalResult;
+          try {
+            finalResult = await humanizeName(domain, domain, false);
+          } catch (err) {
+            console.error(`humanizeName failed for ${domain}: ${err.message}`);
+            finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
+          }
+          let tokensUsed = finalResult.tokens || 0;
 
-          // Fallback to OpenAI if humanizeName returns no name
-          if (!finalResult.name) {
+          // Fallback to OpenAI if humanizeName returns no name or low confidence
+          if (!finalResult.name || finalResult.confidenceScore < 60) {
             const { result: gptName, tokens } = await callOpenAI(`Domain: ${domain}, extract dealership name. Format response as ##Name: [Dealership Name]`, apiKey);
             tokensUsed += tokens;
             totalTokens += tokens;
             if (gptName) {
-              finalResult = await humanizeName(gptName, domain, false);
+              finalResult = await humanizeName(gptName, domain, false, true); // Skip OpenAI in humanize.js
               finalResult.flags.push("GPTFallbackUsed");
             } else {
               finalResult.flags.push("GPTFailed");
@@ -241,7 +246,7 @@ export default async function handler(req, res) {
             tokensUsed += tokens;
             totalTokens += tokens;
             if (metaName && metaName !== finalResult.name) {
-              finalResult = await humanizeName(metaName, domain, false);
+              finalResult = await humanizeName(metaName, domain, false, true); // Skip OpenAI in humanize.js
               finalResult.flags.push("MetaFallbackUsed");
             } else {
               finalResult.flags.push("MetaFallbackFailed");
@@ -249,7 +254,7 @@ export default async function handler(req, res) {
             }
           }
 
-          // Additional fallback to /api/batch-enrich-company-name-fallback
+           // Additional fallback to /api/batch-enrich-company-name-fallback
           if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const fallbackResult = await callFallbackAPI(domain, rowNum);
             if (fallbackResult.name && fallbackResult.confidenceScore >= 80) {
@@ -287,12 +292,11 @@ export default async function handler(req, res) {
         }))
       );
 
-      // Ensure results array is always defined before pushing
       if (!results) throw new Error('Results array is undefined');
       results.push(...chunkResults);
     }
 
-    console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review`);
+    console.log(`Completed: ${results.length} results, ${manual EsteReviewQueue.length} for review`);
     return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
   } catch (err) {
     console.error(`Handler error: ${err.message}`, err.stack);
