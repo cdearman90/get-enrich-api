@@ -599,10 +599,7 @@ export const KNOWN_OVERRIDES = {
 export function normalizeText(name) {
   if (!name || typeof name !== "string") return [];
   return name
-    .replace(/\.com$/, "")
-    .replace(/\.net$/, "")
-    .replace(/\.org$/, "")
-    .replace(/\.co\.uk$/, "")
+    .replace(/\.(com|org|net|co\.uk)$/, "")
     .replace(/['".,-]+/g, '')
     .toLowerCase()
     .trim()
@@ -620,7 +617,8 @@ function capitalizeName(words) {
       if (["of", "the", "to", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
       if (/^[A-Z]{2,5}$/.test(word)) return word;
 
-      let fixedWord = word.replace(/([a-z])([A-Z])/g, '$1 $2')
+      let fixedWord = word
+        .replace(/([a-z])([A-Z])/g, '$1 $2')
         .replace(/(GarlynShelton|McCarthy|McLarty|McLartyDaniel|DriveSuperior|JimmyBritt|DonHattan|CaminoReal|SwantGraber|DeMontrond|TownAndCountry|SanLeandro|GusMachado|RodBaker|DonHattan|Galean|TedBritt|ShopLynch|ScottClark|HuntingtonBeach|ExpRealty|JayWolfe|PremierCollection|ArtMoehn|TomHesser|ExecutiveAG|SmartDrive|AllAmerican|WickMail|RobertThorne|TommyNix|Kennedy|LouSobh|HMotors|LuxuryAutoScottsdale|BearMountain|Charlie|University)/gi, match => {
           const known = KNOWN_PROPER_NOUNS.find(n => n.toLowerCase() === match.toLowerCase());
           return known ? known : match
@@ -726,31 +724,45 @@ function preserveStructures(name) {
 
 function earlyCompoundSplit(name) {
   let result = name;
-  result = result.replace(/(of|auto|group|motors|dealership|corp)/gi, ' $1 ').replace(/\s+/g, ' ');
+
+  // Split on common separators and structural words
+  result = result
+    .replace(/(of|auto|group|motors|dealership|corp)/gi, ' $1 ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  // Split on camelCase or PascalCase boundaries
   result = result.replace(/([a-z])([A-Z])/g, '$1 $2');
+
+  // Split on directional prefixes
   result = result.replace(/(north|south|east|west|central|drive)([a-z]+)/gi, '$1 $2');
-  result = result.replace(/([a-z]+)(ford|chevrolet|toyota|nissan|subaru|kia|hyundai|infiniti)/gi, '$1 $2');
-  result = result.replace(/(chevrolet|infiniti)/gi, '$1');
-  result = result.replace(/(tuttle)(click)/gi, '$1 $2');
-  result = result.replace(/(mclarty)(daniel)/gi, '$1 $2');
-  result = result.replace(/(drive)(superior)/gi, '$1 $2');
-  result = result.replace(/(jimmy)(britt)/gi, '$1 $2');
-  result = result.replace(/(don)(hattan)/gi, '$1 $2');
-  result = result.replace(/(tommy)(nix)/gi, '$1 $2');
-  result = result.replace(/(camino)(real)/gi, '$1 $2');
-  result = result.replace(/(swant)(graber)/gi, '$1 $2');
+
+  // Split all car brands defined in CAR_BRANDS
+  CAR_BRANDS.forEach(brand => {
+    const brandLower = brand.toLowerCase();
+    const regex = new RegExp(`([a-z]+)(${brandLower})(?=$|[^a-z])`, 'gi');
+    result = result.replace(regex, '$1 $2');
+  });
+
+  // Split known proper noun patterns
+  result = result
+    .replace(/(tuttle)(click)/gi, '$1 $2')
+    .replace(/(mclarty)(daniel)/gi, '$1 $2')
+    .replace(/(drive)(superior)/gi, '$1 $2')
+    .replace(/(jimmy)(britt)/gi, '$1 $2')
+    .replace(/(don)(hattan)/gi, '$1 $2')
+    .replace(/(tommy)(nix)/gi, '$1 $2')
+    .replace(/(camino)(real)/gi, '$1 $2')
+    .replace(/(swant)(graber)/gi, '$1 $2');
+
+  // Split on known cities
   KNOWN_CITIES_SET.forEach(city => {
     const cityLower = city.toLowerCase();
     if (result.toLowerCase().includes(cityLower)) {
-      result = result.replace(new RegExp(cityLower, 'gi'), ` ${city} `);
+      result = result.replace(new RegExp(`\\b${cityLower}\\b`, 'gi'), ` ${city} `);
     }
   });
-  CAR_BRANDS.forEach(brand => {
-    const brandLower = brand.toLowerCase();
-    if (result.toLowerCase().includes(brandLower)) {
-      result = result.replace(new RegExp(brandLower, 'gi'), ` ${brand} `);
-    }
-  });
+
   return result.replace(/\s+/g, ' ').trim();
 }
 
@@ -992,12 +1004,13 @@ function runUnitTests() {
     { domain: 'karlchevroletstuart.com', expected: 'Karl Stuart' },
     { domain: 'gusmachadoford.com', expected: 'Gus Machado' },
     { domain: 'duvalford.com', expected: 'Duval' },
-    { domain: 'fordofdalton.com', expected: 'Ford Dalton' }
+    { domain: 'fordofdalton.com', expected: 'Ford Dalton' },
+    { domain: 'devineford.com', expected: 'Devine' } // Added test for improved splitting
   ];
 
   let passed = 0;
   for (const test of tests) {
-    const result = humanizeName(test.domain, test.domain, false);
+    const result = await humanizeName(test.domain, test.domain, false);
     const finalName = KNOWN_OVERRIDES[test.domain] || result.name;
     if (finalName === test.expected) {
       console.log(`Test passed: ${test.domain} → ${finalName}`);
