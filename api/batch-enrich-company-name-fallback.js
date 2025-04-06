@@ -1,8 +1,8 @@
-// api/batch-enrich-company-name-fallback.js
 import { humanizeName } from "./lib/humanize.js";
 
 export default async function handler(req, res) {
   console.log("batch-enrich-company-name-fallback.js - Starting");
+
   try {
     let leads;
     try {
@@ -36,12 +36,38 @@ export default async function handler(req, res) {
         continue;
       }
 
-      let finalResult = humanizeName(domain, domain);
+      let finalResult;
+      try {
+        finalResult = await humanizeName(domain, domain); // ✅ Added await for async compatibility
+      } catch (err) {
+        console.error(`Row ${rowNum}: humanizeName threw error: ${err.message}`);
+        finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], rowNum };
+      }
+
       finalResult.flags.push("FallbackUsed");
+
       console.log(`Row ${rowNum}: ${JSON.stringify(finalResult)}`);
 
-      if (finalResult.confidenceScore < 50 || finalResult.flags.some(f => ["TooGeneric", "PossibleAbbreviation", "NotPossessiveFriendly", "PossessiveAmbiguity", "CityNameOnly"].includes(f))) {
-        manualReviewQueue.push({ domain, name: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags, rowNum });
+      const skipFlags = [
+        "TooGeneric",
+        "PossibleAbbreviation",
+        "NotPossessiveFriendly",
+        "PossessiveAmbiguity",
+        "CityNameOnly"
+      ];
+
+      if (
+        finalResult.confidenceScore < 50 ||
+        finalResult.flags.some(f => skipFlags.includes(f))
+      ) {
+        manualReviewQueue.push({
+          domain,
+          name: finalResult.name,
+          confidenceScore: finalResult.confidenceScore,
+          flags: finalResult.flags,
+          rowNum
+        });
+
         finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], rowNum };
       }
 
@@ -50,10 +76,11 @@ export default async function handler(req, res) {
 
     console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review`);
     return res.status(200).json({ results, manualReviewQueue, partial: false });
+
   } catch (err) {
     console.error(`Handler error: ${err.message}`, err.stack);
     return res.status(500).json({ error: "Server error", details: err.message });
   }
-};
+}
 
 export const config = { api: { bodyParser: false } };
