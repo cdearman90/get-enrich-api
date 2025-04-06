@@ -249,9 +249,6 @@ export const KNOWN_CITIES_SET = new Set([
   "shottenkirk", "riverview", "northwest", "southwest", "downtown" // Already added in updates
 ]);
 
-// Excluded KNOWN_CITIES_SET for brevity as per request
-export const KNOWN_CITIES_SET = new Set([]);
-
 // Added KNOWN_OVERRIDES to align with Google Apps Script
 export const KNOWN_OVERRIDES = {
   "duvalford.com": "Duval",
