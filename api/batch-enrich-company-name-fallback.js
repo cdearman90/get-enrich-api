@@ -63,8 +63,8 @@ export default async function handler(req, res) {
         "NotPossessiveFriendly",
         "PossessiveAmbiguity",
         "CityNameOnly",
-        "BadPrefixOf",           // Added from humanize.js
-        "CarBrandSuffixRemaining" // Added from humanize.js
+        "BadPrefixOf",           // Add if fuzzy matches need review
+        "CarBrandSuffixRemaining" // Add if fallback usage needs review
       ];
 
       if (
