@@ -1,12 +1,9 @@
 {
-  "functions": {
-    "api/batch-enrich.js": {
-      "runtime": "nodejs18.x",
-      "maxDuration": 20
-    },
-    "api/batch-enrich-company-name-fallback.js": {
-      "runtime": "nodejs18.x",
-      "maxDuration": 20
-    }
+  "type": "module",
+  "name": "get-enrich-api",
+  "version": "1.0.0",
+  "dependencies": {},
+  "engines": {
+    "node": "22.x"
   }
 }
