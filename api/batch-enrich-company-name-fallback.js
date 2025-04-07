@@ -55,7 +55,7 @@ export default async function handler(req, res) {
     const manualReviewQueue = [];
     let totalTokens = 0;
 
-    const BATCH_SIZE = 5; // Aligned with system overview and batch-enrich.js
+    const BATCH_SIZE = 3; // Aligned with system overview and batch-enrich.js
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
