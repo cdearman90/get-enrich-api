@@ -1,0 +1,40 @@
+// api/lib/openai.js
+async function callOpenAI(prompt, options = {}) {
+  const apiKey = process.env.OPENAI_API_KEY;
+  if (!apiKey) {
+    throw new Error("OPENAI_API_KEY is not set in environment variables");
+  }
+
+  const defaultOptions = {
+    model: "gpt-4-turbo", // Updated to gpt-4-turbo
+    max_tokens: 50,
+    temperature: 0.3,
+    systemMessage: "You are a helpful assistant.",
+  };
+  const finalOptions = { ...defaultOptions, ...options };
+
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: finalOptions.model,
+      messages: [
+        { role: "system", content: finalOptions.systemMessage },
+        { role: "user", content: prompt },
+      ],
+      max_tokens: finalOptions.max_tokens,
+      temperature: finalOptions.temperature,
+    }),
+  });
+
+  const data = await response.json();
+  if (data.choices && data.choices.length > 0) {
+    return data.choices[0].message.content.trim();
+  }
+  throw new Error("No response from OpenAI");
+}
+
+export { callOpenAI };
