@@ -89,16 +89,16 @@ export default async function handler(req, res) {
         if (
   finalResult.confidenceScore < 50 ||
   (Array.isArray(finalResult.flags) && finalResult.flags.some(f => forceReviewFlags.includes(f)))
-)
-          manualReviewQueue.push({
-            domain,
-            name: finalResult.name,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags,
-            rowNum
-          });
-          finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], tokens: tokensUsed, rowNum };
-        }
+) {
+  manualReviewQueue.push({
+    domain,
+    name: finalResult.name,
+    confidenceScore: finalResult.confidenceScore,
+    flags: finalResult.flags,
+    rowNum
+  });
+  finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], tokens: tokensUsed, rowNum };
+}
 
         return { ...finalResult, rowNum, tokens: tokensUsed };
       }))
