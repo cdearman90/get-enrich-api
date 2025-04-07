@@ -153,46 +153,38 @@ export default async function handler(req, res) {
 
           let finalResult;
           try {
-            finalResult = await humanizeName(domain, domain, false);
-          } catch (err) {
-            console.error(`humanizeName failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
-            finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
-          }
+  finalResult = await humanizeName(domain, domain, false);
+} catch (err) {
+  console.error(`humanizeName failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
+  finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
+}
           let tokensUsed = finalResult.tokens || 0;
 
           // Fallback to OpenAI if humanizeName returns no name or low confidence
           if (!finalResult.name || finalResult.confidenceScore < 60) {
-            const prompt = `Domain: ${domain}, extract dealership name. Format response as ##Name: [Dealership Name]`;
             let gptResult;
-            for (let attempt = 1; attempt <= 2; attempt++) {
-              try {
-                gptResult = await callOpenAI(prompt, {
-                  systemMessage: "You are a helpful assistant that extracts dealership names.",
-                  max_tokens: 50,
-                  temperature: 0.2,
-                });
-                const match = gptResult.match(/##Name:\s*([^\n\r]+)/);
-                gptResult = match?.[1]?.trim() || "";
-                break;
-              } catch (err) {
-                console.error(`OpenAI error for ${domain} (attempt ${attempt}): ${err.message}, Stack: ${err.stack}`);
-                if (attempt === 2) {
-                  gptResult = null;
-                  break;
-                }
-                await new Promise(res => setTimeout(res, 500));
-              }
-            }
-            tokensUsed += Math.ceil(prompt.length / 4); // Approximate token count
-            totalTokens += Math.ceil(prompt.length / 4);
-            if (gptResult) {
-              finalResult = await humanizeName(gptResult, domain, false, true); // Skip OpenAI in humanize.js
-              finalResult.flags.push("GPTFallbackUsed");
-            } else {
+            try {
+              const prompt = `Domain: ${domain}, extract dealership name. Format response as ##Name: [Dealership Name]`;
+              gptResult = await callOpenAI(prompt, {
+                systemMessage: "You are a helpful assistant that extracts dealership names.",
+                max_tokens: 50,
+                temperature: 0.2,
+              });
+              const match = gptResult.match(/##Name:\s*([^\n\r]+)/);
+              gptResult = match?.[1]?.trim() || "";
+            } catch (err) {
+              console.error(`OpenAI error for ${domain}: ${err.message}, Stack: ${err.stack}`);
+              gptResult = null;
               finalResult.flags.push("GPTFailed");
-              fallbackTriggers.push({ domain, reason: "GPTFailed" });
+              fallbackTriggers.push({ domain, reason: "GPTFailed", error: err.message });
             }
+           tokensUsed += Math.ceil(prompt.length / 4);
+           totalTokens += Math.ceil(prompt.length / 4);
+           if (gptResult) {
+            finalResult = await humanizeName(gptResult, domain, false, true); // Skip OpenAI in humanize.js
+            finalResult.flags.push("GPTFallbackUsed");
           }
+        }
 
           // Score CarBrandCityException properly
           if (Array.isArray(finalResult.flags) && finalResult.flags.includes("CarBrandCityException")) {
