@@ -1,0 +1,12 @@
+{
+  "functions": {
+    "api/batch-enrich.js": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 20
+    },
+    "api/batch-enrich-company-name-fallback.js": {
+      "runtime": "nodejs18.x",
+      "maxDuration": 20
+    }
+  }
+}
