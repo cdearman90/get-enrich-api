@@ -598,7 +598,7 @@ export const KNOWN_OVERRIDES = {
   "yorkautomotive.com": "York"
 };
 
-// Utility Functions (unchanged except where noted)
+// Utility Functions
 export function normalizeText(name) {
   if (!name || typeof name !== "string") return [];
   return name
@@ -753,7 +753,7 @@ function correctBadEndings(name) {
   return name;
 }
 
-// OpenAI Fuzzy Matching for City Detection (unchanged)
+// OpenAI Fuzzy Matching for City Detection
 const cityCache = new Map();
 
 export async function fuzzyMatchCity(token) {
@@ -983,7 +983,7 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     }
 
     // Strip redundant trailing brand
-    const finalWords = name.split(" ");
+    let finalWords = name.split(" ");
     const trailingBrand = name.match(new RegExp(`\\b(${CAR_BRANDS.join('|')})$`, 'i'));
     if (trailingBrand && finalWords.length > 1) {
       name = name.replace(trailingBrand[0], '').trim();
@@ -993,6 +993,7 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     name = correctBadEndings(name);
 
     // Check for city-only or generic names
+    finalWords = name.split(" "); // Update finalWords after correctBadEndings
     const isCityOnly = finalWords.length === 1 && (KNOWN_CITIES_SET.has(finalWords[0].toLowerCase()) || cityCandidate) && !hasCarBrand;
     if (isCityOnly) flags.push("CityNameOnly");
 
@@ -1002,6 +1003,11 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     // Suppress TooGeneric for capitalized 2-word names
     if (finalWords.length > 1 && name.match(/[A-Z][a-z]+ [A-Z][a-z]+/)) {
       flags = flags.filter(f => f !== "TooGeneric");
+    }
+
+    // Ensure 2-word fallbacks score >= 75 unless TooGeneric or CityNameOnly
+    if (finalWords.length === 2 && !flags.includes("TooGeneric") && !flags.includes("CityNameOnly")) {
+      confidenceScore = Math.max(confidenceScore, 75); // Ensure 2-word fallbacks pass
     }
 
     if (name.toLowerCase().startsWith("of")) flags.push("BadPrefixOf");
