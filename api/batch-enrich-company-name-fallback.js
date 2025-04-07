@@ -1,5 +1,5 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.3 - Optimized 2025-04-15)
-// Updated to improve timeout handling, add retry logic for OpenAI, and enhance logging
+// api/batch-enrich-company-name-fallback.js (Version 1.0.4 - Optimized 2025-04-15)
+// Updated to improve timeout handling, enhance retry logic, align with humanize.js updates, and improve logging
 
 import { humanizeName } from "./lib/humanize.js";
 
@@ -22,15 +22,23 @@ const pLimit = (concurrency) => {
   });
 };
 
+// Stream to string helper for Vercel (aligned with batch-enrich.js)
+const streamToString = async (stream) => {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf-8");
+};
+
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.3 - Optimized 2025-04-15");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.4 - Optimized 2025-04-15");
 
   try {
     let leads;
     try {
-      const buffers = [];
-      for await (const chunk of req) buffers.push(chunk);
-      leads = JSON.parse(Buffer.concat(buffers).toString("utf-8"));
+      const rawBody = await streamToString(req);
+      leads = JSON.parse(rawBody);
     } catch (err) {
       console.error(`JSON parse error: ${err.message}, Stack: ${err.stack}`);
       return res.status(400).json({ error: "Invalid JSON", details: err.message });
@@ -42,19 +50,20 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(1); // Reduced to 1 to minimize timeout risk
+    const limit = pLimit(1); // Kept at 1 to minimize timeout risk
     const results = [];
     const manualReviewQueue = [];
+    let totalTokens = 0;
 
-    const BATCH_SIZE = 2; // Process in small chunks to stay under 10s limit
+    const BATCH_SIZE = 3; // Increased to 5 to match batch-enrich.js for better throughput
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 8000) { // Reduced to 8s to be safer
+      if (Date.now() - startTime > 8000) {
         console.log("Partial response due to timeout");
-        return res.status(200).json({ results, manualReviewQueue, partial: true });
+        return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
       }
 
       const chunkResults = await Promise.all(
@@ -69,14 +78,14 @@ export default async function handler(req, res) {
           let tokensUsed = 0;
 
           // Retry logic for humanizeName with OpenAI
-          for (let attempt = 1; attempt <= 2; attempt++) {
+          for (let attempt = 1; attempt <= 3; attempt++) { // Increased to 3 retries
             try {
               finalResult = await humanizeName(domain, domain, false); // Default call
               tokensUsed = finalResult.tokens || 0;
               break;
             } catch (err) {
               console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed: ${err.message}, Stack: ${err.stack}`);
-              if (attempt === 2) {
+              if (attempt === 3) {
                 // Fallback without OpenAI
                 try {
                   finalResult = await humanizeName(domain, domain, false, true); // Skip OpenAI
@@ -88,7 +97,7 @@ export default async function handler(req, res) {
                   finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
                 }
               }
-              await new Promise(res => setTimeout(res, 500)); // Delay between retries
+              await new Promise(res => setTimeout(res, 1000)); // Increased delay to 1s between retries
             }
           }
 
@@ -102,9 +111,8 @@ export default async function handler(req, res) {
             "PossibleAbbreviation",
             "BadPrefixOf",
             "CarBrandSuffixRemaining",
-            "FuzzyCityMatch", // Review OpenAI-detected cities
-            "NotPossessiveFriendly", // Added from updated humanize.js
-            "FuzzyCityMatch"
+            "FuzzyCityMatch", // Removed duplicate entry
+            "NotPossessiveFriendly"
           ];
 
           if (
@@ -121,6 +129,7 @@ export default async function handler(req, res) {
             finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], tokens: tokensUsed, rowNum };
           }
 
+          totalTokens += tokensUsed;
           return { ...finalResult, rowNum, tokens: tokensUsed };
         }))
       );
@@ -128,8 +137,8 @@ export default async function handler(req, res) {
       results.push(...chunkResults);
     }
 
-    console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review`);
-    return res.status(200).json({ results, manualReviewQueue, partial: false });
+    console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review, Total tokens: ${totalTokens}`);
+    return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: false });
 
   } catch (err) {
     console.error(`Handler error: ${err.message}, Stack: ${err.stack}`);
