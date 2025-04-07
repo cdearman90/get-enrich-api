@@ -1,5 +1,5 @@
-// api/batch-enrich.js (Version 3.6 - Fully Patched and Optimized)
-// Updated to optimize for timeouts, enhance retry logic, align with humanize.js updates, and improve error handling
+// api/batch-enrich.js (Version 3.7 - Fully Patched and Optimized 2025-04-07)
+// Updated to align with humanize.js (spacing validator), optimize timeouts, and sync with batch-enrich-company-name-fallback.js
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
@@ -49,7 +49,7 @@ const fuzzyMatchDomain = (inputDomain, knownDomains) => {
 const fetchWebsiteMetadata = async (domain) => {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for reliability
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // Reduced to 2s
     const response = await fetch(`https://${domain}`, {
       redirect: "follow",
       headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
@@ -84,7 +84,7 @@ const extractLogoText = async (domain, html) => {
 
 // Safe POST fallback endpoint with retry
 const callFallbackAPI = async (domain, rowNum) => {
-  for (let attempt = 1; attempt <= 3; attempt++) { // Increased retries to 3
+  for (let attempt = 1; attempt <= 2; attempt++) { // Reduced to 2 retries
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
@@ -100,10 +100,10 @@ const callFallbackAPI = async (domain, rowNum) => {
       return result.results[0] || { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"] };
     } catch (err) {
       console.error(`Fallback API attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
-      if (attempt === 3) {
+      if (attempt === 2) {
         return { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"], error: err.message };
       }
-      await new Promise(res => setTimeout(res, 1000)); // Increased delay to 1s between retries
+      await new Promise(res => setTimeout(res, 1000));
     }
   }
 };
@@ -119,7 +119,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.6 - Fully Patched and Optimized");
+  console.log("batch-enrich.js Version 3.7 - Fully Patched and Optimized 2025-04-07");
 
   try {
     let leads;
@@ -142,13 +142,13 @@ export default async function handler(req, res) {
     let totalTokens = 0;
     const fallbackTriggers = [];
 
-    const BATCH_SIZE = 3; // 
+    const BATCH_SIZE = 5; // Aligned with system overview and fallback API
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 8000) {
+      if (Date.now() - startTime > 10000) { // Extended to 10s for free tier; adjust to 18000 for paid tier
         console.log("Partial response due to timeout");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
@@ -177,52 +177,22 @@ export default async function handler(req, res) {
           let finalResult;
           let tokensUsed = 0;
 
-          try {
-            finalResult = await humanizeName(domain, domain, false);
-            tokensUsed = finalResult.tokens || 0;
-          } catch (err) {
-            console.error(`humanizeName failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
-            finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
-          }
-
-          // Skip GPT fallback if humanizeName score is high enough
-          if (finalResult.confidenceScore >= 80 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f))) {
-            domainCache.set(domain, finalResult);
-            return { ...finalResult, rowNum, tokens: tokensUsed };
-          }
-
-          // Fallback to GPT-4 if needed
-          if (!finalResult.name || finalResult.confidenceScore < 60) {
-            for (let attempt = 1; attempt <= 2; attempt++) {
-              try {
-                const prompt = `Domain: ${domain}, extract dealership name. Format response as ##Name: [Dealership Name]`;
-                const gptRaw = await callOpenAI(prompt, {
-                  systemMessage: "You are a helpful assistant that extracts dealership names.",
-                  max_tokens: 50,
-                  temperature: 0.2,
-                });
-                const match = gptRaw?.match(/##Name:\s*(.+)/);
-                const gptName = match?.[1]?.trim();
-                tokensUsed += Math.ceil(prompt.length / 4);
-                totalTokens += Math.ceil(prompt.length / 4);
-                if (gptName) {
-                  finalResult = await humanizeName(gptName, domain, false, true);
-                  finalResult.flags.push("GPTFallbackUsed");
-                  console.log(`Row ${rowNum}: GPT fallback successful`);
-                  break;
-                }
-              } catch (err) {
-                console.error(`GPT fallback attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
-                if (attempt === 2) {
-                  finalResult.flags.push("GPTFailed");
-                  fallbackTriggers.push({ domain, reason: "GPTFailed", error: err.message });
-                }
-                await new Promise(res => setTimeout(res, 500));
+          // Primary humanizeName call
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              finalResult = await humanizeName(domain, domain, false);
+              tokensUsed = finalResult.tokens || 0;
+              break;
+            } catch (err) {
+              console.error(`humanizeName attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
+              if (attempt === 2) {
+                finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
               }
+              await new Promise(res => setTimeout(res, 500));
             }
           }
 
-          // Metadata fallback if flagged
+          // Skip further fallbacks if score is high enough
           const forceReviewFlags = [
             "TooGeneric",
             "CityNameOnly",
@@ -232,40 +202,12 @@ export default async function handler(req, res) {
             "FuzzyCityMatch",
             "NotPossessiveFriendly"
           ];
-          if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
-            const meta = await fetchWebsiteMetadata(domain);
-            const logoText = await extractLogoText(domain, meta.html);
-            const prompt = `Domain: ${domain}, Redirected: ${meta.redirectedDomain}, Title: ${meta.title}, Description: ${meta.description}, Logo: ${logoText}. Extract the dealership name. Format response as ##Name: [Dealership Name]`;
-
-            for (let attempt = 1; attempt <= 2; attempt++) {
-              try {
-                const metaRaw = await callOpenAI(prompt, {
-                  systemMessage: "You are a helpful assistant that extracts dealership names.",
-                  max_tokens: 50,
-                  temperature: 0.2,
-                });
-                const match = metaRaw?.match(/##Name:\s*(.+)/);
-                const metaName = match?.[1]?.trim();
-                tokensUsed += Math.ceil(prompt.length / 4);
-                totalTokens += Math.ceil(prompt.length / 4);
-                if (metaName && metaName !== finalResult.name) {
-                  finalResult = await humanizeName(metaName, domain, false, true);
-                  finalResult.flags.push("MetaFallbackUsed");
-                  console.log(`Row ${rowNum}: Metadata fallback successful`);
-                  break;
-                }
-              } catch (err) {
-                console.error(`Metadata fallback attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
-                if (attempt === 2) {
-                  finalResult.flags.push("MetaFallbackFailed");
-                  fallbackTriggers.push({ domain, reason: "MetaFallbackFailed", error: err.message });
-                }
-                await new Promise(res => setTimeout(res, 500));
-              }
-            }
+          if (finalResult.confidenceScore >= 80 && !finalResult.flags.some(f => forceReviewFlags.includes(f))) {
+            domainCache.set(domain, finalResult);
+            return { ...finalResult, rowNum, tokens: tokensUsed };
           }
 
-          // Final fallback to local API
+          // Fallback to local API if needed
           if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const fallback = await callFallbackAPI(domain, rowNum);
             if (fallback.name && fallback.confidenceScore >= 80) {
@@ -278,9 +220,9 @@ export default async function handler(req, res) {
           }
 
           // Add to manual review if still low
-          if (finalResult.confidenceScore < 50 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
+          if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             manualReviewQueue.push({ domain, name: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags, rowNum });
-            finalResult = { name: finalResult.name || "", confidenceScore: Math.max(finalResult.confidenceScore, 50), flags: [...finalResult.flags, "LowConfidence"], rowNum };
+            finalResult = { name: finalResult.name || "", confidenceScore: Math.max(finalResult.confidenceScore, 60), flags: [...finalResult.flags, "LowConfidence"], rowNum };
           }
 
           domainCache.set(domain, {
