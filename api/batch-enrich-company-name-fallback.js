@@ -1,9 +1,9 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.4 - Optimized 2025-04-15)
-// Updated to improve timeout handling, enhance retry logic, align with humanize.js updates, and improve logging
+// api/batch-enrich-company-name-fallback.js (Version 1.0.5 - Optimized 2025-04-07)
+// Updated to align with humanize.js (spacing validator), improve timeout handling, and sync with batch-enrich.js
 
 import { humanizeName } from "./lib/humanize.js";
 
-// Concurrency limiter (same as batch-enrich.js)
+// Concurrency limiter
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
@@ -22,7 +22,7 @@ const pLimit = (concurrency) => {
   });
 };
 
-// Stream to string helper for Vercel (aligned with batch-enrich.js)
+// Stream to string helper for Vercel
 const streamToString = async (stream) => {
   const chunks = [];
   for await (const chunk of stream) {
@@ -32,7 +32,7 @@ const streamToString = async (stream) => {
 };
 
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.4 - Optimized 2025-04-15");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.5 - Optimized 2025-04-07");
 
   try {
     let leads;
@@ -55,13 +55,13 @@ export default async function handler(req, res) {
     const manualReviewQueue = [];
     let totalTokens = 0;
 
-    const BATCH_SIZE = 3; 
+    const BATCH_SIZE = 5; // Aligned with system overview and batch-enrich.js
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 8000) {
+      if (Date.now() - startTime > 10000) { // Extended to 10s for free tier; adjust to 18000 for paid tier
         console.log("Partial response due to timeout");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
       }
@@ -77,32 +77,22 @@ export default async function handler(req, res) {
           let finalResult;
           let tokensUsed = 0;
 
-          // Retry logic for humanizeName with OpenAI
-          for (let attempt = 1; attempt <= 3; attempt++) { // Increased to 3 retries
+          // Simplified retry logic (humanize.js handles OpenAI internally)
+          for (let attempt = 1; attempt <= 2; attempt++) {
             try {
-              finalResult = await humanizeName(domain, domain, false); // Default call
+              finalResult = await humanizeName(domain, domain, false);
               tokensUsed = finalResult.tokens || 0;
               break;
             } catch (err) {
               console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed: ${err.message}, Stack: ${err.stack}`);
-              if (attempt === 3) {
-                // Fallback without OpenAI
-                try {
-                  finalResult = await humanizeName(domain, domain, false, true); // Skip OpenAI
-                  finalResult.flags = [...(finalResult.flags || []), "OpenAIFallbackUsed"];
-                  tokensUsed = finalResult.tokens || 0;
-                  console.log(`Row ${rowNum}: OpenAI fallback used`);
-                } catch (fallbackErr) {
-                  console.error(`Row ${rowNum}: Fallback humanizeName failed: ${fallbackErr.message}, Stack: ${fallbackErr.stack}`);
-                  finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
-                }
+              if (attempt === 2) {
+                finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
               }
-              await new Promise(res => setTimeout(res, 1000)); // Increased delay to 1s between retries
+              await new Promise(res => setTimeout(res, 1000));
             }
           }
 
           finalResult.flags = [...(finalResult.flags || []), "FallbackUsed"];
-
           console.log(`Row ${rowNum}: ${JSON.stringify(finalResult)}`);
 
           const forceReviewFlags = [
@@ -111,12 +101,12 @@ export default async function handler(req, res) {
             "PossibleAbbreviation",
             "BadPrefixOf",
             "CarBrandSuffixRemaining",
-            "FuzzyCityMatch", // Removed duplicate entry
+            "FuzzyCityMatch",
             "NotPossessiveFriendly"
           ];
 
           if (
-            finalResult.confidenceScore < 50 ||
+            finalResult.confidenceScore < 60 || // Raised to 60 to account for GPTSpacingValidated boosts
             (Array.isArray(finalResult.flags) && finalResult.flags.some(f => forceReviewFlags.includes(f)))
           ) {
             manualReviewQueue.push({
