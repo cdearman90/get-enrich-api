@@ -87,9 +87,9 @@ export default async function handler(req, res) {
     ];
 
         if (
-          finalResult.confidenceScore < 50 ||
-          finalResult.flags.some(f => skipFlags.includes(f))
-        ) {
+  finalResult.confidenceScore < 50 ||
+  (Array.isArray(finalResult.flags) && finalResult.flags.some(f => forceReviewFlags.includes(f)))
+)
           manualReviewQueue.push({
             domain,
             name: finalResult.name,
