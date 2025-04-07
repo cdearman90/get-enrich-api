@@ -785,20 +785,29 @@ function correctBadEndings(name) {
 // OpenAI Fuzzy Matching for City Detection (requires OpenAI API setup)
 const cityCache = new Map();
 
-async function fuzzyMatchCity(token) {
-  if (cityCache.has(token)) return cityCache.get(token);
+export async function fuzzyMatchCity(token) {
+  if (!token || typeof token !== "string") return null;
+  const normalized = token.toLowerCase().trim();
+  if (cityCache.has(normalized)) return cityCache.get(normalized);
+
   try {
-    const prompt = `Determine if the following token is a U.S. city name, allowing for misspellings or variations. If it is, return the corrected city name with proper capitalization (e.g., "grenwich" → "Greenwich"). If not, return null.\nToken: ${token}`;
+    const prompt = `Is "${token}" a U.S. city name (allowing for typos)? If yes, return the correct name. Else, return null.`;
     const response = await callOpenAI(prompt, {
       systemMessage: "You are a helpful assistant that identifies U.S. city names.",
       max_tokens: 50,
       temperature: 0.3,
     });
-    const result = response && response !== "null" ? response : null;
-    cityCache.set(token, result);
+
+    const trimmed = (response || "").trim();
+    const isInvalid = !trimmed || trimmed.toLowerCase() === "null" || trimmed.toLowerCase() === token.toLowerCase();
+    const result = isInvalid ? null : trimmed;
+
+    cityCache.set(normalized, result);
     return result;
+
   } catch (err) {
-    console.error(`OpenAI fuzzyMatchCity failed for ${token}: ${err.message}`);
+    console.error(`fuzzyMatchCity failed for "${token}": ${err.message}`);
+    cityCache.set(normalized, null);
     return null;
   }
 }
