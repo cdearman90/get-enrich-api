@@ -1,4 +1,6 @@
 // api/batch-enrich.js (Version 3.5 - Finalized with Fuzzy Override Logic)
+// Updated to optimize for timeouts, add retry logic, and align with humanize.js updates
+
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
 
@@ -27,7 +29,7 @@ const pLimit = (concurrency) => {
 // Cache
 const domainCache = new Map();
 
-// Fuzzy domain matcher (invoked below)
+// Fuzzy domain matcher
 const fuzzyMatchDomain = (inputDomain, knownDomains) => {
   try {
     const normalizedInput = inputDomain.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "").trim();
@@ -47,7 +49,7 @@ const fuzzyMatchDomain = (inputDomain, knownDomains) => {
 const fetchWebsiteMetadata = async (domain) => {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // Increased to 3s for reliability
     const response = await fetch(`https://${domain}`, {
       redirect: "follow",
       headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
@@ -59,7 +61,7 @@ const fetchWebsiteMetadata = async (domain) => {
     const metaMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
     return { title: titleMatch?.[1] || "", description: metaMatch?.[1] || "", redirectedDomain: response.url, html };
   } catch (err) {
-    console.error(`Metadata fetch failed for ${domain}: ${err.message}`);
+    console.error(`Metadata fetch failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
     return { title: "", description: "", redirectedDomain: domain, error: err.message };
   }
 };
@@ -75,35 +77,40 @@ const extractLogoText = async (domain, html) => {
     for (let brand of CAR_BRANDS) logoText = logoText.toLowerCase().replace(brand, "").trim();
     return logoText || "No logo text available";
   } catch (err) {
-    console.error(`Logo extraction failed for ${domain}: ${err.message}`);
+    console.error(`Logo extraction failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
     return "No logo text available";
   }
 };
 
-// Safe POST fallback endpoint
+// Safe POST fallback endpoint with retry
 const callFallbackAPI = async (domain, rowNum) => {
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 4000);
-    const response = await fetch(VERCEL_API_ENRICH_FALLBACK_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify([{ domain, rowNum }]),
-      signal: controller.signal
-    });
-    clearTimeout(timeoutId);
-    const result = await response.json();
-    if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
-    return result.results[0] || { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"] };
-  } catch (err) {
-    console.error(`Fallback API error for ${domain}: ${err.message}, Stack: ${err.stack}`);
-    return { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"], error: err.message };
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const response = await fetch(VERCEL_API_ENRICH_FALLBACK_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify([{ domain, rowNum }]),
+        signal: controller.signal
+      });
+      clearTimeout(timeoutId);
+      const result = await response.json();
+      if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
+      return result.results[0] || { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"] };
+    } catch (err) {
+      console.error(`Fallback API attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
+      if (attempt === 2) {
+        return { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"], error: err.message };
+      }
+      await new Promise(res => setTimeout(res, 500)); // Delay between retries
+    }
   }
 };
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.4.9 - Fuzzy Override Logic Active");
+  console.log("batch-enrich.js Version 3.5 - Finalized with Fuzzy Override Logic"); // Fixed version number
 
   try {
     let leads;
@@ -121,7 +128,7 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(2);
+    const limit = pLimit(1); // Reduced to 1 to minimize timeout risk
     const results = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
@@ -133,7 +140,8 @@ export default async function handler(req, res) {
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 9000) {
+      if (Date.now() - startTime > 8000) { // Reduced to 8s for safer buffer
+        console.log("Partial response due to timeout");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
 
@@ -159,47 +167,63 @@ export default async function handler(req, res) {
           if (domainCache.has(domain)) return { ...domainCache.get(domain), rowNum };
 
           let finalResult;
+          let tokensUsed = 0;
+
           try {
             finalResult = await humanizeName(domain, domain, false);
+            tokensUsed = finalResult.tokens || 0;
           } catch (err) {
-            console.error(`humanizeName failed for ${domain}: ${err.message}`);
+            console.error(`humanizeName failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
             finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
           }
 
-          let tokensUsed = finalResult.tokens || 0;
-
           // Fallback to GPT-4 if needed
           if (!finalResult.name || finalResult.confidenceScore < 60) {
-            try {
-              const prompt = `Domain: ${domain}, extract dealership name. Format response as ##Name: [Dealership Name]`;
-              const gptRaw = await callOpenAI(prompt, {
-                systemMessage: "You are a helpful assistant that extracts dealership names.",
-                max_tokens: 50,
-                temperature: 0.2,
-              });
-              const match = gptRaw?.match(/##Name:\s*(.+)/);
-              const gptName = match?.[1]?.trim();
-              tokensUsed += Math.ceil(prompt.length / 4);
-              totalTokens += Math.ceil(prompt.length / 4);
-              if (gptName) {
-                finalResult = await humanizeName(gptName, domain, false, true);
-                finalResult.flags.push("GPTFallbackUsed");
+            for (let attempt = 1; attempt <= 2; attempt++) {
+              try {
+                const prompt = `Domain: ${domain}, extract dealership name. Format response as ##Name: [Dealership Name]`;
+                const gptRaw = await callOpenAI(prompt, {
+                  systemMessage: "You are a helpful assistant that extracts dealership names.",
+                  max_tokens: 50,
+                  temperature: 0.2,
+                });
+                const match = gptRaw?.match(/##Name:\s*(.+)/);
+                const gptName = match?.[1]?.trim();
+                tokensUsed += Math.ceil(prompt.length / 4);
+                totalTokens += Math.ceil(prompt.length / 4);
+                if (gptName) {
+                  finalResult = await humanizeName(gptName, domain, false, true);
+                  finalResult.flags.push("GPTFallbackUsed");
+                  console.log(`Row ${rowNum}: GPT fallback successful`);
+                  break;
+                }
+              } catch (err) {
+                console.error(`GPT fallback attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
+                if (attempt === 2) {
+                  finalResult.flags.push("GPTFailed");
+                  fallbackTriggers.push({ domain, reason: "GPTFailed", error: err.message });
+                }
+                await new Promise(res => setTimeout(res, 500)); // Delay between retries
               }
-            } catch (err) {
-              console.error(`GPT fallback failed for ${domain}: ${err.message}`);
-              finalResult.flags.push("GPTFailed");
-              fallbackTriggers.push({ domain, reason: "GPTFailed", error: err.message });
             }
           }
 
           // Metadata fallback if flagged
-          const forceReviewFlags = ["TooGeneric", "CityNameOnly", "PossibleAbbreviation", "BadPrefixOf", "CarBrandSuffixRemaining", "FuzzyCityMatch"];
+          const forceReviewFlags = [
+            "TooGeneric",
+            "CityNameOnly",
+            "PossibleAbbreviation",
+            "BadPrefixOf",
+            "CarBrandSuffixRemaining",
+            "FuzzyCityMatch",
+            "NotPossessiveFriendly" // Added from updated humanize.js
+          ];
           if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const meta = await fetchWebsiteMetadata(domain);
             const logoText = await extractLogoText(domain, meta.html);
             const prompt = `Domain: ${domain}, Redirected: ${meta.redirectedDomain}, Title: ${meta.title}, Description: ${meta.description}, Logo: ${logoText}. Extract the dealership name. Format response as ##Name: [Dealership Name]`;
 
-            for (let i = 0; i < 2; i++) {
+            for (let attempt = 1; attempt <= 2; attempt++) {
               try {
                 const metaRaw = await callOpenAI(prompt, {
                   systemMessage: "You are a helpful assistant that extracts dealership names.",
@@ -213,13 +237,16 @@ export default async function handler(req, res) {
                 if (metaName && metaName !== finalResult.name) {
                   finalResult = await humanizeName(metaName, domain, false, true);
                   finalResult.flags.push("MetaFallbackUsed");
+                  console.log(`Row ${rowNum}: Metadata fallback successful`);
                   break;
                 }
               } catch (err) {
-                if (i === 1) {
+                console.error(`Metadata fallback attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
+                if (attempt === 2) {
                   finalResult.flags.push("MetaFallbackFailed");
-                  fallbackTriggers.push({ domain, reason: "MetaFallbackFailed" });
+                  fallbackTriggers.push({ domain, reason: "MetaFallbackFailed", error: err.message });
                 }
+                await new Promise(res => setTimeout(res, 500)); // Delay between retries
               }
             }
           }
@@ -229,6 +256,7 @@ export default async function handler(req, res) {
             const fallback = await callFallbackAPI(domain, rowNum);
             if (fallback.name && fallback.confidenceScore >= 80) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
+              console.log(`Row ${rowNum}: Fallback API successful`);
             } else {
               finalResult.flags.push("FallbackAPIFailed");
               fallbackTriggers.push({ domain, reason: "FallbackAPIFailed" });
@@ -256,7 +284,7 @@ export default async function handler(req, res) {
 
     return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
   } catch (err) {
-    console.error(`Handler error: ${err.message}`);
+    console.error(`Handler error: ${err.message}, Stack: ${err.stack}`);
     return res.status(500).json({ error: "Server error", details: err.message });
   }
 }
