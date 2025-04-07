@@ -1,3 +1,5 @@
+import { callOpenAI } from './openai.js';
+
 // lib/humanize.js
 export const COMMON_WORDS = [
   "and", "auto", "autogroup", "automall", "best", "bmw", "cars", "center", "chevrolet", "chevy", "classic",
@@ -787,7 +789,11 @@ async function fuzzyMatchCity(token) {
   if (cityCache.has(token)) return cityCache.get(token);
   try {
     const prompt = `Determine if the following token is a U.S. city name, allowing for misspellings or variations. If it is, return the corrected city name with proper capitalization (e.g., "grenwich" → "Greenwich"). If not, return null.\nToken: ${token}`;
-    const response = await callOpenAI(prompt); // Replace with actual OpenAI API call
+    const response = await callOpenAI(prompt, {
+      systemMessage: "You are a helpful assistant that identifies U.S. city names.",
+      max_tokens: 50,
+      temperature: 0.3,
+    });
     const result = response && response !== "null" ? response : null;
     cityCache.set(token, result);
     return result;
@@ -796,6 +802,32 @@ async function fuzzyMatchCity(token) {
     return null;
   }
 }
+
+function runUnitTests() {
+  const tests = [
+    { domain: 'athensford.com', expected: 'Athens Ford' },
+    { domain: 'karlchevroletstuart.com', expected: 'Karl Stuart' },
+    { domain: 'gusmachadoford.com', expected: 'Gus Machado' },
+    { domain: 'duvalford.com', expected: 'Duval' },
+    { domain: 'fordofdalton.com', expected: 'Ford Dalton' },
+    { domain: 'devineford.com', expected: 'Devine' },
+  ];
+
+  let passed = 0;
+  for (const test of tests) {
+    const result = await humanizeName(test.domain, test.domain, false);
+    const finalName = KNOWN_OVERRIDES[test.domain] || result.name;
+    if (finalName === test.expected) {
+      console.log(`Test passed: ${test.domain} → ${finalName}`);
+      passed++;
+    } else {
+      console.log(`Test failed: ${test.domain} → ${finalName} (expected ${test.expected})`);
+    }
+  }
+  console.log(`Unit tests: ${passed}/${tests.length} passed`);
+}
+
+export { humanizeName, CAR_BRANDS, COMMON_WORDS };
 
 export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
