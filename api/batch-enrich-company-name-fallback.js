@@ -1,4 +1,6 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.2 - Optimized 2025-04-10)
+// api/batch-enrich-company-name-fallback.js (Version 1.0.3 - Optimized 2025-04-15)
+// Updated to improve timeout handling, add retry logic for OpenAI, and enhance logging
+
 import { humanizeName } from "./lib/humanize.js";
 
 // Concurrency limiter (same as batch-enrich.js)
@@ -21,7 +23,7 @@ const pLimit = (concurrency) => {
 };
 
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.2 - Optimized 2025-04-10");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.3 - Optimized 2025-04-15");
 
   try {
     let leads;
@@ -40,71 +42,91 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(2); // Limit to 2 concurrent requests
+    const limit = pLimit(1); // Reduced to 1 to minimize timeout risk
     const results = [];
     const manualReviewQueue = [];
 
-    const chunkResults = await Promise.all(
-      leads.map(lead => limit(async () => {
-        if (Date.now() - startTime > 9000) {
-          console.log(`Row ${lead.rowNum}: Skipped due to timeout`);
-          return { name: "", confidenceScore: 0, flags: ["Timeout"], rowNum: lead.rowNum, tokens: 0 };
-        }
-
-        const { domain, rowNum } = lead;
-        if (!domain) {
-          console.error(`Row ${rowNum}: Missing domain`);
-          return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 };
-        }
-
-        let finalResult;
-        try {
-          finalResult = await humanizeName(domain, domain, false); // Default call
-        } catch (err) {
-          console.error(`Row ${rowNum}: humanizeName threw error: ${err.message}, Stack: ${err.stack}`);
-          // Fallback without OpenAI
-          try {
-            finalResult = await humanizeName(domain, domain, false, true); // Skip OpenAI
-            finalResult.flags = [...(finalResult.flags || []), "OpenAIFallbackUsed"];
-          } catch (fallbackErr) {
-            console.error(`Row ${rowNum}: Fallback humanizeName failed: ${fallbackErr.message}, Stack: ${fallbackErr.stack}`);
-            finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
-          }
-        }
-
-        finalResult.flags = [...(finalResult.flags || []), "FallbackUsed"];
-        const tokensUsed = finalResult.tokens || 0;
-
-        console.log(`Row ${rowNum}: ${JSON.stringify(finalResult)}`);
-
-    const forceReviewFlags = [
-      "TooGeneric",
-      "CityNameOnly",
-      "PossibleAbbreviation",
-      "BadPrefixOf",
-      "CarBrandSuffixRemaining",
-      "FuzzyCityMatch" // Added to review OpenAI-detected cities
-    ];
-
-        if (
-  finalResult.confidenceScore < 50 ||
-  (Array.isArray(finalResult.flags) && finalResult.flags.some(f => forceReviewFlags.includes(f)))
-) {
-  manualReviewQueue.push({
-    domain,
-    name: finalResult.name,
-    confidenceScore: finalResult.confidenceScore,
-    flags: finalResult.flags,
-    rowNum
-  });
-  finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], tokens: tokensUsed, rowNum };
-}
-
-        return { ...finalResult, rowNum, tokens: tokensUsed };
-      }))
+    const BATCH_SIZE = 2; // Process in small chunks to stay under 10s limit
+    const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
+      leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
-    results.push(...chunkResults);
+    for (const chunk of leadChunks) {
+      if (Date.now() - startTime > 8000) { // Reduced to 8s to be safer
+        console.log("Partial response due to timeout");
+        return res.status(200).json({ results, manualReviewQueue, partial: true });
+      }
+
+      const chunkResults = await Promise.all(
+        chunk.map(lead => limit(async () => {
+          const { domain, rowNum } = lead;
+          if (!domain) {
+            console.error(`Row ${rowNum}: Missing domain`);
+            return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 };
+          }
+
+          let finalResult;
+          let tokensUsed = 0;
+
+          // Retry logic for humanizeName with OpenAI
+          for (let attempt = 1; attempt <= 2; attempt++) {
+            try {
+              finalResult = await humanizeName(domain, domain, false); // Default call
+              tokensUsed = finalResult.tokens || 0;
+              break;
+            } catch (err) {
+              console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed: ${err.message}, Stack: ${err.stack}`);
+              if (attempt === 2) {
+                // Fallback without OpenAI
+                try {
+                  finalResult = await humanizeName(domain, domain, false, true); // Skip OpenAI
+                  finalResult.flags = [...(finalResult.flags || []), "OpenAIFallbackUsed"];
+                  tokensUsed = finalResult.tokens || 0;
+                  console.log(`Row ${rowNum}: OpenAI fallback used`);
+                } catch (fallbackErr) {
+                  console.error(`Row ${rowNum}: Fallback humanizeName failed: ${fallbackErr.message}, Stack: ${fallbackErr.stack}`);
+                  finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
+                }
+              }
+              await new Promise(res => setTimeout(res, 500)); // Delay between retries
+            }
+          }
+
+          finalResult.flags = [...(finalResult.flags || []), "FallbackUsed"];
+
+          console.log(`Row ${rowNum}: ${JSON.stringify(finalResult)}`);
+
+          const forceReviewFlags = [
+            "TooGeneric",
+            "CityNameOnly",
+            "PossibleAbbreviation",
+            "BadPrefixOf",
+            "CarBrandSuffixRemaining",
+            "FuzzyCityMatch", // Review OpenAI-detected cities
+            "NotPossessiveFriendly", // Added from updated humanize.js
+            "FuzzyCityMatch"
+          ];
+
+          if (
+            finalResult.confidenceScore < 50 ||
+            (Array.isArray(finalResult.flags) && finalResult.flags.some(f => forceReviewFlags.includes(f)))
+          ) {
+            manualReviewQueue.push({
+              domain,
+              name: finalResult.name,
+              confidenceScore: finalResult.confidenceScore,
+              flags: finalResult.flags,
+              rowNum
+            });
+            finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], tokens: tokensUsed, rowNum };
+          }
+
+          return { ...finalResult, rowNum, tokens: tokensUsed };
+        }))
+      );
+
+      results.push(...chunkResults);
+    }
 
     console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review`);
     return res.status(200).json({ results, manualReviewQueue, partial: false });
