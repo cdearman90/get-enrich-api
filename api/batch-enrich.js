@@ -1,5 +1,5 @@
-// api/batch-enrich.js (Version 3.5 - Finalized with Fuzzy Override Logic)
-// Updated to optimize for timeouts, add retry logic, and align with humanize.js updates
+// api/batch-enrich.js (Version 3.6 - Fully Patched and Optimized)
+// Updated to optimize for timeouts, enhance retry logic, align with humanize.js updates, and improve error handling
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
@@ -49,7 +49,7 @@ const fuzzyMatchDomain = (inputDomain, knownDomains) => {
 const fetchWebsiteMetadata = async (domain) => {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // Increased to 3s for reliability
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3s timeout for reliability
     const response = await fetch(`https://${domain}`, {
       redirect: "follow",
       headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
@@ -84,7 +84,7 @@ const extractLogoText = async (domain, html) => {
 
 // Safe POST fallback endpoint with retry
 const callFallbackAPI = async (domain, rowNum) => {
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) { // Increased retries to 3
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000);
@@ -100,24 +100,32 @@ const callFallbackAPI = async (domain, rowNum) => {
       return result.results[0] || { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"] };
     } catch (err) {
       console.error(`Fallback API attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
-      if (attempt === 2) {
+      if (attempt === 3) {
         return { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"], error: err.message };
       }
-      await new Promise(res => setTimeout(res, 500)); // Delay between retries
+      await new Promise(res => setTimeout(res, 1000)); // Increased delay to 1s between retries
     }
   }
 };
 
+// Stream to string helper for Vercel
+const streamToString = async (stream) => {
+  const chunks = [];
+  for await (const chunk of stream) {
+    chunks.push(chunk);
+  }
+  return Buffer.concat(chunks).toString("utf-8");
+};
+
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.5 - Finalized with Fuzzy Override Logic"); // Fixed version number
+  console.log("batch-enrich.js Version 3.6 - Fully Patched and Optimized");
 
   try {
     let leads;
     try {
-      const buffers = [];
-      for await (const chunk of req) buffers.push(chunk);
-      leads = JSON.parse(Buffer.concat(buffers).toString("utf-8"));
+      const rawBody = await streamToString(req);
+      leads = JSON.parse(rawBody);
     } catch (err) {
       console.error(`JSON parse error: ${err.message}, Stack: ${err.stack}`);
       return res.status(400).json({ error: "Invalid JSON", details: err.message });
@@ -128,19 +136,19 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(1); // Reduced to 1 to minimize timeout risk
+    const limit = pLimit(1); // Kept at 1 to minimize timeout risk
     const results = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
     const fallbackTriggers = [];
 
-    const BATCH_SIZE = 2;
+    const BATCH_SIZE = 5; // Increased to 5 for better throughput after optimization
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 8000) { // Reduced to 8s for safer buffer
+      if (Date.now() - startTime > 8000) {
         console.log("Partial response due to timeout");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
@@ -148,7 +156,7 @@ export default async function handler(req, res) {
       const chunkResults = await Promise.all(
         chunk.map(lead => limit(async () => {
           const { domain, rowNum } = lead;
-          if (!domain) return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum };
+          if (!domain) return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 };
 
           const domainLower = domain.toLowerCase();
 
@@ -177,6 +185,12 @@ export default async function handler(req, res) {
             finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
           }
 
+          // Skip GPT fallback if humanizeName score is high enough
+          if (finalResult.confidenceScore >= 80 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f))) {
+            domainCache.set(domain, finalResult);
+            return { ...finalResult, rowNum, tokens: tokensUsed };
+          }
+
           // Fallback to GPT-4 if needed
           if (!finalResult.name || finalResult.confidenceScore < 60) {
             for (let attempt = 1; attempt <= 2; attempt++) {
@@ -203,7 +217,7 @@ export default async function handler(req, res) {
                   finalResult.flags.push("GPTFailed");
                   fallbackTriggers.push({ domain, reason: "GPTFailed", error: err.message });
                 }
-                await new Promise(res => setTimeout(res, 500)); // Delay between retries
+                await new Promise(res => setTimeout(res, 500));
               }
             }
           }
@@ -216,7 +230,7 @@ export default async function handler(req, res) {
             "BadPrefixOf",
             "CarBrandSuffixRemaining",
             "FuzzyCityMatch",
-            "NotPossessiveFriendly" // Added from updated humanize.js
+            "NotPossessiveFriendly"
           ];
           if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const meta = await fetchWebsiteMetadata(domain);
@@ -246,7 +260,7 @@ export default async function handler(req, res) {
                   finalResult.flags.push("MetaFallbackFailed");
                   fallbackTriggers.push({ domain, reason: "MetaFallbackFailed", error: err.message });
                 }
-                await new Promise(res => setTimeout(res, 500)); // Delay between retries
+                await new Promise(res => setTimeout(res, 500));
               }
             }
           }
