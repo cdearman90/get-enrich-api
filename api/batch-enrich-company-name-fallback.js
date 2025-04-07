@@ -1,7 +1,8 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.7 - Optimized 2025-04-07)
-// Updated to accept 2-word fallbacks at 75+, align with humanize.js, and sync with batch-enrich.js v3.9
+// api/batch-enrich-company-name-fallback.js (Version 1.0.8 - Optimized 2025-04-07)
+// Updated to accept 2-word fallbacks at 75+, align with humanize.js and batch-enrich.js v4.0,
+// enhance logging, and sync acceptability thresholds
 
-import { humanizeName } from "./lib/humanize.js";
+import { humanizeName } from "./lib/humanize.js"; // Aligned with single-export humanize.js
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -39,13 +40,14 @@ const streamToString = async (stream) => {
 };
 
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.7 - Optimized 2025-04-07");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.8 - Optimized 2025-04-07");
 
   try {
     let leads;
     try {
       const rawBody = await streamToString(req);
       leads = JSON.parse(rawBody);
+      console.log(`Received ${leads.length} leads for fallback processing`);
     } catch (err) {
       console.error(`JSON parse error: ${err.message}, Stack: ${err.stack}`);
       return res.status(400).json({ error: "Invalid JSON", details: err.message });
@@ -57,19 +59,19 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(1); // Kept at 1 for stability
+    const limit = pLimit(1); // Conservative concurrency for stability
     const results = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
 
-    const BATCH_SIZE = 5; // Aligned with system overview and batch-enrich.js v3.9
+    const BATCH_SIZE = 5; // Aligned with batch-enrich.js v4.0 and Google Apps Script
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 18000) { // 18s timeout for paid tier
-        console.log("Partial response due to timeout");
+      if (Date.now() - startTime > 18000) { // 18s timeout for Vercel paid tier
+        console.log("Partial response due to timeout after 18s");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
       }
 
@@ -81,6 +83,7 @@ export default async function handler(req, res) {
             return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 };
           }
 
+          console.log(`Processing fallback for ${domain} (Row ${rowNum})`);
           let finalResult;
           let tokensUsed = 0;
 
@@ -88,8 +91,8 @@ export default async function handler(req, res) {
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
               finalResult = await humanizeName(domain, domain, false);
-              console.log(`Row ${rowNum}: humanizeName output: ${JSON.stringify(finalResult)}`);
               tokensUsed = finalResult.tokens || 0;
+              console.log(`Row ${rowNum}: humanizeName attempt ${attempt} success: ${JSON.stringify(finalResult)}`);
               break;
             } catch (err) {
               console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed: ${err.message}, Stack: ${err.stack}`);
@@ -112,10 +115,10 @@ export default async function handler(req, res) {
             "NotPossessiveFriendly"
           ];
 
-          // Accept scores >= 75 unless flagged TooGeneric or CityNameOnly
+          // Align with batch-enrich.js v4.0 and Google Apps Script
           if (
             finalResult.confidenceScore < 75 ||
-            (Array.isArray(finalResult.flags) && finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f)))
+            finalResult.flags.some(f => ["TooGeneric", "CityNameOnly", "PossibleAbbreviation"].includes(f))
           ) {
             manualReviewQueue.push({
               domain,
@@ -125,6 +128,9 @@ export default async function handler(req, res) {
               rowNum
             });
             finalResult = { name: "", confidenceScore: 0, flags: [...finalResult.flags, "Skipped"], tokens: tokensUsed, rowNum };
+            console.log(`Row ${rowNum}: Skipped and added to manual review: ${JSON.stringify(finalResult)}`);
+          } else {
+            console.log(`Row ${rowNum}: Acceptable fallback result: ${JSON.stringify(finalResult)}`);
           }
 
           totalTokens += tokensUsed;
@@ -135,7 +141,7 @@ export default async function handler(req, res) {
       results.push(...chunkResults);
     }
 
-    console.log(`Completed: ${results.length} results, ${manualReviewQueue.length} for review, Total tokens: ${totalTokens}`);
+    console.log(`Fallback completed: ${results.length} results, ${manualReviewQueue.length} for review, Total tokens: ${totalTokens}`);
     return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: false });
 
   } catch (err) {
