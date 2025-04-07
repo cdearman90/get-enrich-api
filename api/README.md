@@ -49,7 +49,7 @@ Script batch-enrich-franchise.js: Version v1.0.0, Updated 2025-04-07
 
 Development
 Run Locally: vercel dev
-Node.js: 18 or higher required
+Node.js: 22 or higher required
 Logging: Detailed error traces and processing steps for transparency
 
 Development Notes:
