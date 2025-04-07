@@ -2,7 +2,7 @@
 // Updated to fix Vercel errors, align with humanize.js and Google Apps Script,
 // accept 2-word fallbacks at 75+, remove redundant metadata fetches, and enhance logging
 
-import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES } from "./lib/humanize.js";
+import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
 
 // Concurrency limiter
@@ -106,12 +106,14 @@ export default async function handler(req, res) {
     try {
       const rawBody = await streamToString(req);
       leads = JSON.parse(rawBody);
+      console.log(`Received ${leads.length} leads for processing`);
     } catch (err) {
       console.error(`JSON parse error: ${err.message}, Stack: ${err.stack}`);
       return res.status(400).json({ error: "Invalid JSON", details: err.message });
     }
 
     if (!Array.isArray(leads) || leads.length === 0) {
+      console.error("Missing or invalid lead list");
       return res.status(400).json({ error: "Missing or invalid lead list" });
     }
 
@@ -136,7 +138,10 @@ export default async function handler(req, res) {
       const chunkResults = await Promise.all(
         chunk.map(lead => limit(async () => {
           const { domain, rowNum } = lead;
-          if (!domain) return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 };
+          if (!domain) {
+            console.error(`Row ${rowNum}: Missing domain`);
+            return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 };
+          }
 
           const domainLower = domain.toLowerCase();
 
@@ -144,7 +149,7 @@ export default async function handler(req, res) {
           const matchedOverrideDomain = fuzzyMatchDomain(domainLower, Object.keys(KNOWN_OVERRIDES));
           if (matchedOverrideDomain) {
             const overrideName = KNOWN_OVERRIDES[matchedOverrideDomain];
-            console.log(`Fuzzy override match for ${domain}: ${overrideName}`);
+            console.log(`Row ${rowNum}: Fuzzy override match for ${domain}: ${overrideName}`);
             return {
               name: overrideName,
               confidenceScore: 100,
@@ -155,8 +160,9 @@ export default async function handler(req, res) {
           }
 
           if (domainCache.has(domainLower)) {
-            console.log(`Cache hit for ${domain}: ${JSON.stringify(domainCache.get(domainLower))}`);
-            return { ...domainCache.get(domainLower), rowNum };
+            const cachedResult = domainCache.get(domainLower);
+            console.log(`Row ${rowNum}: Cache hit for ${domain}: ${JSON.stringify(cachedResult)}`);
+            return { ...cachedResult, rowNum };
           }
 
           let finalResult;
@@ -167,10 +173,10 @@ export default async function handler(req, res) {
             try {
               finalResult = await humanizeName(domain, domain, false);
               tokensUsed = finalResult.tokens || 0;
-              console.log(`humanizeName attempt ${attempt} success for ${domain}: ${JSON.stringify(finalResult)}`);
+              console.log(`Row ${rowNum}: humanizeName attempt ${attempt} success for ${domain}: ${JSON.stringify(finalResult)}`);
               break;
             } catch (err) {
-              console.error(`humanizeName attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
+              console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
               if (attempt === 2) {
                 finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
               }
@@ -178,7 +184,7 @@ export default async function handler(req, res) {
             }
           }
 
-          // Acceptability criteria aligned with Google Apps Script
+          // Acceptability criteria aligned with Google Apps Script and batch-enrich-company-name-fallback.js
           const forceReviewFlags = [
             "TooGeneric",
             "CityNameOnly",
@@ -190,8 +196,12 @@ export default async function handler(req, res) {
           ];
           const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f));
           if (isAcceptable) {
-            domainCache.set(domainLower, finalResult);
-            console.log(`Acceptable result for ${domain}: ${JSON.stringify(finalResult)}`);
+            domainCache.set(domainLower, {
+              name: finalResult.name,
+              confidenceScore: finalResult.confidenceScore,
+              flags: finalResult.flags
+            });
+            console.log(`Row ${rowNum}: Acceptable result for ${domain}: ${JSON.stringify(finalResult)}`);
             return { ...finalResult, rowNum, tokens: tokensUsed };
           }
 
@@ -210,10 +220,21 @@ export default async function handler(req, res) {
           }
 
           // Manual review for low-confidence or problematic results
-          if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f))) {
-            manualReviewQueue.push({ domain, name: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags, rowNum });
-            finalResult = { name: finalResult.name || "", confidenceScore: Math.max(finalResult.confidenceScore, 60), flags: [...finalResult.flags, "LowConfidence"], rowNum };
-            console.log(`Row ${rowNum}: Added to manual review: ${JSON.stringify(finalResult)}`);
+          if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
+            manualReviewQueue.push({
+              domain,
+              name: finalResult.name,
+              confidenceScore: finalResult.confidenceScore,
+              flags: finalResult.flags,
+              rowNum
+            });
+            finalResult = {
+              name: finalResult.name || "",
+              confidenceScore: Math.max(finalResult.confidenceScore, 60),
+              flags: [...finalResult.flags, "LowConfidence"],
+              rowNum
+            };
+            console.log(`Row ${rowNum}: Added to manual review due to low confidence or flags: ${JSON.stringify(finalResult)}`);
           }
 
           domainCache.set(domainLower, {
@@ -222,15 +243,15 @@ export default async function handler(req, res) {
             flags: finalResult.flags
           });
 
+          totalTokens += tokensUsed;
           return { ...finalResult, rowNum, tokens: tokensUsed };
         }))
       );
 
       results.push(...chunkResults);
-      totalTokens += chunkResults.reduce((sum, r) => sum + (r.tokens || 0), 0);
     }
 
-    console.log(`Batch completed: ${results.length} results, ${manualReviewQueue.length} for review, ${totalTokens} tokens used`);
+    console.log(`Batch completed: ${results.length} results, ${manualReviewQueue.length} for review, ${totalTokens} tokens used, ${fallbackTriggers.length} fallback triggers`);
     return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
   } catch (err) {
     console.error(`Handler error: ${err.message}, Stack: ${err.stack}`);
