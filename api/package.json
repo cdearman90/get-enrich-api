@@ -4,6 +4,6 @@
   "version": "1.0.0",
   "dependencies": {},
   "engines": {
-    "node": "18.x"
+    "node": ">=22"
   }
 }
