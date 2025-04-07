@@ -1,69 +1,65 @@
-# get-enrich-api
+get-enrich-api
+A Vercel-based enrichment API powering cold-email dealership campaigns in the ShowRevv Lead Processing Tools.
 
-A Vercel API for enriching lead data in the ShowRevv Lead Processing Tools Google Apps Script project.
+Purpose + Architecture
+This API provides precision-cleaning and enrichment for dealership lead data, optimizing cold outreach campaigns. It supports domain-to-name cleaning, title/location normalization, and franchise group assignment, integrating seamlessly with Google Apps Script via the ShowRevv Lead Processing Tools.
+Google Sheets (batchCleanCompanyNames.gs)
+   /api/batch-enrich (v4.0)              Cleans company names
+   /api/batch-enrich-company-name-fallback (v1.0.8) Fallback cleaning
+   /api/batch-clean-titles-and-locations Normalizes Job Title, City, State
+   /api/batch-enrich-franchise (v1.0.0)  Assigns Franchise Group
+   
+Endpoints
 
-## Overview
-This API provides endpoints for cleaning and enriching lead data, such as job titles, locations, company names, and franchise groups. It is used by the ShowRevv Lead Processing Tools script to process leads in batches, ensuring data quality for automotive dealership leads.
+/batch-clean-titles-and-locations endpoint: Cleans Job Title, City, and State fields. Method is POST. Payload example: [{ "title": "gen. manager", "city": "los angeles ca", "state": "california", "rowNum": 1 }, ...]. Response example: { "results": [{ "title": "General Manager", "city": "Los Angeles", "state": "CA", "rowNum": 1 }], "partial": false }. Notes: Batch size of 5, 18s timeout.
 
-## Endpoints
-- **`/api/batch-clean-titles-and-locations`**: Cleans Job Title, City, and State fields.
-  - Method: POST
-  - Payload: `[{ "title": "gen. manager", "city": "los angeles ca", "state": "california", "rowNum": 1 }, ...]`
-  - Response: `{ "results": [{ "title": "General Manager", "city": "Los Angeles", "state": "CA", "rowNum": 1 }], ... }`
-- **`/api/batch-enrich`**: Cleans company names.
-  - Method: POST
-  - Payload: `[{ "domain": "smithtowntoyota.com", "rowNum": 1 }, ...]`
-  - Response: `{ "results": [{ "name": "Smithtown Toyota", "confidenceScore": 100, "flags": ["OverrideApplied"], "rowNum": 1 }], ... }`
-- **`/api/batch-enrich-company-name-fallback`**: Fallback for company name cleaning when `/api/batch-enrich` fails.
-  - Method: POST
-  - Payload: `[{ "domain": "smithtowntoyota.com", "rowNum": 1 }, ...]`
-  - Response: Similar to `/api/batch-enrich`.
-- **`/api/batch-enrich-franchise`**: Assigns Franchise Group based on domain and company name.
-  - Method: POST
-  - Payload: `[{ "domain": "smithtowntoyota.com", "humanName": "Smithtown Toyota", "rowNum": 1 }, ...]`
-  - Response: `{ "results": [{ "franchiseGroup": "Toyota", "flags": ["Success"], "rowNum": 1 }], ... }`
+/batch-enrich (v4.0) endpoint: Cleans company names from dealership domains. Method is POST. Payload example: [{ "domain": "smithtowntoyota.com", "rowNum": 1 }, ...]. Response example: { "results": [{ "name": "Smithtown Toyota", "confidenceScore": 100, "flags": ["OverrideApplied"], "rowNum": 1, "tokens": 0 }], "manualReviewQueue": [], "totalTokens": 0, "fallbackTriggers": [], "partial": false }. Notes: Batch size of 5, 18s timeout.
 
-## Setup
-1. **Clone the Repository**:
-   \`\`\`bash
-   git clone https://github.com/cdearman90/get-enrich-api.git
+/batch-enrich-company-name-fallback (v1.0.8) endpoint: Fallback for company name cleaning when /batch-enrich fails. Method is POST. Payload is same as /batch-enrich. Response example: { "results": [{ "name": "Smithtown Toyota", "confidenceScore": 100, "flags": ["OverrideApplied", "FallbackUsed"], "rowNum": 1, "tokens": 0 }], "manualReviewQueue": [], "totalTokens": 0, "partial": false }. Notes: Batch size of 5, 18s timeout.
+
+/batch-enrich-franchise (v1.0.0) endpoint: Assigns Franchise Groups (e.g., Toyota, Ford). Method is POST. Payload example: [{ "domain": "smithtowntoyota.com", "humanName": "Smithtown Toyota", "rowNum": 1 }, ...]. Response example: { "results": [{ "franchiseGroup": "Toyota", "flags": ["Success"], "rowNum": 1 }], "manualReviewQueue": [], "partial": false }. Notes: Batch size of 5, 18s timeout.
+
+Scoring + Acceptance Rules
+
+Accepted Names: ConfidenceScore is 75 or higher, has 2 or more words (unless override), no flags like TooGeneric, CityNameOnly, PossibleAbbreviation, Skipped, FallbackFailed. Rejected Names: Score below 75 or flagged are added to manualReviewQueue or discarded. Overrides: KNOWN_OVERRIDES (e.g., duvalford.com becomes Duval) always score 100. Cleanup: Trailing brands stripped unless part of a valid phrase (e.g., Devine Ford becomes Devine Auto).
+
+Setup
+
+1. Clone & Install: git clone https://github.com/cdearman90/get-enrich-api.git
    cd get-enrich-api
-   \`\`\`
-2. **Install Dependencies**:
-   - Currently, there are no external dependencies (\`"dependencies": {}\` in `package.json`).
-   - If you add dependencies, run:
-     \`\`\`bash
-     npm install
-     \`\`\`
-3. **Set Environment Variables**:
-   - Add the following environment variable in Vercel:
-     - `OPENAI_API_KEY`: Your OpenAI API key (required for `/api/batch-enrich`).
-   - In the Vercel dashboard, go to Settings > Environment Variables and add `OPENAI_API_KEY`.
-4. **Deploy to Vercel**:
-   \`\`\`bash
+   No external npm dependencies, but requires internal ./lib/humanize.js.
+
+3. Set Environment Variables:
+   In Vercel, go to Settings, then Environment Variables:
+   OPENAI_API_KEY: Your OpenAI API key (used via humanize.js).
+
+4. Deploy:
    vercel deploy --prod
-   \`\`\`
 
-## Usage
-This API is designed to be called by the ShowRevv Lead Processing Tools Google Apps Script. The script uses the following endpoints:
-- `/api/batch-clean-titles-and-locations` for cleaning Job Title, City, and State.
-- `/api/batch-enrich` and `/api/batch-enrich-company-name-fallback` for cleaning company names.
-- `/api/batch-enrich-franchise` for assigning Franchise Groups.
+Usage
+Designed for automated enrichment in Google Apps Script, processing batches of 5. Test manually:
+curl -X POST https://get-enrich-api-git-main-show-revv.vercel.app/api/batch-enrich -H "Content-Type: application/json" -d '[{ "domain": "smithtowntoyota.com", "rowNum": 1 }]'
 
-To test an endpoint manually:
-\`\`\`bash
-curl -X POST https://get-enrich-api-git-main-show-revv.vercel.app/api/batch-enrich \
-  -H "Content-Type: application/json" \
-  -d '[{ "domain": "smithtowntoyota.com", "rowNum": 1 }]'
-\`\`\`
+System Versioning
 
-## Development
-- **Local Development**: Use Vercel CLI to run the API locally:
-  \`\`\`bash
-  vercel dev
-  \`\`\`
-- **Node.js Version**: The project uses Node.js 18 or higher (specified in `package.json`).
+Script humanize.js: Version N/A, Updated 2025-04-07
+Script batch-enrich.js: Version v4.0, Updated 2025-04-07
+Script batch-enrich-company-name-fallback.js: Version v1.0.8, Updated 2025-04-07
+Script batch-enrich-franchise.js: Version v1.0.0, Updated 2025-04-07
 
-## Notes
-- Ensure the OpenAI API key is set in Vercel to enable company name cleaning.
-- The API uses ESM syntax (`"type": "module"` in `package.json`), so all `.js` files must use `import`/`export` syntax.
+Development
+Run Locally: vercel dev
+Node.js: 18 or higher required
+Logging: Detailed error traces and processing steps for transparency
+
+Development Notes:
+Uses ESM ("type": "module" in package.json)
+OPENAI_API_KEY enables GPT-4-turbo via humanize.js for /api/batch-enrich
+
+Notes
+Optimized for cold-email-safe output (1–3 words, no trailing brands)
+
+18s timeout ensures partial results under Vercel paid tier limits
+
+Integrates with Google Apps Script for dealership-specific outreach
+
