@@ -39,6 +39,7 @@ const streamToString = async (stream) => {
   }
 };
 
+// Entry point
 export default async function handler(req, res) {
   console.log("batch-enrich-company-name-fallback.js Version 1.0.8 - Optimized 2025-04-07");
 
@@ -103,8 +104,10 @@ export default async function handler(req, res) {
             }
           }
 
+          // Add fallback flag
           finalResult.flags = [...(finalResult.flags || []), "FallbackUsed"];
 
+          // Acceptability criteria synced with batch-enrich.js v4.0 and Google Apps Script
           const forceReviewFlags = [
             "TooGeneric",
             "CityNameOnly",
@@ -114,12 +117,9 @@ export default async function handler(req, res) {
             "FuzzyCityMatch",
             "NotPossessiveFriendly"
           ];
+          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f));
 
-          // Align with batch-enrich.js v4.0 and Google Apps Script
-          if (
-            finalResult.confidenceScore < 75 ||
-            finalResult.flags.some(f => ["TooGeneric", "CityNameOnly", "PossibleAbbreviation"].includes(f))
-          ) {
+          if (!isAcceptable) {
             manualReviewQueue.push({
               domain,
               name: finalResult.name,
@@ -127,8 +127,14 @@ export default async function handler(req, res) {
               flags: finalResult.flags,
               rowNum
             });
-            finalResult = { name: "", confidenceScore: 0, flags: [...finalResult.flags, "Skipped"], tokens: tokensUsed, rowNum };
-            console.log(`Row ${rowNum}: Skipped and added to manual review: ${JSON.stringify(finalResult)}`);
+            finalResult = {
+              name: finalResult.name || "",
+              confidenceScore: Math.max(finalResult.confidenceScore, 60),
+              flags: [...finalResult.flags, "LowConfidence"],
+              tokens: tokensUsed,
+              rowNum
+            };
+            console.log(`Row ${rowNum}: Added to manual review: ${JSON.stringify(finalResult)}`);
           } else {
             console.log(`Row ${rowNum}: Acceptable fallback result: ${JSON.stringify(finalResult)}`);
           }
