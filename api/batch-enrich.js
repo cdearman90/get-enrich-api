@@ -1,9 +1,8 @@
 // api/batch-enrich.js (Version 4.0 - Fully Patched and Optimized 2025-04-07)
-// Updated to fix Vercel errors, align with humanize.js and Google Apps Script, 
+// Updated to fix Vercel errors, align with humanize.js and Google Apps Script,
 // accept 2-word fallbacks at 75+, remove redundant metadata fetches, and enhance logging
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES } from "./lib/humanize.js";
-
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
 
 // Concurrency limiter
@@ -144,9 +143,10 @@ export default async function handler(req, res) {
           // Fuzzy override matching
           const matchedOverrideDomain = fuzzyMatchDomain(domainLower, Object.keys(KNOWN_OVERRIDES));
           if (matchedOverrideDomain) {
-            console.log(`Fuzzy override match for ${domain}: ${KNOWN_OVERRIDES[matchedOverrideDomain]}`);
+            const overrideName = KNOWN_OVERRIDES[matchedOverrideDomain];
+            console.log(`Fuzzy override match for ${domain}: ${overrideName}`);
             return {
-              name: KNOWN_OVERRIDES[matchedOverrideDomain],
+              name: overrideName,
               confidenceScore: 100,
               flags: ["FuzzyOverrideMatched"],
               rowNum,
@@ -178,7 +178,7 @@ export default async function handler(req, res) {
             }
           }
 
-          // Align acceptability with Google Apps Script
+          // Acceptability criteria aligned with Google Apps Script
           const forceReviewFlags = [
             "TooGeneric",
             "CityNameOnly",
@@ -188,7 +188,8 @@ export default async function handler(req, res) {
             "FuzzyCityMatch",
             "NotPossessiveFriendly"
           ];
-          if (finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly", "PossibleAbbreviation"].includes(f))) {
+          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f));
+          if (isAcceptable) {
             domainCache.set(domainLower, finalResult);
             console.log(`Acceptable result for ${domain}: ${JSON.stringify(finalResult)}`);
             return { ...finalResult, rowNum, tokens: tokensUsed };
@@ -197,8 +198,9 @@ export default async function handler(req, res) {
           // Fallback to API if needed
           if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const fallback = await callFallbackAPI(domain, rowNum);
-            if (fallback.name && fallback.confidenceScore >= 75 && !fallback.flags.some(f => ["TooGeneric", "CityNameOnly", "PossibleAbbreviation"].includes(f))) {
+            if (fallback.name && fallback.confidenceScore >= 75 && !fallback.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f))) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
+              tokensUsed += fallback.tokens || 0;
               console.log(`Row ${rowNum}: Fallback API used successfully: ${JSON.stringify(finalResult)}`);
             } else {
               finalResult.flags.push("FallbackAPIFailed");
@@ -208,7 +210,7 @@ export default async function handler(req, res) {
           }
 
           // Manual review for low-confidence or problematic results
-          if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => ["TooGeneric", "CityNameOnly", "PossibleAbbreviation"].includes(f))) {
+          if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f))) {
             manualReviewQueue.push({ domain, name: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags, rowNum });
             finalResult = { name: finalResult.name || "", confidenceScore: Math.max(finalResult.confidenceScore, 60), flags: [...finalResult.flags, "LowConfidence"], rowNum };
             console.log(`Row ${rowNum}: Added to manual review: ${JSON.stringify(finalResult)}`);
