@@ -31,7 +31,7 @@ Setup
 
 3. Set Environment Variables:
    In Vercel, go to Settings, then Environment Variables:
-   OPENAI_API_KEY: Your OpenAI API key (used via humanize.js).
+   OPENAI_API_KEY: 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
 
 4. Deploy:
    vercel deploy --prod
