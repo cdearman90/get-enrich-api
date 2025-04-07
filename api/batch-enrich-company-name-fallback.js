@@ -1,5 +1,5 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.5 - Optimized 2025-04-07)
-// Updated to align with humanize.js (spacing validator), improve timeout handling, and sync with batch-enrich.js
+// api/batch-enrich-company-name-fallback.js (Version 1.0.7 - Optimized 2025-04-07)
+// Updated to accept 2-word fallbacks at 75+, align with humanize.js, and sync with batch-enrich.js v3.9
 
 import { humanizeName } from "./lib/humanize.js";
 
@@ -22,17 +22,24 @@ const pLimit = (concurrency) => {
   });
 };
 
-// Stream to string helper for Vercel
+// Stream to string helper with timeout
 const streamToString = async (stream) => {
   const chunks = [];
-  for await (const chunk of stream) {
-    chunks.push(chunk);
+  const timeout = setTimeout(() => { throw new Error("Stream read timeout"); }, 5000); // 5s timeout
+  try {
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+    clearTimeout(timeout);
+    return Buffer.concat(chunks).toString("utf-8");
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
   }
-  return Buffer.concat(chunks).toString("utf-8");
 };
 
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.5 - Optimized 2025-04-07");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.7 - Optimized 2025-04-07");
 
   try {
     let leads;
@@ -50,18 +57,18 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(1); // Kept at 1 to minimize timeout risk
+    const limit = pLimit(1); // Kept at 1 for stability
     const results = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
 
-    const BATCH_SIZE = 4; // Aligned with system overview and batch-enrich.js
+    const BATCH_SIZE = 5; // Aligned with system overview and batch-enrich.js v3.9
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 10000) { // Extended to 10s for free tier; adjust to 18000 for paid tier
+      if (Date.now() - startTime > 18000) { // 18s timeout for paid tier
         console.log("Partial response due to timeout");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
       }
@@ -77,15 +84,16 @@ export default async function handler(req, res) {
           let finalResult;
           let tokensUsed = 0;
 
-          // Simplified retry logic (humanize.js handles OpenAI internally)
-          for (let attempt = 1; attempt <= 2; attempt++) {
+          // Retry logic for humanizeName
+          for (let attempt = 1; attempt <= 3; attempt++) {
             try {
               finalResult = await humanizeName(domain, domain, false);
+              console.log(`Row ${rowNum}: humanizeName output: ${JSON.stringify(finalResult)}`);
               tokensUsed = finalResult.tokens || 0;
               break;
             } catch (err) {
               console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed: ${err.message}, Stack: ${err.stack}`);
-              if (attempt === 2) {
+              if (attempt === 3) {
                 finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
               }
               await new Promise(res => setTimeout(res, 1000));
@@ -93,7 +101,6 @@ export default async function handler(req, res) {
           }
 
           finalResult.flags = [...(finalResult.flags || []), "FallbackUsed"];
-          console.log(`Row ${rowNum}: ${JSON.stringify(finalResult)}`);
 
           const forceReviewFlags = [
             "TooGeneric",
@@ -105,9 +112,10 @@ export default async function handler(req, res) {
             "NotPossessiveFriendly"
           ];
 
+          // Accept scores >= 75 unless flagged TooGeneric or CityNameOnly
           if (
-            finalResult.confidenceScore < 60 || // Raised to 60 to account for GPTSpacingValidated boosts
-            (Array.isArray(finalResult.flags) && finalResult.flags.some(f => forceReviewFlags.includes(f)))
+            finalResult.confidenceScore < 75 ||
+            (Array.isArray(finalResult.flags) && finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f)))
           ) {
             manualReviewQueue.push({
               domain,
@@ -116,7 +124,7 @@ export default async function handler(req, res) {
               flags: finalResult.flags,
               rowNum
             });
-            finalResult = { name: "", confidenceScore: 0, flags: ["Skipped"], tokens: tokensUsed, rowNum };
+            finalResult = { name: "", confidenceScore: 0, flags: [...finalResult.flags, "Skipped"], tokens: tokensUsed, rowNum };
           }
 
           totalTokens += tokensUsed;
