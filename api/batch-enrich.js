@@ -145,18 +145,25 @@ export default async function handler(req, res) {
 
           const domainLower = domain.toLowerCase();
 
-          // Fuzzy override matching
+          // Fuzzy override matching with improved enforcement
           const matchedOverrideDomain = fuzzyMatchDomain(domainLower, Object.keys(KNOWN_OVERRIDES));
           if (matchedOverrideDomain) {
-            const overrideName = KNOWN_OVERRIDES[matchedOverrideDomain];
-            console.log(`Row ${rowNum}: Fuzzy override match for ${domain}: ${overrideName}`);
-            return {
-              name: overrideName,
-              confidenceScore: 100,
-              flags: ["FuzzyOverrideMatched"],
-              rowNum,
-              tokens: 0
-            };
+            const override = KNOWN_OVERRIDES[matchedOverrideDomain];
+            if (typeof override === 'string' && override.trim().length > 0) {
+              const overrideName = override.trim();
+              console.log(`Row ${rowNum}: Fuzzy override match for ${domain}: ${overrideName}`);
+              return {
+                name: overrideName,
+                confidenceScore: 100,
+                flags: ["FuzzyOverrideMatched"],
+                rowNum,
+                tokens: 0
+              };
+            } else if (override !== undefined && override.trim() === "") {
+              console.log(`Row ${rowNum}: Empty override for ${domain}, proceeding to fallback`);
+              return { name: "", confidenceScore: 0, flags: ["EmptyOverride"], rowNum, tokens: 0 };
+            }
+            // If override is not a string or invalid, continue to fallback
           }
 
           if (domainCache.has(domainLower)) {
