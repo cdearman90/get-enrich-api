@@ -1,5 +1,5 @@
-// api/batch-enrich.js (Version 3.7 - Fully Patched and Optimized 2025-04-07)
-// Updated to align with humanize.js (spacing validator), optimize timeouts, and sync with batch-enrich-company-name-fallback.js
+// api/batch-enrich.js (Version 3.8 - Fully Patched and Optimized 2025-04-07)
+// Updated to handle Vercel errors, align with humanize.js, and optimize for paid tier (18s timeout)
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
@@ -40,7 +40,7 @@ const fuzzyMatchDomain = (inputDomain, knownDomains) => {
     }
     return null;
   } catch (err) {
-    console.error(`Error fuzzy matching domain ${inputDomain}: ${err.message}`);
+    console.error(`Error fuzzy matching domain ${inputDomain}: ${err.message}, Stack: ${err.stack}`);
     return null;
   }
 };
@@ -49,7 +49,7 @@ const fuzzyMatchDomain = (inputDomain, knownDomains) => {
 const fetchWebsiteMetadata = async (domain) => {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 2000); // Reduced to 2s
+    const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
     const response = await fetch(`https://${domain}`, {
       redirect: "follow",
       headers: { "User-Agent": "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)" },
@@ -84,10 +84,10 @@ const extractLogoText = async (domain, html) => {
 
 // Safe POST fallback endpoint with retry
 const callFallbackAPI = async (domain, rowNum) => {
-  for (let attempt = 1; attempt <= 2; attempt++) { // Reduced to 2 retries
+  for (let attempt = 1; attempt <= 2; attempt++) {
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
+      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s per retry
       const response = await fetch(VERCEL_API_ENRICH_FALLBACK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -95,31 +95,46 @@ const callFallbackAPI = async (domain, rowNum) => {
         signal: controller.signal
       });
       clearTimeout(timeoutId);
-      const result = await response.json();
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (jsonErr) {
+        throw new Error(`Invalid JSON response: ${text}`);
+      }
       if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
       return result.results[0] || { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"] };
     } catch (err) {
       console.error(`Fallback API attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
       if (attempt === 2) {
-        return { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"], error: err.message };
+        // Local fallback if API fails
+        const localResult = await humanizeName(domain, domain, false);
+        return { ...localResult, flags: [...localResult.flags, "FallbackAPIFailed", "LocalFallbackUsed"], error: err.message };
       }
       await new Promise(res => setTimeout(res, 1000));
     }
   }
 };
 
-// Stream to string helper for Vercel
+// Stream to string helper with timeout
 const streamToString = async (stream) => {
   const chunks = [];
-  for await (const chunk of stream) {
-    chunks.push(chunk);
+  const timeout = setTimeout(() => { throw new Error("Stream read timeout"); }, 5000); // 5s timeout
+  try {
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+    clearTimeout(timeout);
+    return Buffer.concat(chunks).toString("utf-8");
+  } catch (err) {
+    clearTimeout(timeout);
+    throw err;
   }
-  return Buffer.concat(chunks).toString("utf-8");
 };
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.7 - Fully Patched and Optimized 2025-04-07");
+  console.log("batch-enrich.js Version 3.8 - Fully Patched and Optimized 2025-04-07");
 
   try {
     let leads;
@@ -136,19 +151,19 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(1); // Kept at 1 to minimize timeout risk
+    const limit = pLimit(1); // Kept at 1 for stability
     const results = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
     const fallbackTriggers = [];
 
-    const BATCH_SIZE = 4; // Aligned with system overview and fallback API
+    const BATCH_SIZE = 5; // Aligned with system overview
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 10000) { // Extended to 10s for free tier; adjust to 18000 for paid tier
+      if (Date.now() - startTime > 18000) { // 18s timeout for paid tier
         console.log("Partial response due to timeout");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
@@ -177,10 +192,11 @@ export default async function handler(req, res) {
           let finalResult;
           let tokensUsed = 0;
 
-          // Primary humanizeName call
+          // Primary humanizeName call with retries
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
               finalResult = await humanizeName(domain, domain, false);
+              console.log(`humanizeName output for ${domain}: ${JSON.stringify(finalResult)}`);
               tokensUsed = finalResult.tokens || 0;
               break;
             } catch (err) {
@@ -207,12 +223,12 @@ export default async function handler(req, res) {
             return { ...finalResult, rowNum, tokens: tokensUsed };
           }
 
-          // Fallback to local API if needed
+          // Fallback to API if needed
           if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const fallback = await callFallbackAPI(domain, rowNum);
             if (fallback.name && fallback.confidenceScore >= 80) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
-              console.log(`Row ${rowNum}: Fallback API successful`);
+              console.log(`Row ${rowNum}: Fallback API successful: ${JSON.stringify(finalResult)}`);
             } else {
               finalResult.flags.push("FallbackAPIFailed");
               fallbackTriggers.push({ domain, reason: "FallbackAPIFailed" });
@@ -236,6 +252,7 @@ export default async function handler(req, res) {
       );
 
       results.push(...chunkResults);
+      totalTokens += chunkResults.reduce((sum, r) => sum + (r.tokens || 0), 0);
     }
 
     return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
