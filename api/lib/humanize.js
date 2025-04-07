@@ -885,3 +885,5 @@ export async function runUnitTests() {
   }
   console.log(`Unit tests: ${passed}/${tests.length} passed`);
 }
+
+export { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, CAR_BRAND_MAPPING, KNOWN_CITIES_SET, NON_DEALERSHIP_KEYWORDS, KNOWN_PROPER_NOUNS };
