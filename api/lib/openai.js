@@ -14,6 +14,8 @@ export async function callOpenAI(prompt, options = {}) {
   const finalOptions = { ...defaultOptions, ...options };
 
   try {
+    console.log(`📡 Calling OpenAI: ${finalOptions.model} | Prompt: ${prompt.slice(0, 80)}...`);
+
     const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -34,13 +36,11 @@ export async function callOpenAI(prompt, options = {}) {
     const status = response.status;
     const text = await response.text();
 
-    // ✅ Log any non-2xx errors explicitly
     if (!response.ok) {
-      console.error(`❌ OpenAI Error (HTTP ${status}): ${text}`);
+      console.error(`❌ OpenAI API error (HTTP ${status}): ${text}`);
       throw new Error(`OpenAI API returned HTTP ${status}`);
     }
 
-    // ✅ Parse response safely
     let data;
     try {
       data = JSON.parse(text);
@@ -51,12 +51,12 @@ export async function callOpenAI(prompt, options = {}) {
 
     const output = data.choices?.[0]?.message?.content?.trim();
     if (!output || typeof output !== "string") {
-      throw new Error("OpenAI returned empty or malformed content");
+      throw new Error("❌ OpenAI returned empty or malformed content");
     }
 
     return output;
   } catch (err) {
     console.error(`🔥 callOpenAI() failed: ${err.message}`);
-    throw err; // Bubble up so you can handle fallback properly
+    throw err;
   }
 }
