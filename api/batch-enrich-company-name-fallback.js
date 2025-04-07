@@ -77,15 +77,14 @@ export default async function handler(req, res) {
 
         console.log(`Row ${rowNum}: ${JSON.stringify(finalResult)}`);
 
-        const skipFlags = [
-          "TooGeneric",
-          "PossibleAbbreviation",
-          "NotPossessiveFriendly",
-          "PossessiveAmbiguity",
-          "CityNameOnly",
-          "BadPrefixOf",
-          "CarBrandSuffixRemaining"
-        ];
+    const forceReviewFlags = [
+      "TooGeneric",
+      "CityNameOnly",
+      "PossibleAbbreviation",
+      "BadPrefixOf",
+      "CarBrandSuffixRemaining",
+      "FuzzyCityMatch" // Added to review OpenAI-detected cities
+    ];
 
         if (
           finalResult.confidenceScore < 50 ||
