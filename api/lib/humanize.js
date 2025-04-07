@@ -1,6 +1,5 @@
 // humanize.js - Fully patched version for ShowRevv Lead Processing Tools
 // Updated to handle compound splitting, retain car brands when appropriate, and merge with existing utility functions
-// Excludes KNOWN_CITIES_SET and KNOWN_OVERRIDES as requested
 
 import { callOpenAI } from './openai.js';
 
@@ -13,7 +12,6 @@ export const COMMON_WORDS = [
   "superstore", "the", "to", "top", "toyota", "used"
 ];
 
-// Car brands for identification
 export const CAR_BRANDS = [
   "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
   "cadillac", "carmax", "cdj", "cdjrf", "cdjr", "chev", "chevvy", "chevrolet", "chrysler", "cjd", "daewoo",
@@ -25,7 +23,6 @@ export const CAR_BRANDS = [
   "volkswagen", "volvo", "vw"
 ];
 
-// Non-dealership keywords to disqualify
 export const NON_DEALERSHIP_KEYWORDS = [
   "ability", "accident", "accounting", "aftermarket", "agent", "agents", "atv", "audio", "autoparts",
   "bikes", "blueprint", "boating", "boats", "bodyshop", "broker", "brokers", "building", "carpentry",
@@ -75,7 +72,7 @@ export const KNOWN_CITIES_SET = new Set([
   "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "alabaster", "opelika", "northport", "enterprise", "daphne",
   "homewood", "bessemer", "athens", "pelham", "fairhope", "anniston", "mountain brook", "troy", "trussville", "talladega",
   "selma", "oxford", "alexander city", "millbrook", "helena", "sylacauga", "scottsboro", "hueytown", "gardendale", "foley",
-  "jasper", "cullman", "prichard", "irondale", "eufaula", "saraland", "fort payne", "albertville", "ozark", "wetumpka",
+  "jasper", "cullman", "prichard", "irondale", "eufaula", "saraland", "fort payne", "albertville", "ozark", "wetumpka", "Tuscaloosa",
   // Alaska (top 50, limited by population)
   "anchorage", "juneau", "fairbanks", "ketchikan", "sitka", "wasilla", "kenai", "kodiak", "bethel", "palmer",
   "homer", "soldotna", "valdez", "nome", "barrow", "kotzebue", "seward", "cordova", "dillingham", "petersburg",
@@ -375,9 +372,8 @@ export const KNOWN_CITIES_SET = new Set([
   "shottenkirk", "riverview", "northwest", "southwest", "downtown", "uptown", "midtown", 
 ]);  
 
-// Added KNOWN_OVERRIDES to align with Google Apps Script
+// Existing KNOWN_OVERRIDES from your script
 export const KNOWN_OVERRIDES = {
- export const KNOWN_OVERRIDES = {
   "acdealergroup.com": "AC Dealer",
   "acura4me.com": "Acura 4 Me",
   "akinsonline.com": "Akins",
@@ -463,12 +459,12 @@ export const KNOWN_OVERRIDES = {
   "fivestaronline.net": "Five Star",
   "fletcherauto.com": "Fletcher",
   "fordofdalton.com": "Ford Dalton",
-  "4porsche.com": "Porsche 4",
+  "4porsche.com": "4Porsche",
   "garberchevrolet.com": "Garber",
   "garlynshelton.com": "Garlyn Shelton",
   "germaincars.com": "Germain",
   "gilescars.com": "Giles",
-  "givemethevin.com": "",
+  "givemethevin.com": "Give me the Vin",
   "goldenwestoil.com": "Golden West",
   "golfmillford.com": "Golf Mill",
   "gomontrose.com": "Montrose",
@@ -583,10 +579,10 @@ export const KNOWN_OVERRIDES = {
   "toyotacedarpark.com": "Cedar Park",
   "toyotacv.com": "Toyota Chula Vista",
   "toyotaofgreenwich.com": "Toyota Greenwich",
-  "toyotaofslidell.net": "Slidell",
+  "toyotaofslidell.net": "Toyota Slidell",
   "trustandrew.com": "Andrew",
-  "tsands.com": "Sands",
-  "tuscaloosatoyota.com": "Tuscaloosa",
+  "tsands.com": "T Sands",
+  "tuscaloosatoyota.com": "Tuscaloosa Toyota",
   "tuttleclick.com": "Tuttle Click",
   "unionpark.com": "Union Park",
   "uvwaudi.com": "University VW Audi",
@@ -601,7 +597,7 @@ export const KNOWN_OVERRIDES = {
   "yorkautomotive.com": "York"
 };
 
-// Utility Functions (from your current script)
+// Utility Functions (Updated)
 export function normalizeText(name) {
   if (!name || typeof name !== "string") return [];
   return name
@@ -728,72 +724,25 @@ function preserveStructures(name) {
   return name;
 }
 
-function earlyCompoundSplit(name) {
-  let result = name.toLowerCase();
+function earlyCompoundSplit(text) {
+  const carBrands = new Set(CAR_BRANDS.map(b => b.toLowerCase()));
+  const cities = new Set(KNOWN_CITIES_SET.map(c => c.toLowerCase()));
+  let parts = [text.toLowerCase()];
+  const brandRegex = new RegExp(`\\b(${CAR_BRANDS.join('|')})\\b`, 'gi');
+  const cityRegex = new RegExp(`\\b(${KNOWN_CITIES_SET.join('|')})\\b`, 'gi');
+  const abbrRegex = /^[a-z]{2,5}$/i;
 
-  // Split on common separators and structural words
-  result = result
-    .replace(/(of|auto|group|motors|dealership|corp)/gi, ' $1 ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  // Split by brands, cities, and camelCase
+  parts = parts.flatMap(part => part.split(brandRegex).filter(Boolean));
+  parts = parts.flatMap(part => part.split(cityRegex).filter(Boolean));
+  parts = parts.flatMap(part => part.match(/[A-Z][a-z]+|[a-z]+/g) || [part]);
 
-  // Split on camelCase or PascalCase boundaries
-  result = result.replace(/([a-z])([A-Z])/g, '$1 $2');
-
-  // Split on directional prefixes
-  result = result.replace(/(north|south|east|west|central|drive)([a-z]+)/gi, '$1 $2');
-
-  // Split all car brands (but don’t remove them yet)
-  CAR_BRANDS.forEach(brand => {
-    const brandLower = brand.toLowerCase();
-    const regex = new RegExp(`(${brandLower})([a-z]+)`, 'gi');
-    result = result.replace(regex, '$1 $2');
-  });
-
-  // Split known compounds
-  const compoundPatterns = [
-    /(honda)(of[a-z]+)/gi,
-    /(toyota)(of[a-z]+)/gi,
-    /(ford)(of[a-z]+)/gi,
-    /(chevy)([a-z]+)/gi,
-    /(tuttle)(click)/gi,
-    /(mclarty)(daniel)/gi,
-    /(drive)(superior)/gi,
-    /(jimmy)(britt)/gi,
-    /(don)(hattan)/gi,
-    /(tommy)(nix)/gi,
-    /(camino)(real)/gi,
-    /(swant)(graber)/gi,
-    /(northwest)(auto)/gi,
-    /(southwest)(dealers)/gi,
-    /(south)(charlotte)/gi,
-    /(chuck)(fairbanks)/gi,
-    /(titus)(will)/gi,
-    /(vw)(south)/gi,
-    /(bmw)(of[a-z]+)/gi,
-    /(mb)(of[a-z]+)/gi,
-    /(lexus)(of[a-z]+)/gi
-  ];
-  compoundPatterns.forEach(pattern => {
-    result = result.replace(pattern, '$1 $2');
-  });
-
-  // Split on known cities
-  KNOWN_CITIES_SET.forEach(city => {
-    const cityLower = city.toLowerCase();
-    if (result.includes(cityLower)) {
-      result = result.replace(new RegExp(`\\b${cityLower}\\b`, 'gi'), ` ${city} `);
-    }
-  });
-
-  return result.replace(/\s+/g, ' ').trim();
-}
-
-function preserveBrandForPossessive(words, removedBrands) {
-  if (removedBrands.length === 1 && isPossessiveFriendly(words.join(" ") + " " + removedBrands[0])) {
-    return [...words, removedBrands[0]];
-  }
-  return words;
+  return parts.map(part => {
+    if (carBrands.has(part)) return CAR_BRANDS.find(b => b.toLowerCase() === part);
+    if (cities.has(part)) return KNOWN_CITIES_SET.find(c => c.toLowerCase() === part);
+    if (abbrRegex.test(part)) return part.toUpperCase();
+    return part.charAt(0).toUpperCase() + part.slice(1);
+  }).join(" ");
 }
 
 function correctBadEndings(name) {
@@ -803,7 +752,7 @@ function correctBadEndings(name) {
   return name;
 }
 
-// OpenAI Fuzzy Matching for City Detection (requires OpenAI API setup)
+// OpenAI Fuzzy Matching for City Detection (retained from your script)
 const cityCache = new Map();
 
 export async function fuzzyMatchCity(token) {
@@ -833,7 +782,7 @@ export async function fuzzyMatchCity(token) {
   }
 }
 
-// Main humanization function
+// Main humanization function (fully patched)
 export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
     const domainLower = domain.toLowerCase();
@@ -854,7 +803,7 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
       return { name: "", confidenceScore: 0, flags: ["NonDealership"], tokens };
     }
 
-    // ShopCarBrandException (e.g., "Shop Honda")
+    // ShopCarBrandException
     if (words.length >= 2 && words[0].toLowerCase() === "shop" && CAR_BRANDS.includes(words[1].toLowerCase())) {
       const carBrand = words[1].charAt(0).toUpperCase() + words[1].slice(1).toLowerCase();
       const finalName = `Shop ${carBrand}`;
@@ -867,7 +816,7 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
       };
     }
 
-    // HappyCarBrandException (e.g., "Happy Honda")
+    // HappyCarBrandException
     if (words.length >= 2 && words[0].toLowerCase() === "happy" && CAR_BRANDS.includes(words[1].toLowerCase())) {
       const carBrand = words[1].charAt(0).toUpperCase() + words[1].slice(1).toLowerCase();
       const finalName = `Happy ${carBrand}`;
@@ -880,11 +829,18 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
       };
     }
 
-    // Car brand detection
-    const matchedBrands = words.filter(w => CAR_BRANDS.includes(w.toLowerCase()));
-    const carBrandFound = matchedBrands.length > 0 ? matchedBrands[0].toLowerCase() : null;
-    const carBrandCount = matchedBrands.length;
-    let hasCity = words.some(w => KNOWN_CITIES_SET.has(w.toLowerCase()));
+    // Enhanced blob splitting
+    let cleanedName = words.join(" ");
+    if (words.length === 1 && !cleanedName.includes(" ") && !KNOWN_PROPER_NOUNS.includes(cleanedName.toLowerCase())) {
+      cleanedName = earlyCompoundSplit(cleanedName);
+      if (cleanedName.split(" ").length >= 2) {
+        console.log(`Early compound split for ${domain}: ${words[0]} → ${cleanedName}`);
+        flags.push("FallbackBlobSplit");
+      }
+    }
+
+    words = cleanedName.split(" ");
+    const hasCity = words.some(w => KNOWN_CITIES_SET.has(w.toLowerCase()));
     let cityCandidate = null;
 
     // Fuzzy city matching with OpenAI if no city found
@@ -899,12 +855,26 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
         const matchedCity = await fuzzyMatchCity(token);
         if (matchedCity) {
           cityCandidate = matchedCity;
-          hasCity = true;
           words = words.map(w => w.toLowerCase() === token.toLowerCase() ? matchedCity : w);
           flags.push("FuzzyCityMatch");
           break;
         }
       }
+    }
+
+    // Handle specific patterns (e.g., "Kia of LaGrange")
+    if (domain.match(/^(kiaof|toyotaof|hondaof|fordof|mbof)/i) && words.length > 1) {
+      const parts = earlyCompoundSplit(domain).split(" ");
+      const brand = parts[0];
+      const rest = parts.slice(1).join(" ");
+      const name = `${brand} of ${rest}`;
+      const finalName = capitalizeName(name);
+      return {
+        name: addPossessiveFlag ? addPossessive(finalName) : finalName,
+        confidenceScore: 95,
+        flags: ["CarBrandOfPattern", ...flags],
+        tokens
+      };
     }
 
     // CarBrandCityException (e.g., "Honda of Columbia")
@@ -928,7 +898,7 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     }
 
     // CityBrandPattern (e.g., "Columbia Honda")
-    const cityBrandPattern = hasCity && words.some(word => CAR_BRANDS.includes(word.toLowerCase()));
+    const cityBrandPattern = (hasCity || cityCandidate) && words.some(word => CAR_BRANDS.includes(word.toLowerCase()));
     if (cityBrandPattern) {
       const city = cityCandidate || words.find(word => KNOWN_CITIES_SET.has(word.toLowerCase()));
       const brand = words.find(word => CAR_BRANDS.includes(word.toLowerCase()));
@@ -945,6 +915,7 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
 
     // CarBrandRegionException (e.g., "North Ford")
     const regionPrefixes = ["north", "south", "east", "west", "central"];
+    const matchedBrands = words.filter(w => CAR_BRANDS.includes(w.toLowerCase()));
     if (matchedBrands.length === 1) {
       const brandIndex = words.findIndex(w => w.toLowerCase() === matchedBrands[0].toLowerCase());
       const nextWord = words[brandIndex + 1]?.toLowerCase();
@@ -963,18 +934,6 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
       }
     }
 
-    // Enhanced blob splitting
-    let cleanedName = words.join(" ");
-    if (words.length === 1 && !cleanedName.includes(" ") && !KNOWN_PROPER_NOUNS.includes(cleanedName.toLowerCase())) {
-      const blobSplit = earlyCompoundSplit(cleanedName);
-      if (blobSplit.split(" ").length >= 2) {
-        cleanedName = blobSplit;
-        console.log(`Early compound split for ${domain}: ${words[0]} → ${cleanedName}`);
-        flags.push("FallbackBlobSplit");
-      }
-    }
-
-    words = cleanedName.split(" ");
     words = removeForbiddenWords(words);
     const beforeBrandRemoval = [...words];
     if (!carBrandCityPattern && !cityBrandPattern) {
@@ -984,58 +943,46 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     words = preserveBrandForPossessive(words, removedBrands);
 
     if (words.length === 0 && beforeBrandRemoval.length > 0) {
-      words = beforeBrandRemoval; // Retain the name if car brand removal empties it
+      words = beforeBrandRemoval;
       flags.push("CarBrandRemovalAdjusted");
     }
 
     console.log(`After brand removal for ${domain}: ${words.join(" ")}`);
 
-    // Remove forbidden suffixes
-    const forbiddenSuffixes = ["plaza", "superstore", "gallery", "mall", "center", "sales", "group", "dealership", "auto", "trucks"];
-    const lastWordBeforeCleanup = words[words.length - 1]?.toLowerCase();
-    if (forbiddenSuffixes.includes(lastWordBeforeCleanup) && !KNOWN_PROPER_NOUNS.includes(domain)) {
-      if (lastWordBeforeCleanup === "mall" && hasCarBrand) {
-        words[words.length - 1] = "Auto";
-      } else {
-        words = words.slice(0, -1);
-      }
-      console.log(`Adjusted suffix: ${lastWordBeforeCleanup}, new words: ${words}`);
-    }
-
-    words = removeForbiddenWords(words);
-
-    // Check for city-only or generic names
-    const isCityOnly = words.length === 1 && (KNOWN_CITIES_SET.has(words[0].toLowerCase()) || cityCandidate) && !KNOWN_OVERRIDES[domainLower] && !hasCarBrand;
-    if (isCityOnly) {
-      return { name: words.join(" "), confidenceScore: 0, flags: ["CityNameOnly", ...flags], tokens };
-    }
-
-    const isTooGeneric = words.length === 1 && words[0].length <= 4 && !KNOWN_PROPER_NOUNS.includes(words[0].toLowerCase()) && !KNOWN_CITIES_SET.has(words[0].toLowerCase()) && !hasCarBrand;
-    if (isTooGeneric && !KNOWN_OVERRIDES[domainLower]) {
-      return { name: words.join(" "), confidenceScore: 0, flags: ["TooGeneric", "FallbackTooGeneric", ...flags], tokens };
-    }
-
+    // Add "Auto" if single-word name without city
     let name = capitalizeName(words);
+    if (words.length === 1 && !hasCity && !name.toLowerCase().endsWith("auto") && !flags.includes("TooGeneric")) {
+      name += " Auto";
+      flags.push("AutoSuffixAdded");
+    }
+
     if (!name) {
       return { name: words.join(" "), confidenceScore: 0, flags: ["EmptyFallbackUsed", ...flags], tokens };
     }
 
-    let finalWords = name.split(" ");
-    if (CAR_BRANDS.includes(finalWords.slice(-1)[0]?.toLowerCase()) && !carBrandCityPattern && !cityBrandPattern) {
-      flags.push("CarBrandSuffixRemaining");
-    }
-
-    finalWords = finalWords.filter(word => !COMMON_WORDS.includes(word.toLowerCase()) || KNOWN_PROPER_NOUNS.includes(word.toLowerCase()));
-    name = finalWords.join(" ");
-
-    if (!name) {
-      return { name: "", confidenceScore: 0, flags: ["InvalidOutput", ...flags], tokens };
+    // Strip redundant trailing brand
+    const finalWords = name.split(" ");
+    const trailingBrand = name.match(new RegExp(`\\b(${CAR_BRANDS.join('|')})$`, 'i'));
+    if (trailingBrand && finalWords.length > 1) {
+      name = name.replace(trailingBrand[0], '').trim();
+      flags.push("TrailingBrandRemoved");
     }
 
     name = correctBadEndings(name);
 
-    if (name.toLowerCase().startsWith("of") && !KNOWN_OVERRIDES[domainLower]) {
-      return { name, confidenceScore: 0, flags: ["BadPrefixOf", ...flags], tokens };
+    // Check for city-only or generic names
+    const isCityOnly = finalWords.length === 1 && (KNOWN_CITIES_SET.has(finalWords[0].toLowerCase()) || cityCandidate) && !hasCarBrand;
+    if (isCityOnly) {
+      flags.push("CityNameOnly");
+    }
+
+    const isTooGeneric = finalWords.length === 1 && finalWords[0].length <= 4 && !KNOWN_PROPER_NOUNS.includes(finalWords[0].toLowerCase()) && !KNOWN_CITIES_SET.has(finalWords[0].toLowerCase()) && !hasCarBrand;
+    if (isTooGeneric) {
+      flags.push("TooGeneric");
+    }
+
+    if (name.toLowerCase().startsWith("of")) {
+      flags.push("BadPrefixOf");
     }
 
     if (!isPossessiveFriendly(name)) {
@@ -1046,12 +993,17 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
       flags.push("PossibleAbbreviation");
     }
 
+    // Adjust for non-dealership misflags
+    if (flags.includes("NonDealership") && (hasCarBrand || domain.includes("auto"))) {
+      flags = flags.filter(f => f !== "NonDealership");
+    }
+
     let confidenceScore = 100;
     if (flags.includes("NotPossessiveFriendly")) confidenceScore = 80;
     if (flags.includes("FallbackBlobSplit")) confidenceScore = Math.min(confidenceScore, 90);
     if (flags.includes("CarBrandSuffixRemaining")) confidenceScore = Math.min(confidenceScore, 50);
     if (flags.includes("TooGeneric") || flags.includes("CityNameOnly") || flags.includes("PossibleAbbreviation")) {
-      confidenceScore = 0;
+      confidenceScore = Math.min(confidenceScore, 75);
     }
 
     const finalName = addPossessiveFlag ? addPossessive(name) : name;
@@ -1074,8 +1026,11 @@ function runUnitTests() {
     { domain: 'gusmachadoford.com', expected: 'Gus Machado' },
     { domain: 'duvalford.com', expected: 'Duval' },
     { domain: 'fordofdalton.com', expected: 'Ford Dalton' },
-    { domain: 'devineford.com', expected: 'Devine Ford' }, // Updated to expect car brand retention
-    { domain: 'hondaofcolumbia.com', expected: 'Honda of Columbia' } // Added to test CarBrandCityException
+    { domain: 'devineford.com', expected: 'Devine Auto' }, // Updated to reflect suffix addition
+    { domain: 'hondaofcolumbia.com', expected: 'Honda of Columbia' },
+    { domain: 'andersonautogroup.com', expected: 'Anderson Auto' },
+    { domain: 'mbofbrooklyn.com', expected: 'MB of Brooklyn' },
+    { domain: 'vscc.com', expected: 'VSCC Auto' }
   ];
 
   let passed = 0;
