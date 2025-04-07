@@ -142,7 +142,7 @@ export default async function handler(req, res) {
     let totalTokens = 0;
     const fallbackTriggers = [];
 
-    const BATCH_SIZE = 3; // Aligned with system overview and fallback API
+    const BATCH_SIZE = 4; // Aligned with system overview and fallback API
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
