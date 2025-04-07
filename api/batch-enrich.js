@@ -1,5 +1,5 @@
-// api/batch-enrich.js (Version 3.8 - Fully Patched and Optimized 2025-04-07)
-// Updated to handle Vercel errors, align with humanize.js, and optimize for paid tier (18s timeout)
+// api/batch-enrich.js (Version 3.9 - Fully Patched and Optimized 2025-04-07)
+// Updated to handle Vercel errors, align with humanize.js, accept 2-word fallbacks at 75+, and optimize for paid tier (18s timeout)
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
@@ -134,7 +134,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 3.8 - Fully Patched and Optimized 2025-04-07");
+  console.log("batch-enrich.js Version 3.9 - Fully Patched and Optimized 2025-04-07");
 
   try {
     let leads;
@@ -218,15 +218,15 @@ export default async function handler(req, res) {
             "FuzzyCityMatch",
             "NotPossessiveFriendly"
           ];
-          if (finalResult.confidenceScore >= 80 && !finalResult.flags.some(f => forceReviewFlags.includes(f))) {
+          if (finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f))) {
             domainCache.set(domain, finalResult);
             return { ...finalResult, rowNum, tokens: tokensUsed };
           }
 
           // Fallback to API if needed
-          if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
+          if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const fallback = await callFallbackAPI(domain, rowNum);
-            if (fallback.name && fallback.confidenceScore >= 80) {
+            if (fallback.name && fallback.confidenceScore >= 75) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
               console.log(`Row ${rowNum}: Fallback API successful: ${JSON.stringify(finalResult)}`);
             } else {
@@ -236,7 +236,7 @@ export default async function handler(req, res) {
           }
 
           // Add to manual review if still low
-          if (finalResult.confidenceScore < 60 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
+          if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f))) {
             manualReviewQueue.push({ domain, name: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags, rowNum });
             finalResult = { name: finalResult.name || "", confidenceScore: Math.max(finalResult.confidenceScore, 60), flags: [...finalResult.flags, "LowConfidence"], rowNum };
           }
