@@ -1,9 +1,10 @@
-// api/batch-enrich.js (Version 4.1.10 - Updated 2025-04-13)
+// api/batch-enrich.js (Version 4.1.11 - Updated 2025-04-14)
 // Changes:
-// - Rewrote streamToString to handle req body as raw buffer in Vercel environment
-// - Fixed SyntaxError: Unexpected identifier 'Invalid' by removing for await...of loop
-// - Synced with humanize.js for car brand exclusion rule
-// - Bumped version to 4.1.10
+// - Increased concurrency limit to pLimit(5) for better throughput
+// - Added configurable FALLBACK_API_TIMEOUT_MS (default 6 seconds)
+// - Enhanced fallbackTriggers logging to include primary humanizeName result
+// - Added attempt number to Fallback API success logs
+// - Added "Processing Started" logs for each domain
 
 import { humanizeName, CAR_BRANDS, normalizeText, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain, applyCityShortName, earlyCompoundSplit } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
@@ -33,57 +34,74 @@ const domainCache = new Map();
 // Safe POST fallback endpoint with retry
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
+const FALLBACK_API_TIMEOUT_MS = parseInt(process.env.FALLBACK_API_TIMEOUT_MS, 10) || 6000; // Default to 6 seconds
+
+const callWithRetries = async (fn, retries = 3, delay = 1000) => {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      const result = await fn();
+      return { result, attempt };
+    } catch (err) {
+      if (attempt === retries) throw err;
+      console.error(`Attempt ${attempt} failed: ${err.message}`);
+      await new Promise(res => setTimeout(res, delay));
+    }
+  }
+};
 
 const callFallbackAPI = async (domain, rowNum) => {
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
+  try {
+    const fn = async () => {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s per retry
-      const response = await fetch(VERCEL_API_ENRICH_FALLBACK_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leads: [{ domain, rowNum }] }),
-        signal: controller.signal
-      });
-      clearTimeout(timeoutId);
-      const text = await response.text();
-      let result;
+      const timeoutId = setTimeout(() => controller.abort(), FALLBACK_API_TIMEOUT_MS);
       try {
-        result = JSON.parse(text);
-      } catch (jsonErr) {
-        throw new Error(`Invalid JSON response: ${text}`);
-      }
-      if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
-      if (!Array.isArray(result.successful) || !result.successful[0]) {
-        throw new Error(`Invalid fallback API response format: ${text}`);
-      }
-      const fallbackResult = result.successful[0];
-      const validatedResult = {
-        domain: fallbackResult.domain || domain,
-        companyName: typeof fallbackResult.companyName === "string" ? fallbackResult.companyName : "",
-        confidenceScore: typeof fallbackResult.confidenceScore === "number" ? fallbackResult.confidenceScore : 0,
-        flags: Array.isArray(fallbackResult.flags) ? fallbackResult.flags : ["InvalidFallbackResponse"],
-        tokens: typeof fallbackResult.tokens === "number" ? fallbackResult.tokens : 0
-      };
-      console.log(`Fallback API success for ${domain} (row ${rowNum}): name=${validatedResult.companyName}, score=${validatedResult.confidenceScore}`);
-      return { ...validatedResult, rowNum };
-    } catch (err) {
-      console.error(`Fallback API attempt ${attempt} failed for ${domain} (row ${rowNum}): ${err.message}`);
-      if (attempt === 3) {
-        const localResult = await humanizeName(domain, domain, false, true);
-        console.log(`Local fallback for ${domain} (row ${rowNum}) after API failure: name=${localResult.name}, score=${localResult.confidenceScore}`);
-        return { 
-          domain,
-          companyName: localResult.name || "",
-          confidenceScore: localResult.confidenceScore || 0,
-          flags: [...(localResult.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"], 
-          rowNum, 
-          error: err.message,
-          tokens: localResult.tokens || 0 
+        const response = await fetch(VERCEL_API_ENRICH_FALLBACK_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ leads: [{ domain, rowNum }] }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+        const text = await response.text();
+        let result;
+        try {
+          result = JSON.parse(text);
+        } catch (jsonErr) {
+          throw new Error(`Invalid JSON response: ${text}`);
+        }
+        if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
+        if (!Array.isArray(result.successful) || !result.successful[0]) {
+          throw new Error(`Invalid fallback API response format: ${text}`);
+        }
+        const fallbackResult = result.successful[0];
+        const validatedResult = {
+          domain: fallbackResult.domain || domain,
+          companyName: typeof fallbackResult.companyName === "string" ? fallbackResult.companyName : "",
+          confidenceScore: typeof fallbackResult.confidenceScore === "number" ? fallbackResult.confidenceScore : 0,
+          flags: Array.isArray(fallbackResult.flags) ? fallbackResult.flags : ["InvalidFallbackResponse"],
+          tokens: typeof fallbackResult.tokens === "number" ? fallbackResult.tokens : 0
         };
+        return validatedResult;
+      } catch (err) {
+        clearTimeout(timeoutId);
+        throw err;
       }
-      await new Promise(res => setTimeout(res, 1000));
-    }
+    };
+    const { result, attempt } = await callWithRetries(fn);
+    console.log(`Fallback API success for ${domain} (row ${rowNum}) after attempt ${attempt}: name=${result.companyName}, score=${result.confidenceScore}`);
+    return { ...result, rowNum };
+  } catch (err) {
+    const localResult = await humanizeName(domain, domain, false, true);
+    console.log(`Local fallback for ${domain} (row ${rowNum}) after API failure: name=${localResult.name}, score=${localResult.confidenceScore}`);
+    return { 
+      domain,
+      companyName: localResult.name || "",
+      confidenceScore: localResult.confidenceScore || 0,
+      flags: [...(localResult.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"], 
+      rowNum, 
+      error: err.message,
+      tokens: localResult.tokens || 0 
+    };
   }
 };
 
@@ -114,7 +132,7 @@ const streamToString = async (req) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.10 - Updated 2025-04-13");
+  console.log("batch-enrich.js Version 4.1.11 - Updated 2025-04-14");
 
   try {
     // Parse the request body
@@ -160,7 +178,7 @@ export default async function handler(req, res) {
     console.log(`Processing ${validatedLeads.length} valid leads`);
 
     const startTime = Date.now();
-    const limit = pLimit(2);
+    const limit = pLimit(5); // Increased concurrency to 5
     const successful = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
@@ -180,6 +198,8 @@ export default async function handler(req, res) {
       const chunkResults = await Promise.all(
         chunk.map(lead => limit(async () => {
           const { domain, rowNum } = lead;
+
+          console.info(`Row ${rowNum}: Processing ${domain}: Started`);
 
           if (Date.now() - startTime > 18000) {
             console.log(`Row ${rowNum}: Skipped due to overall timeout`);
@@ -231,6 +251,7 @@ export default async function handler(req, res) {
             });
             console.log(`Row ${rowNum}: Acceptable result for ${domain}: name=${finalResult.name}, score=${finalResult.confidenceScore}`);
           } else {
+            const primaryResult = { ...finalResult };
             const fallback = await callFallbackAPI(domain, rowNum);
             if (fallback.companyName && fallback.confidenceScore >= 75 && !fallback.flags.some(f => criticalFlags.includes(f))) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
@@ -243,6 +264,11 @@ export default async function handler(req, res) {
                 rowNum,
                 reason: "FallbackAPIFailed", 
                 details: { 
+                  primaryResult: {
+                    name: primaryResult.name,
+                    confidenceScore: primaryResult.confidenceScore,
+                    flags: primaryResult.flags
+                  },
                   score: fallback.confidenceScore, 
                   flags: fallback.flags, 
                   brand: brandDetected, 
