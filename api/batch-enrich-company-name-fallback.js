@@ -1,12 +1,10 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.18 - Optimized 2025-04-11)
+// api/batch-enrich-company-name-fallback.js (Version 1.0.19 - Optimized 2025-04-12)
 // Changes:
-// - Removed KNOWN_OVERRIDES dependency to align with humanize.js and other scripts
-// - Simplified normalization logic to rely solely on humanizeName
-// - Updated manual test outputs to reflect pattern-based results without overrides
-// - Bumped version to 1.0.18
-// - Added capitalizeName for OpenAI initials expansion consistency
+// - Synced with humanize.js: removed TooGeneric for single-word proper nouns, added TooVerbose penalty
+// - Adjusted OpenAI initials expansion to use updated scoring
+// - Bumped version to 1.0.19
 
-import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
+import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, earlyCompoundSplit } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
 // Concurrency limiter
@@ -58,7 +56,7 @@ const capitalizeName = (words) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.18 - Optimized 2025-04-11");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.19 - Optimized 2025-04-12");
 
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -230,7 +228,7 @@ export default async function handler(req, res) {
             finalResult = {
               domain,
               companyName: finalResult.name || "",
-              confidenceScore: Math.max(finalResult.confidenceScore, 50), // Align with humanize.js min
+              confidenceScore: Math.max(finalResult.confidenceScore, 50),
               flags: [...finalResult.flags, "LowConfidence"],
               tokens: tokensUsed,
               rowNum
