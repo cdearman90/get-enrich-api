@@ -1,6 +1,10 @@
-// api/batch-enrich.js (Version 4.0 - Fully Patched and Optimized 2025-04-07)
-// Updated to fix Vercel errors, align with humanize.js and Google Apps Script,
-// accept 2-word fallbacks at 75+, remove redundant metadata fetches, and enhance logging
+// api/batch-enrich.js (Version 4.1 - Updated 2025-04-07)
+// Changes:
+// - Fixed payload parsing to accept { leadList: [...] } from Google Apps Script
+// - Added detailed validation error messages
+// - Improved logging for debugging
+// - Aligned with system architecture (batch size 5, 18s timeout, Node.js 22.x)
+// - Ensured non-negotiable rules (e.g., disqualification flags, threshold ≥ 75)
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
@@ -48,7 +52,7 @@ const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.ap
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
 
 const callFallbackAPI = async (domain, rowNum) => {
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  for (let attempt = 1; attempt <= 3; attempt++) { // Aligned with system architecture: 3 retries
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s per retry
@@ -71,12 +75,12 @@ const callFallbackAPI = async (domain, rowNum) => {
       return result.results[0] || { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"] };
     } catch (err) {
       console.error(`Fallback API attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
-      if (attempt === 2) {
+      if (attempt === 3) {
         const localResult = await humanizeName(domain, domain, false);
         console.log(`Local fallback for ${domain} after API failure: ${JSON.stringify(localResult)}`);
         return { ...localResult, flags: [...localResult.flags, "FallbackAPIFailed", "LocalFallbackUsed"], error: err.message };
       }
-      await new Promise(res => setTimeout(res, 1000));
+      await new Promise(res => setTimeout(res, 1000)); // 1s delay as per system architecture
     }
   }
 };
@@ -99,23 +103,56 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.0 - Fully Patched and Optimized 2025-04-07");
+  console.log("batch-enrich.js Version 4.1 - Updated 2025-04-07");
 
   try {
-    let leads;
+    // Parse the request body
+    let body;
     try {
       const rawBody = await streamToString(req);
-      leads = JSON.parse(rawBody);
-      console.log(`Received ${leads.length} leads for processing`);
+      body = JSON.parse(rawBody);
+      console.log(`Received payload: ${JSON.stringify(body).slice(0, 300)}`);
     } catch (err) {
       console.error(`JSON parse error: ${err.message}, Stack: ${err.stack}`);
       return res.status(400).json({ error: "Invalid JSON", details: err.message });
     }
 
-    if (!Array.isArray(leads) || leads.length === 0) {
-      console.error("Missing or invalid lead list");
-      return res.status(400).json({ error: "Missing or invalid lead list" });
+    // Validate payload structure
+    if (!body || typeof body !== "object") {
+      console.error("Request body is missing or not an object");
+      return res.status(400).json({ error: "Request body is missing or not an object" });
     }
+
+    // Extract leads (support both 'leadList' and 'domains' for compatibility)
+    const leads = body.leadList || body.domains;
+    if (!leads) {
+      console.error("Missing 'leadList' or 'domains' field in payload");
+      return res.status(400).json({ error: "Missing 'leadList' or 'domains' field in payload" });
+    }
+    if (!Array.isArray(leads)) {
+      console.error("'leadList' or 'domains' must be an array");
+      return res.status(400).json({ error: "'leadList' or 'domains' must be an array" });
+    }
+    if (leads.length === 0) {
+      console.error("'leadList' or 'domains' array is empty");
+      return res.status(400).json({ error: "'leadList' or 'domains' array is empty" });
+    }
+
+    // Validate each lead entry
+    const validatedLeads = leads.map((lead, index) => {
+      if (!lead || typeof lead !== "object" || !lead.domain || typeof lead.domain !== "string" || lead.domain.trim() === "") {
+        console.error(`Invalid lead at index ${index}: ${JSON.stringify(lead)}`);
+        return null;
+      }
+      return { domain: lead.domain.trim().toLowerCase(), rowNum: lead.rowNum || (index + 1) };
+    }).filter(lead => lead !== null);
+
+    if (validatedLeads.length === 0) {
+      console.error("No valid leads after validation");
+      return res.status(400).json({ error: "No valid leads after validation" });
+    }
+
+    console.log(`Processing ${validatedLeads.length} valid leads`);
 
     const startTime = Date.now();
     const limit = pLimit(1); // Conservative concurrency for stability
@@ -124,9 +161,9 @@ export default async function handler(req, res) {
     let totalTokens = 0;
     const fallbackTriggers = [];
 
-    const BATCH_SIZE = 5; // Matches system overview and Google Apps Script
-    const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
-      leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+    const BATCH_SIZE = 5; // Matches system architecture
+    const leadChunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
+      validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
@@ -138,10 +175,6 @@ export default async function handler(req, res) {
       const chunkResults = await Promise.all(
         chunk.map(lead => limit(async () => {
           const { domain, rowNum } = lead;
-          if (!domain) {
-            console.error(`Row ${rowNum}: Missing domain`);
-            return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 };
-          }
 
           const domainLower = domain.toLowerCase();
 
@@ -163,9 +196,9 @@ export default async function handler(req, res) {
               console.log(`Row ${rowNum}: Empty override for ${domain}, proceeding to fallback`);
               return { name: "", confidenceScore: 0, flags: ["EmptyOverride"], rowNum, tokens: 0 };
             }
-            // If override is not a string or invalid, continue to fallback
           }
 
+          // Check cache
           if (domainCache.has(domainLower)) {
             const cachedResult = domainCache.get(domainLower);
             console.log(`Row ${rowNum}: Cache hit for ${domain}: ${JSON.stringify(cachedResult)}`);
@@ -191,7 +224,8 @@ export default async function handler(req, res) {
             }
           }
 
-          // Acceptability criteria aligned with Google Apps Script and batch-enrich-company-name-fallback.js
+          // Acceptability criteria (aligned with non-negotiable rules)
+          const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
           const forceReviewFlags = [
             "TooGeneric",
             "CityNameOnly",
@@ -201,7 +235,8 @@ export default async function handler(req, res) {
             "FuzzyCityMatch",
             "NotPossessiveFriendly"
           ];
-          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f));
+          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => criticalFlags.includes(f));
+
           if (isAcceptable) {
             domainCache.set(domainLower, {
               name: finalResult.name,
@@ -215,13 +250,17 @@ export default async function handler(req, res) {
           // Fallback to API if needed
           if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const fallback = await callFallbackAPI(domain, rowNum);
-            if (fallback.name && fallback.confidenceScore >= 75 && !fallback.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f))) {
+            if (fallback.name && fallback.confidenceScore >= 75 && !fallback.flags.some(f => criticalFlags.includes(f))) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
               tokensUsed += fallback.tokens || 0;
               console.log(`Row ${rowNum}: Fallback API used successfully: ${JSON.stringify(finalResult)}`);
             } else {
               finalResult.flags.push("FallbackAPIFailed");
-              fallbackTriggers.push({ domain, reason: "FallbackAPIFailed", details: `Score: ${fallback.confidenceScore}, Flags: ${fallback.flags.join(", ")}` });
+              fallbackTriggers.push({ 
+                domain, 
+                reason: "FallbackAPIFailed", 
+                details: `Score: ${fallback.confidenceScore}, Flags: ${fallback.flags.join(", ")}` 
+              });
               console.log(`Row ${rowNum}: Fallback API failed, using primary result: ${JSON.stringify(finalResult)}`);
             }
           }
