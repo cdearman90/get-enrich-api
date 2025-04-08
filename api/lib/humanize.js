@@ -748,7 +748,7 @@ async function validateSpacingWithGPT(domain, inputName) {
 }
 
 // Main Humanization Function
-async function humanizeName(inputName, domain, addPossessiveFlag = false) {
+export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
     const domainLower = domain.toLowerCase();
     console.log(`Processing domain: ${domain}`);
