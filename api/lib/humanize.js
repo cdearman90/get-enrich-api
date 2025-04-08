@@ -633,7 +633,8 @@ const KNOWN_OVERRIDES = {
   "smartdrive.com": "Smart Drive",
   "wickmail.com": "Wick Mail",
   "bentleyauto.com": "Bentley Auto",
-  "saabvw.com": "Saab VW"};
+  "saabvw.com": "Saab VW"
+};
 
 // Utility Functions
 function normalizeText(name) {
