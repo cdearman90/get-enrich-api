@@ -1,8 +1,13 @@
-// api/batch-enrich-franchise.js (Version 1.0.0 - Optimized 2025-04-07)
-// Assigns Franchise Groups based on domain and company name, aligned with batch-enrich.js v4.0,
-// batch-enrich-company-name-fallback.js v1.0.8, and Google Apps Script
+// api/batch-enrich-franchise.js (Version 1.0.1 - Optimized 2025-04-07)
+// Changes:
+// - Integrated extractBrandOfCityFromDomain from humanize.js for CarBrandOfCity pattern detection
+// - Added FRANCHISE_GROUPS mapping for multi-brand dealership groups
+// - Improved brand detection with word boundaries and humanName prioritization
+// - Added metadataCache for efficient metadata fetching
+// - Increased concurrency to pLimit(5) for better throughput
+// - Updated version to 1.0.1 to reflect the changes
 
-import { CAR_BRANDS, CAR_BRAND_MAPPING } from "./lib/humanize.js"; // Aligned with updated humanize.js
+import { CAR_BRANDS, CAR_BRAND_MAPPING, extractBrandOfCityFromDomain } from "./lib/humanize.js";
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -23,11 +28,26 @@ const pLimit = (concurrency) => {
   });
 };
 
-// Cache for franchise results
+// Cache for franchise results and metadata
 const franchiseCache = new Map();
+const metadataCache = new Map();
+
+// Known multi-brand franchise groups
+const FRANCHISE_GROUPS = {
+  "autonation.com": "AutoNation",
+  "lithia.com": "Lithia Motors",
+  "penskeautomotive.com": "Penske Automotive",
+  "group1auto.com": "Group 1 Automotive",
+  "sonicdealers.com": "Sonic Automotive"
+};
 
 // HTML metadata fetch
 const fetchWebsiteMetadata = async (domain) => {
+  if (metadataCache.has(domain)) {
+    console.log(`Metadata cache hit for ${domain}`);
+    return metadataCache.get(domain);
+  }
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000); // 2s timeout
@@ -40,11 +60,15 @@ const fetchWebsiteMetadata = async (domain) => {
     const html = await response.text();
     const titleMatch = html.match(/<title>([^<]+)<\/title>/i);
     const metaMatch = html.match(/<meta[^>]+name=["']description["'][^>]+content=["']([^"']+)["']/i);
-    console.log(`Metadata fetched for ${domain}: title=${titleMatch?.[1] || ""}`);
-    return { title: titleMatch?.[1] || "", description: metaMatch?.[1] || "", redirectedDomain: response.url };
+    const result = { title: titleMatch?.[1] || "", description: metaMatch?.[1] || "", redirectedDomain: response.url };
+    metadataCache.set(domain, result);
+    console.log(`Metadata fetched for ${domain}: title=${result.title}`);
+    return result;
   } catch (err) {
     console.error(`Metadata fetch failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
-    return { title: "", description: "", redirectedDomain: domain, error: err.message };
+    const result = { title: "", description: "", redirectedDomain: domain, error: err.message };
+    metadataCache.set(domain, result);
+    return result;
   }
 };
 
@@ -65,7 +89,7 @@ const streamToString = async (stream) => {
 };
 
 export default async function handler(req, res) {
-  console.log("batch-enrich-franchise.js Version 1.0.0 - Optimized 2025-04-07");
+  console.log("batch-enrich-franchise.js Version 1.0.1 - Optimized 2025-04-07");
 
   try {
     let leads;
@@ -84,17 +108,17 @@ export default async function handler(req, res) {
     }
 
     const startTime = Date.now();
-    const limit = pLimit(1); // Conservative concurrency for stability
+    const limit = pLimit(5); // Increased to 5 for better throughput
     const results = [];
     const manualReviewQueue = [];
 
-    const BATCH_SIZE = 5; // Aligned with batch-enrich.js v4.0 and Google Apps Script
+    const BATCH_SIZE = 5;
     const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
       leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 18000) { // 18s timeout for Vercel paid tier
+      if (Date.now() - startTime > 18000) {
         console.log("Partial response due to timeout after 18s");
         return res.status(200).json({ results, manualReviewQueue, partial: true });
       }
@@ -114,60 +138,97 @@ export default async function handler(req, res) {
           }
 
           console.log(`Processing franchise for ${domain} (Row ${rowNum})`);
+          let franchiseGroup = "";
+          let flags = [];
           let primaryBrand = null;
-          const sources = [
-            { name: "humanName", text: humanName || domain.replace(/\.(com|org|net|co\.uk)$/, "") },
-            { name: "domain", text: domain }
-          ];
 
-          for (const source of sources) {
-            const text = source.text.toLowerCase();
-            for (const brand of CAR_BRANDS) {
-              if (text.includes(brand)) {
-                primaryBrand = brand;
-                console.log(`Row ${rowNum}: Found ${brand} in ${source.name}`);
-                break;
-              }
+          // Check for known franchise groups
+          const domainLower = domain.toLowerCase();
+          for (const [franchiseDomain, group] of Object.entries(FRANCHISE_GROUPS)) {
+            if (domainLower.includes(franchiseDomain)) {
+              franchiseGroup = group;
+              flags.push("FranchiseGroupMatched");
+              console.log(`Row ${rowNum}: Matched franchise group ${group} for ${domain}`);
+              break;
             }
-            if (primaryBrand) break;
           }
 
-          if (!primaryBrand) {
-            const metadata = await fetchWebsiteMetadata(domain);
-            if (metadata.error) {
-              console.log(`Row ${rowNum}: Metadata fetch failed, skipping`);
-              manualReviewQueue.push({ domain, humanName, rowNum, reason: "MetadataFetchFailed" });
-              return { franchiseGroup: "", flags: ["MetadataFetchFailed", "NeedsHumanReview"], rowNum };
+          if (!franchiseGroup) {
+            // Try CarBrandOfCity pattern first
+            const brandOfCityResult = extractBrandOfCityFromDomain(domainLower);
+            if (brandOfCityResult) {
+              primaryBrand = brandOfCityResult.brand.toLowerCase();
+              flags.push("CarBrandOfCityPattern");
+              console.log(`Row ${rowNum}: Extracted brand ${primaryBrand} from CarBrandOfCity pattern`);
             }
-            sources.push({ name: "metatitle", text: metadata.title.toLowerCase() });
-            sources.push({ name: "description", text: metadata.description.toLowerCase() });
 
-            for (const source of sources) {
-              const text = source.text.toLowerCase();
-              for (const brand of CAR_BRANDS) {
-                if (text.includes(brand)) {
-                  primaryBrand = brand;
-                  console.log(`Row ${rowNum}: Found ${brand} in ${source.name}`);
-                  break;
+            // If no brand found, try humanName and domain substring matching
+            if (!primaryBrand) {
+              const sources = [
+                { name: "humanName", text: humanName || "" },
+                { name: "domain", text: domain.replace(/\.(com|org|net|co\.uk)$/, "") }
+              ];
+
+              for (const source of sources) {
+                const words = source.text.toLowerCase().split(/\W+/);
+                for (const word of words) {
+                  for (const brand of CAR_BRANDS) {
+                    if (word === brand.toLowerCase()) {
+                      primaryBrand = brand;
+                      console.log(`Row ${rowNum}: Found ${brand} in ${source.name}`);
+                      break;
+                    }
+                  }
+                  if (primaryBrand) break;
+                }
+                if (primaryBrand) break;
+              }
+            }
+
+            // If still no brand, fetch metadata
+            if (!primaryBrand) {
+              const metadata = await fetchWebsiteMetadata(domain);
+              if (metadata.error) {
+                console.log(`Row ${rowNum}: Metadata fetch failed, proceeding without metadata`);
+                flags.push("MetadataFetchFailed");
+              } else {
+                const metadataSources = [
+                  { name: "metatitle", text: metadata.title.toLowerCase() },
+                  { name: "description", text: metadata.description.toLowerCase() }
+                ];
+
+                for (const source of metadataSources) {
+                  const words = source.text.split(/\W+/);
+                  for (const word of words) {
+                    for (const brand of CAR_BRANDS) {
+                      if (word === brand.toLowerCase()) {
+                        primaryBrand = brand;
+                        console.log(`Row ${rowNum}: Found ${brand} in ${source.name}`);
+                        break;
+                      }
+                    }
+                    if (primaryBrand) break;
+                  }
+                  if (primaryBrand) break;
                 }
               }
-              if (primaryBrand) break;
+            }
+
+            // Assign franchise group based on primary brand
+            if (primaryBrand) {
+              franchiseGroup = CAR_BRAND_MAPPING[primaryBrand.toLowerCase()] || primaryBrand;
+              flags.push("Success");
+              console.log(`Row ${rowNum}: Assigned franchise ${franchiseGroup}`);
+            } else {
+              console.log(`Row ${rowNum}: No car brand found`);
+              manualReviewQueue.push({ domain, humanName, rowNum, reason: "NoCarBrandFound" });
+              flags.push("NoCarBrandFound", "NeedsHumanReview");
             }
           }
 
-          if (primaryBrand) {
-            const standardizedBrand = CAR_BRAND_MAPPING[primaryBrand.toLowerCase()] || primaryBrand;
-            const result = { franchiseGroup: standardizedBrand, flags: ["Success"], rowNum };
-            franchiseCache.set(cacheKey, result);
-            console.log(`Row ${rowNum}: Assigned franchise ${standardizedBrand}`);
-            return result;
-          } else {
-            console.log(`Row ${rowNum}: No car brand found`);
-            manualReviewQueue.push({ domain, humanName, rowNum, reason: "NoCarBrandFound" });
-            const result = { franchiseGroup: "", flags: ["NoCarBrandFound", "NeedsHumanReview"], rowNum };
-            franchiseCache.set(cacheKey, result);
-            return result;
-          }
+          const result = { franchiseGroup, flags, rowNum };
+          franchiseCache.set(cacheKey, result);
+          return result;
         }))
       );
 
