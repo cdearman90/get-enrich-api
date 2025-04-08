@@ -4,6 +4,9 @@
 import { callOpenAI } from './openai.js';
 
 // Constants
+const CAR_BRAND_PREFIXES = new Set(CAR_BRANDS.map(brand => `${brand}of`));
+
+// Constants
 const COMMON_WORDS = [
   "and", "auto", "autogroup", "automall", "best", "bmw", "cars", "center", "chevrolet", "chevy", "classic",
   "com", "corp", "corporation", "dealers", "dealership", "elite", "first", "great", "group", "honda",
