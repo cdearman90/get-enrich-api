@@ -456,6 +456,11 @@ function applyCityShortName(cityName) {
   return KNOWN_CITY_SHORT_NAMES[key] || capitalizeName(cityName);
 }
 
+function earlyCompoundSplit(word) {
+  const result = word.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+  return result;
+}
+
 function extractBrandOfCityFromDomain(domain) {
   const domainLower = domain.toLowerCase().replace(/\.(com|net|org)$/, "");
 
@@ -465,7 +470,7 @@ function extractBrandOfCityFromDomain(domain) {
   if (match) {
     const brand = BRAND_MAPPING[match[1].toLowerCase()] || capitalizeName(match[1]);
     const city = applyCityShortName(match[2]);
-    return { name: `${city} ${brand}`, flags: ["PatternMatched", "CarBrandOfCityPattern"], confidence: 100 };
+    return { name: `${city} ${brand}`, brand: match[1], city: match[2], flags: ["PatternMatched", "CarBrandOfCityPattern"], confidence: 100 };
   }
 
   // [Brand][City] or [City][Brand]
@@ -475,7 +480,7 @@ function extractBrandOfCityFromDomain(domain) {
       if (cityPart && KNOWN_CITIES_SET.has(cityPart)) {
         const brandName = BRAND_MAPPING[brand] || capitalizeName(brand);
         const cityName = applyCityShortName(cityPart);
-        return { name: `${cityName} ${brandName}`, flags: ["PatternMatched"], confidence: 95 };
+        return { name: `${cityName} ${brandName}`, brand, city: cityPart, flags: ["PatternMatched"], confidence: 95 };
       }
     }
   }
@@ -487,7 +492,7 @@ function extractBrandOfCityFromDomain(domain) {
     if (CAR_BRANDS.includes(lastWord)) {
       const prefix = words.join("").replace(/auto(group|mall)?/i, "Auto");
       const brandName = BRAND_MAPPING[lastWord] || capitalizeName(lastWord);
-      return { name: `${capitalizeName(prefix)} ${brandName}`, flags: ["PatternMatched"], confidence: 90 };
+      return { name: `${capitalizeName(prefix)} ${brandName}`, brand: lastWord, city: null, flags: ["PatternMatched"], confidence: 90 };
     }
   }
 
@@ -500,11 +505,11 @@ function extractBrandOfCityFromDomain(domain) {
     if (CAR_BRANDS.includes(brand)) {
       const brandName = BRAND_MAPPING[brand] || capitalizeName(brand);
       const expandedPrefix = ABBREVIATION_EXPANSIONS[initials.toLowerCase()] || `${initials} Auto`;
-      return { name: `${expandedPrefix} ${brandName}`, flags: ["PatternMatched", "InitialsPattern"], confidence: 85 };
+      return { name: `${expandedPrefix} ${brandName}`, brand, city: null, flags: ["PatternMatched", "InitialsPattern"], confidence: 85 };
     }
   }
 
-  return { name: capitalizeName(domainLower), flags: ["FallbackToDomain"], confidence: 70 };
+  return { name: capitalizeName(domainLower), brand: null, city: null, flags: ["FallbackToDomain"], confidence: 70 };
 }
 
 // Main Function
@@ -519,7 +524,7 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     }
 
     // Pattern matching
-    let { name, flags, confidence } = extractBrandOfCityFromDomain(domainLower);
+    let { name, flags, confidence, brand, city } = extractBrandOfCityFromDomain(domainLower);
     let tokens = 0;
 
     // Abbreviation handling
@@ -534,9 +539,21 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
       flags.push("CityNameOnly");
       confidenceScore -= 20;
     }
+    // Remove TooGeneric penalty for single-word proper nouns or human-like names
     if (words.length === 1 && !containsCarBrand(name) && !GENERIC_SUFFIXES.has(words[0].toLowerCase())) {
-      flags.push("TooGeneric");
-      confidenceScore -= 20;
+      if (!KNOWN_PROPER_NOUNS.includes(words[0].toLowerCase())) {
+        // Check if it looks like a human name (e.g., "Duval", "Gusmachado")
+        const isHumanLike = /^[A-Z][a-z]+$/i.test(words[0]);
+        if (!isHumanLike) {
+          flags.push("TooGeneric");
+          confidenceScore -= 20;
+        }
+      }
+    }
+    // Penalize names with 4+ words to encourage brevity
+    if (words.length >= 4) {
+      flags.push("TooVerbose");
+      confidenceScore -= 5; // Small penalty to favor 1-3 words
     }
 
     // Ensure minimum confidence
@@ -559,4 +576,4 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
   }
 }
 
-export { CAR_BRANDS, BRAND_MAPPING, KNOWN_PROPER_NOUNS, ABBREVIATION_EXPANSIONS, normalizeText, capitalizeName };
+export { CAR_BRANDS, BRAND_MAPPING, KNOWN_PROPER_NOUNS, ABBREVIATION_EXPANSIONS, normalizeText, capitalizeName, earlyCompoundSplit };
