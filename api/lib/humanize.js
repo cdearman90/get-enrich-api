@@ -964,7 +964,7 @@ function extractBrandOfCityFromDomain(domain) {
   return { brand: brandFormatted, city };
 }
 
-// Main Humanization Function
+// In humanize.js, update the humanizeName function to skip OpenAI for known cities
 export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
     const domainLower = domain.toLowerCase();
@@ -988,6 +988,8 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
 
       if (KNOWN_CITIES_SET.has(city.toLowerCase())) {
         finalCity = capitalizeName(city);
+        confidenceScore = 100; // Set confidence to 100 for known cities
+        flags.push("AutoPatternBypass"); // Skip OpenAI
       } else {
         const fuzzyMatch = Array.from(KNOWN_CITIES_SET).find(c => {
           const dist = levenshteinDistance(city.toLowerCase(), c.toLowerCase());
@@ -1015,7 +1017,7 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
 
       let name;
       if (brand === "MB") {
-        name = `${brand} ${finalCity}`;
+        name = `${BRAND_MAPPING["mb"]} ${finalCity}`; // Apply BRAND_MAPPING
       } else {
         name = finalCity;
       }
@@ -1027,6 +1029,14 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
         tokens
       };
     }
+
+    // Rest of the humanizeName function remains unchanged
+    // ...
+  } catch (err) {
+    console.error(`Error in humanizeName for ${domain}: ${err.stack}`);
+    return { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
+  }
+}
 
     // Apply overrides after CarBrandOfCity check
     const override = KNOWN_OVERRIDES[domainLower];
