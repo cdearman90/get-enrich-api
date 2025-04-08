@@ -1,13 +1,13 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.17 - Optimized 2025-04-10)
+// api/batch-enrich-company-name-fallback.js (Version 1.0.18 - Optimized 2025-04-11)
 // Changes:
-// - Integrated latest humanize.js with applyCityShortName for city short names
-// - Added OpenAI validation to avoid unreadable initials combos (e.g., "LV BA")
-// - Aligned timeout with batch-enrich.js (18s total, 4s per domain)
-// - Enhanced fallbackTriggers logging with detailed justifications
-// - Updated manual test outputs to reflect short names (e.g., "N.O. Lexus")
-// - Updated version to 1.0.17
+// - Removed KNOWN_OVERRIDES dependency to align with humanize.js and other scripts
+// - Simplified normalization logic to rely solely on humanizeName
+// - Updated manual test outputs to reflect pattern-based results without overrides
+// - Bumped version to 1.0.18
+// - Added capitalizeName for OpenAI initials expansion consistency
 
-import { humanizeName, KNOWN_OVERRIDES, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
+import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
+import { callOpenAI } from "./lib/openai.js";
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -41,13 +41,24 @@ const streamToString = async (stream) => {
   } catch (err) {
     clearTimeout(timeout);
     console.error(`Stream read failed: ${err.message}`);
-    return ""; // Fallback to empty string
+    return "";
   }
+};
+
+// Capitalize name (synced with humanize.js)
+const capitalizeName = (words) => {
+  if (typeof words === "string") words = words.split(/\s+/).filter(word => word);
+  return words.map((word, i) => {
+    if (word.toLowerCase() === "chevrolet") return "Chevy";
+    if (["of", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
+    if (/^[A-Z]{2,5}$/.test(word)) return word;
+    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+  }).join(" ");
 };
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.17 - Optimized 2025-04-10");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.18 - Optimized 2025-04-11");
 
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -122,35 +133,14 @@ export default async function handler(req, res) {
             return { domain, companyName: "", confidenceScore: 0, flags: ["SkippedDueToTimeout"], rowNum, tokens: 0 };
           }
 
-          let domainLower = domain.toLowerCase();
-          const normalizedMatch = extractBrandOfCityFromDomain(domainLower);
-          if (normalizedMatch && !KNOWN_OVERRIDES[domainLower]) {
-            const normalizedDomain = `${normalizedMatch.brand.toLowerCase()}of${normalizedMatch.city.toLowerCase()}`;
-            console.log(`Row ${rowNum}: Normalized subdomain detected: ${domain} → ${normalizedDomain}`);
-            domainLower = normalizedDomain;
-          }
-
-          const override = KNOWN_OVERRIDES[domainLower];
-          if (typeof override === 'string' && override.trim().length > 0) {
-            const overrideName = override.trim();
-            console.log(`Row ${rowNum}: Override applied for ${domain}: ${overrideName}`);
-            return {
-              domain,
-              companyName: overrideName,
-              confidenceScore: 100,
-              flags: ["OverrideApplied"],
-              rowNum,
-              tokens: 0
-            };
-          } else if (override !== undefined && override.trim() === "") {
-            console.log(`Row ${rowNum}: Empty override for ${domain}, proceeding to fallback`);
-          }
-
+          const domainLower = domain.toLowerCase();
           console.log(`Processing fallback for ${domain} (Row ${rowNum})`);
+
           let finalResult;
           let tokensUsed = 0;
-          let brandDetected = normalizedMatch?.brand || null;
-          let cityDetected = normalizedMatch?.city || null;
+          const normalizedMatch = extractBrandOfCityFromDomain(domainLower);
+          const brandDetected = normalizedMatch?.brand || null;
+          const cityDetected = normalizedMatch?.city || null;
 
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
@@ -195,17 +185,16 @@ export default async function handler(req, res) {
             "TooGeneric", "CityNameOnly", "PossibleAbbreviation", "BadPrefixOf", "CarBrandSuffixRemaining",
             "NotPossessiveFriendly", "UnverifiedCity"
           ];
-          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => criticalFlags.includes(f)) &&
-                              !(finalResult.flags.includes("OpenAICityValidated") && finalResult.confidenceScore < 75);
+          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => criticalFlags.includes(f));
 
-          // Stage 4: Check for unreadable initials (e.g., "LV BA")
+          // Check for unreadable initials (e.g., "LV BA")
           if (process.env.OPENAI_API_KEY && finalResult.name.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
             const prompt = `Is "${finalResult.name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
             const response = await callOpenAI({ prompt, maxTokens: 40 });
             tokensUsed += response.tokens || 0;
-            const parsed = safeParseGPTJson(response.output, { isReadable: true, isConfident: false });
+            const parsed = safeParseGPTJson(response.text, { isReadable: true, isConfident: false });
             if (!parsed.isReadable && parsed.isConfident) {
-              const fullCity = cityDetected ? capitalizeName(cityDetected) : finalResult.name.split(" ")[0];
+              const fullCity = cityDetected ? applyCityShortName(cityDetected) : finalResult.name.split(" ")[0];
               finalResult.name = `${fullCity} ${brandDetected || finalResult.name.split(" ")[1] || "Auto"}`;
               finalResult.flags.push("InitialsExpanded");
               finalResult.confidenceScore -= 5;
@@ -241,7 +230,7 @@ export default async function handler(req, res) {
             finalResult = {
               domain,
               companyName: finalResult.name || "",
-              confidenceScore: Math.max(finalResult.confidenceScore, 60),
+              confidenceScore: Math.max(finalResult.confidenceScore, 50), // Align with humanize.js min
               flags: [...finalResult.flags, "LowConfidence"],
               tokens: tokensUsed,
               rowNum
@@ -279,11 +268,11 @@ function safeParseGPTJson(raw, fallbackObj) {
 
 /*
 Manual Test for CarBrandOfCity Domains
-Expected: All domains resolve with short names where applicable, without excessive manual review or OpenAI calls.
-- "toyotaofslidell.net" → "Slidell Toyota" (confidence: 100, flags: ["OverrideApplied"])
-- "lexusofneworleans.com" → "N.O. Lexus" (confidence: 100, flags: ["OverrideApplied"])
-- "cadillacoflasvegas.com" → "Vegas Cadillac" (confidence: 100, flags: ["OverrideApplied"])
-- "kiaoflagrange.com" → "Lagrange Kia" (confidence: 100, flags: ["OverrideApplied"])
+Expected: All domains resolve with short names where applicable, relying on pattern matching.
+- "toyotaofslidell.net" → "Slidell Toyota" (confidence: 100, flags: ["PatternMatched", "CarBrandOfCityPattern"])
+- "lexusofneworleans.com" → "N.O. Lexus" (confidence: 100, flags: ["PatternMatched", "CarBrandOfCityPattern"])
+- "cadillacoflasvegas.com" → "Vegas Cadillac" (confidence: 100, flags: ["PatternMatched", "CarBrandOfCityPattern"])
+- "kiaoflagrange.com" → "Lagrange Kia" (confidence: 100, flags: ["PatternMatched", "CarBrandOfCityPattern"])
 */
 
 export const config = { api: { bodyParser: false } };
