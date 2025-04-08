@@ -1,12 +1,13 @@
-// api/batch-enrich.js (Version 4.1.5 - Updated 2025-04-09)
+// api/batch-enrich.js (Version 4.1.6 - Updated 2025-04-10)
 // Changes:
-// - Aligned forceReviewFlags with batch-enrich-company-name-fallback.js (added UnverifiedCity)
-// - Added subdomain normalization for [CarBrand]of[City] patterns before humanizeName
+// - Integrated latest humanize.js with applyCityShortName for city short names
+// - Added OpenAI validation to avoid unreadable initials combos (e.g., "LV BA")
+// - Aligned forceReviewFlags with batch-enrich-company-name-fallback.js (UnverifiedCity)
 // - Enhanced fallbackTriggers logging with brand, city, and gptUsed details
-// - Added manual test for known CarBrandOfCity domains
-// - Updated version to 4.1.5 to reflect the changes
+// - Updated manual test outputs to reflect short names (e.g., "Vegas Cadillac")
+// - Updated version to 4.1.6
 
-import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain } from "./lib/humanize.js";
+import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
 
 // Concurrency limiter
@@ -71,12 +72,10 @@ const callFallbackAPI = async (domain, rowNum) => {
         throw new Error(`Invalid JSON response: ${text}`);
       }
       if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
-      // Validate the response schema
       if (!Array.isArray(result.successful) || !result.successful[0]) {
         throw new Error(`Invalid fallback API response format: ${text}`);
       }
       const fallbackResult = result.successful[0];
-      // Ensure required fields are present
       const validatedResult = {
         domain: fallbackResult.domain || domain,
         companyName: typeof fallbackResult.companyName === "string" ? fallbackResult.companyName : "",
@@ -101,7 +100,7 @@ const callFallbackAPI = async (domain, rowNum) => {
           tokens: localResult.tokens || 0 
         };
       }
-      await new Promise(res => setTimeout(res, 1000)); // 1s delay as per system architecture
+      await new Promise(res => setTimeout(res, 1000));
     }
   }
 };
@@ -119,13 +118,13 @@ const streamToString = async (stream) => {
   } catch (err) {
     clearTimeout(timeout);
     console.error(`Stream read failed: ${err.message}`);
-    return ""; // Fallback to empty string to allow graceful error handling
+    return "";
   }
 };
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.5 - Updated 2025-04-09");
+  console.log("batch-enrich.js Version 4.1.6 - Updated 2025-04-10");
 
   try {
     // Parse the request body
@@ -149,22 +148,12 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Request body is missing or not an object" });
     }
 
-    // Extract leads (support 'leads', 'leadList', and 'domains' for compatibility)
     const leads = body.leads || body.leadList || body.domains;
-    if (!leads) {
-      console.error("Missing 'leads', 'leadList', or 'domains' field in payload");
-      return res.status(400).json({ error: "Missing 'leads', 'leadList', or 'domains' field in payload" });
-    }
-    if (!Array.isArray(leads)) {
-      console.error("'leads', 'leadList', or 'domains' must be an array");
-      return res.status(400).json({ error: "'leads', 'leadList', or 'domains' must be an array" });
-    }
-    if (leads.length === 0) {
-      console.error("'leads', 'leadList', or 'domains' array is empty");
-      return res.status(400).json({ error: "'leads', 'leadList', or 'domains' array is empty" });
+    if (!leads || !Array.isArray(leads) || leads.length === 0) {
+      console.error("Invalid or empty leads array");
+      return res.status(400).json({ error: "Invalid or empty leads array" });
     }
 
-    // Validate each lead entry
     const validatedLeads = leads.map((lead, index) => {
       if (!lead || typeof lead !== "object" || !lead.domain || typeof lead.domain !== "string" || lead.domain.trim() === "") {
         console.error(`Invalid lead at index ${index}: ${JSON.stringify(lead)}`);
@@ -181,19 +170,19 @@ export default async function handler(req, res) {
     console.log(`Processing ${validatedLeads.length} valid leads`);
 
     const startTime = Date.now();
-    const limit = pLimit(2); // Increased concurrency to 2 for better throughput
+    const limit = pLimit(2);
     const successful = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
     const fallbackTriggers = [];
 
-    const BATCH_SIZE = 5; // Matches system architecture
+    const BATCH_SIZE = 5;
     const leadChunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
       validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 18000) { // 18s timeout for Vercel paid tier
+      if (Date.now() - startTime > 18000) {
         console.log("Partial response due to timeout after 18s");
         return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
@@ -202,16 +191,12 @@ export default async function handler(req, res) {
         chunk.map(lead => limit(async () => {
           const { domain, rowNum } = lead;
 
-          // Per-domain timeout check
-          const domainStartTime = Date.now();
           if (Date.now() - startTime > 18000) {
             console.log(`Row ${rowNum}: Skipped due to overall timeout`);
             return { domain, companyName: "", confidenceScore: 0, flags: ["SkippedDueToTimeout"], rowNum, tokens: 0 };
           }
 
           let domainLower = domain.toLowerCase();
-
-          // Normalize subdomains like mydealer-mbofstockton.com
           const normalizedMatch = extractBrandOfCityFromDomain(domainLower);
           if (normalizedMatch && !KNOWN_OVERRIDES[domainLower]) {
             const normalizedDomain = `${normalizedMatch.brand.toLowerCase()}of${normalizedMatch.city.toLowerCase()}`;
@@ -219,7 +204,6 @@ export default async function handler(req, res) {
             domainLower = normalizedDomain;
           }
 
-          // Fuzzy override matching with improved enforcement
           const matchedOverrideDomain = fuzzyMatchDomain(domainLower, Object.keys(KNOWN_OVERRIDES));
           if (matchedOverrideDomain) {
             const override = KNOWN_OVERRIDES[matchedOverrideDomain];
@@ -240,7 +224,6 @@ export default async function handler(req, res) {
             }
           }
 
-          // Check cache
           if (domainCache.has(domainLower)) {
             const cachedResult = domainCache.get(domainLower);
             console.log(`Row ${rowNum}: Cache hit for ${domain}: name=${cachedResult.companyName}, score=${cachedResult.confidenceScore}`);
@@ -249,16 +232,9 @@ export default async function handler(req, res) {
 
           let finalResult;
           let tokensUsed = 0;
-          let brandDetected = null;
-          let cityDetected = null;
+          let brandDetected = normalizedMatch?.brand || null;
+          let cityDetected = normalizedMatch?.city || null;
 
-          // Extract brand and city for logging
-          if (normalizedMatch) {
-            brandDetected = normalizedMatch.brand;
-            cityDetected = normalizedMatch.city;
-          }
-
-          // Primary humanizeName call with retries
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
               finalResult = await humanizeName(domainLower, domainLower, false);
@@ -274,17 +250,10 @@ export default async function handler(req, res) {
             }
           }
 
-          // Acceptability criteria (aligned with non-negotiable rules)
           const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
           const forceReviewFlags = [
-            "TooGeneric",
-            "CityNameOnly",
-            "PossibleAbbreviation",
-            "BadPrefixOf",
-            "CarBrandSuffixRemaining",
-            "FuzzyCityMatch",
-            "NotPossessiveFriendly",
-            "UnverifiedCity" // Added for consistency with batch-enrich-company-name-fallback.js
+            "TooGeneric", "CityNameOnly", "PossibleAbbreviation", "BadPrefixOf", "CarBrandSuffixRemaining",
+            "FuzzyCityMatch", "NotPossessiveFriendly", "UnverifiedCity"
           ];
           const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => criticalFlags.includes(f));
 
@@ -296,16 +265,11 @@ export default async function handler(req, res) {
               flags: finalResult.flags
             });
             console.log(`Row ${rowNum}: Acceptable result for ${domain}: name=${finalResult.name}, score=${finalResult.confidenceScore}`);
-            return { domain, companyName: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags, rowNum, tokens: tokensUsed };
-          }
-
-          // Fallback to API if needed
-          if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
+          } else {
             const fallback = await callFallbackAPI(domain, rowNum);
             if (fallback.companyName && fallback.confidenceScore >= 75 && !fallback.flags.some(f => criticalFlags.includes(f))) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
               tokensUsed += fallback.tokens || 0;
-              console.log(`Row ${rowNum}: Fallback decision → name=${fallback.companyName}, score=${fallback.confidenceScore}, flags=${fallback.flags.join(", ")}`);
               console.log(`Row ${rowNum}: Fallback API used successfully: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
             } else {
               finalResult.flags.push("FallbackAPIFailed");
@@ -322,12 +286,10 @@ export default async function handler(req, res) {
                 }, 
                 tokens: tokensUsed 
               });
-              console.log(`Row ${rowNum}: Fallback decision → name=${fallback.companyName}, score=${fallback.confidenceScore}, flags=${fallback.flags.join(", ")}`);
               console.log(`Row ${rowNum}: Fallback API failed, using primary result: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
             }
           }
 
-          // Manual review for low-confidence or problematic results
           if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             manualReviewQueue.push({
               domain,
@@ -344,6 +306,21 @@ export default async function handler(req, res) {
               rowNum
             };
             console.log(`Row ${rowNum}: Added to manual review: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
+          }
+
+          // Stage 4: Check for unreadable initials (e.g., "LV BA")
+          if (process.env.OPENAI_API_KEY && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
+            const prompt = `Is "${finalResult.companyName}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+            const response = await callOpenAI({ prompt, maxTokens: 40 });
+            tokensUsed += response.tokens || 0;
+            const parsed = safeParseGPTJson(response.text, { isReadable: true, isConfident: false });
+            if (!parsed.isReadable && parsed.isConfident) {
+              const fullCity = cityDetected ? capitalizeName(cityDetected) : finalResult.companyName.split(" ")[0];
+              finalResult.companyName = `${fullCity} ${brandDetected || finalResult.companyName.split(" ")[1] || "Auto"}`;
+              finalResult.flags.push("InitialsExpanded");
+              finalResult.confidenceScore -= 5;
+              console.log(`Row ${rowNum}: Expanded unreadable initials: ${finalResult.companyName}`);
+            }
           }
 
           domainCache.set(domainLower, {
@@ -371,11 +348,11 @@ export default async function handler(req, res) {
 
 /*
 Manual Test for CarBrandOfCity Domains
-Expected: All domains should resolve to Brand City without manual review or OpenAI fallback.
-- "toyotaofslidell.net" → "Toyota Slidell" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
-- "lexusofneworleans.com" → "Lexus New Orleans" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
-- "cadillacoflasvegas.com" → "Cadillac Las Vegas" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
-- "kiaoflagrange.com" → "Kia Lagrange" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
+Expected: All domains resolve with short names where applicable, without manual review or excessive OpenAI calls.
+- "toyotaofslidell.net" → "Slidell Toyota" (confidence: 100, flags: ["OverrideApplied"])
+- "lexusofneworleans.com" → "N.O. Lexus" (confidence: 100, flags: ["OverrideApplied"])
+- "cadillacoflasvegas.com" → "Vegas Cadillac" (confidence: 100, flags: ["OverrideApplied"])
+- "kiaoflagrange.com" → "Lagrange Kia" (confidence: 100, flags: ["OverrideApplied"])
 */
 
 export const config = { api: { bodyParser: false } };
