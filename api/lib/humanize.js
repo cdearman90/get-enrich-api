@@ -31,23 +31,21 @@ const CAR_BRANDS = [
 ];
 
 const BRAND_MAPPING = {
-  "mb": "MB",
-  "mercedes": "MB",
-  "mercedes-benz": "MB",
-  "mercedesbenz": "MB",
-  "chev": "Chevrolet",
-  "chevvy": "Chevrolet",
-  "bmw": "BMW",
-  "kia": "Kia",
-  "toyota": "Toyota",
-  "lexus": "Lexus",
-  "honda": "Honda",
-  "ford": "Ford",
-  "nissan": "Nissan",
-  "cadillac": "Cadillac",
-  "lincoln": "Lincoln",
-  "infiniti": "Infiniti",
-  "chevrolet": "Chevrolet"
+  "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
+  "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
+  "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevrolet",
+  "chevvy": "Chevrolet", "chevrolet": "Chevrolet", "chrysler": "Chrysler", "cjd": "Chrysler", "daewoo": "Daewoo",
+  "dodge": "Dodge", "eagle": "Eagle", "ferrari": "Ferrari", "fiat": "Fiat", "ford": "Ford", "genesis": "Genesis",
+  "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
+  "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
+  "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
+  "lincoln": "Lincoln", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
+  "mb": "M.B.", "merc": "M.B.", "mercedes": "M.B.", "mercedes-benz": "M.B.", "mercedesbenz": "M.B.", "merk": "M.B.",
+  "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile", "plymouth": "Plymouth",
+  "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram", "rivian": "Rivian",
+  "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion", "smart": "Smart",
+  "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
+  "volkswagen": "Volkswagen", "volvo": "Volvo", "vw": "Volkswagen"
 };
 
 const NON_DEALERSHIP_KEYWORDS = [
@@ -411,6 +409,33 @@ if (!(KNOWN_CITIES_SET instanceof Set)) {
   KNOWN_CITIES_SET = new Set(KNOWN_CITIES_SET);
 }
 
+const KNOWN_CITY_SHORT_NAMES = {
+  // Common short names
+  "las vegas": "Vegas", "los angeles": "LA", "new york": "NY", "new orleans": "N.O.", "miami lakes": "ML",
+  "south charlotte": "SC", "huntington beach": "HB", "west springfield": "WS", "san leandro": "SL",
+  "san francisco": "SF", "san diego": "SD", "fort lauderdale": "FTL", "west palm beach": "WPB",
+  "palm beach gardens": "PBG", "st. louis": "STL", "st. petersburg": "St. Pete", "st. paul": "St. Paul",
+  "south bend": "SB", "north las vegas": "NLV", "north charleston": "NC", "southfield": "SF",
+  "college station": "CS", "lake havasu city": "LHC", "mount vernon": "MV", "port st. lucie": "PSL",
+  "panama city": "PC", "fort myers": "FM", "palm coast": "PCoast", "newport news": "NN",
+  "jacksonville beach": "Jax Beach", "west new york": "WNY", "elk grove": "EG", "palm springs": "PS",
+  "grand prairie": "GP", "palm bay": "PB", "st. augustine": "St. Aug", "boca raton": "Boca",
+  "bonita springs": "Bonita", "north miami": "N. Miami", "south miami": "S. Miami", "pompano beach": "Pompano",
+  "boynton beach": "Boynton", "delray beach": "Delray", "hallandale beach": "Hallandale", "winter haven": "WH",
+  "cape coral": "CC", "weston": "Weston", "north port": "NP", "port charlotte": "PC", "port orange": "PO",
+  "palm harbor": "PH", "north lauderdale": "NL", "north fort myers": "NFM",
+
+  // Fallback initials
+  "west chester": "WC", "white plains": "WP", "west covina": "WC", "west hollywood": "WH",
+  "east haven": "EH", "east orange": "EO", "north bergen": "NB", "north ridgeville": "NR",
+  "north olmsted": "NO", "north royalton": "NR", "north huntingdon": "NH", "north augusta": "NA",
+  "south gate": "SG", "south jordan": "SJ", "south ogden": "SO", "south el monte": "SEM",
+  "south san francisco": "SSF", "south boston": "SB", "mount prospect": "MP", "mount pleasant": "MP",
+  "mount laurel": "ML", "fort worth": "FW", "fort collins": "FC", "fort wayne": "FW", "fort smith": "FS",
+  "fort pierce": "FP", "fort dodge": "FD", "fort payne": "FP", "new rochelle": "NR", "new bedford": "NB",
+  "new britain": "NB", "new haven": "NH", "newark": "Newark", "newport": "Newport", "bay st. louis": "BSL"
+};
+
 // In-memory caches
 const VALIDATED_CITIES_CACHE = new Set();
 const OPENAI_SPACING_CACHE = new Map();
@@ -418,232 +443,79 @@ const OPENAI_CITY_CACHE = new Map();
 const RUNTIME_OVERRIDES = new Map();
 
 const KNOWN_OVERRIDES = {
-  "acdealergroup.com": "AC Dealer",
-  "acura4me.com": "Acura 4 Me",
-  "akinsonline.com": "Akins",
-  "albanyfordsubaru.com": "Albany",
-  "athensford.com": "Athens",
-  "atamian.com": "Atamian",
-  "audicentralhouston.com": "Houston",
-  "audimv.com": "Audi Mission Viejo",
-  "audinorthaustin.com": "Audi North Austin",
-  "audinorthorlando.com": "Audi North Orlando",
-  "audinorthscottsdale.com": "Audi North Scottsdale",
-  "audinorthshore.com": "Audi North Shore",
-  "audisouthorlando.com": "Audi South Orlando",
-  "austininfiniti.com": "Austin Infiniti",
-  "autobyfox.com": "Fox",
-  "autonation.com": "AutoNation",
-  "autonationacura.com": "AutoNation Acura",
-  "autonationchevrolet.com": "AutoNation Chevrolet",
-  "autonationford.com": "AutoNation Ford",
-  "autonationhonda.com": "AutoNation Honda",
-  "avisford.com": "Avis",
-  "ballardtrucks.com": "Ballard",
-  "bearmtnadi.com": "Bear Mountain",
-  "bentleynaples.com": "Bentley Naples",
-  "bentleyauto.com": "Bentley",
-  "bighorntoyota.com": "Bighorn",
-  "billdube.com": "Bill Dube",
-  "bloomingtoncjd.com": "Bloomington",
-  "bmwwestspringfield.com": "West Springfield",
-  "bobjohnsonchevy.com": "Bob Johnson",
-  "bondysford.com": "Bondy",
-  "boulevard4u.com": "Boulevard",
-  "budschevy.com": "Bud",
-  "bulldogkia.com": "Bulldog",
-  "bulluckchevrolet.com": "Bulluck",
-  "bwalkauto.com": "Bob Walk Auto",
-  "caldwellcountry.com": "Caldwell",
-  "caminorealchevrolet.com": "Camino Real Chevrolet",
-  "campbellcars.com": "Campbell",
-  "capital-honda.com": "Capital",
-  "capitalbpg.com": "Capital BPG",
-  "carlblack.com": "Carl Black",
-  "carterseattle.com": "Carter",
-  "castlerockautoplex.com": "Castle Rock",
-  "chapmanchoice.com": "Chapman",
-  "charliesmm.com": "Charlie",
-  "chem-strip.com": "",
-  "chevyland.com": "Chevyland",
-  "chevyexchange.com": "Chevy Exchange",
-  "chmb.com": "MB Cherry Hill",
-  "chryslerwinona.com": "Chrysler Winona",
-  "cincyjlr.com": "JLR Cincinnati",
-  "citykia.com": "City Kia",
-  "classicbmw.com": "Classic BMW",
-  "colonial-west.com": "Colonial West",
-  "crossroadscars.com": "Crossroads",
-  "czag.net": "CZAG Auto",
-  "dancummins.com": "Dan Cummins",
-  "davischevrolet.com": "Davis Chevrolet",
-  "daytonandrews.com": "Dayton Andrews",
-  "demontrond.com": "DeMontrond",
-  "devineford.com": "Devine",
-  "dicklovett.co.uk": "Dick Lovett",
-  "dmautoleasing.com": "DM Auto",
-  "donhattan.com": "Don Hattan",
-  "donhindsford.com": "Don Hinds",
-  "drivedag.com": "DAG",
-  "driveclassic.com": "Classic",
-  "drivejoyce.com": "Joyce",
-  "drivesunrise.com": "Sunrise",
-  "drivesuperior.com": "Drive Superior",
-  "duvalford.com": "Duval",
-  "dvbmw.com": "DV BMW",
-  "dyerauto.com": "Dyer",
-  "ehchevy.com": "East Hills",
-  "elwaydealers.net": "Elway",
-  "firstautogroup.com": "First Auto",
-  "fivestaronline.net": "Five Star",
-  "fletcherauto.com": "Fletcher",
-  "fordofdalton.com": "Ford Dalton",
-  "4porsche.com": "4Porsche",
-  "garberchevrolet.com": "Garber",
-  "garlynshelton.com": "Garlyn Shelton",
-  "geraldauto.com": "Gerald Auto",
-  "germaincars.com": "Germain",
-  "gilescars.com": "Giles",
-  "givemethevin.com": "Give Me The Vin",
-  "goldenwestoil.com": "Golden West",
-  "golfmillford.com": "Golf Mill",
-  "gomontrose.com": "Montrose",
-  "gravityautos.com": "Gravity Autos",
-  "group1auto.com": "Group 1",
-  "gusmachadoford.com": "Gus Machado",
-  "gychevy.com": "Gregg Young",
-  "hemetcdjr.com": "Hemet",
-  "hgreglux.com": "HGreg Lux",
-  "hileyhuntsville.com": "Hiley",
-  "hillsidehonda.com": "Hillside",
-  "hmtrs.com": "H Motors",
-  "hondaofcolumbia.com": "Columbia",
-  "huntingtonbeachford.com": "Huntington Beach",
-  "idehonda.com": "Ide Honda",
-  "infinitibhm.com": "Birmingham Infiniti",
-  "jackpowell.com": "Jack Powell",
-  "jacksoncars.com": "Jackson",
-  "jakesweeney.com": "Jake Sweeney",
-  "jaxcjd.com": "Jacksonville",
-  "jeffdeals.com": "Jeff",
-  "jetchevrolet.com": "Jet Chevrolet",
-  "jimfalkmotorsofmaui.com": "Jim Falk",
-  "jimmybrittchevrolet.com": "Jimmy Britt",
-  "jmlexus.com": "JM",
-  "jtscars.com": "JT",
-  "karlchevroletstuart.com": "Karl Stuart",
-  "kcmetroford.com": "Kansas City",
-  "kwic.com": "Kwic Auto",
-  "lacitycars.com": "LA City",
-  "lacscottsdale.com": "Luxury Auto Scottsdale",
-  "lakelandtoyota.com": "Lakeland",
-  "landerscorp.com": "Landers",
-  "laurelautogroup.com": "Laurel",
-  "malouf.com": "Malouf",
-  "martinchevrolet.com": "Martin",
-  "masano.com": "Masano",
-  "mbbhm.com": "Birmingham",
-  "mbso.com": "MB South Orlando",
-  "mbusa.com": "Usa",
-  "mccarthyautogroup.com": "McCarthy",
-  "mclarennb.com": "McLaren New Braunfels",
-  "mclartydaniel.com": "McLarty Daniel",
-  "mercofselma.com": "Selma",
-  "metro-toyota.com": "Metro",
-  "metrofordofmadison.com": "Metro Madison",
-  "miamilakesautomall.com": "Miami Lakes Auto",
-  "mikeshawtoyota.com": "Mike Shaw",
-  "mterryautogroup.com": "M Terry",
-  "myhappyhyundai.com": "Happy Hyundai",
-  "myhudsonnissan.com": "Hudson Nissan",
-  "nadalcapital.com": "Nadal",
-  "newhollandauto.com": "New Holland",
-  "nissanofec.com": "East Coast",
-  "northcountyautomall.com": "North County",
-  "northwestauto.com": "Northwest",
-  "nplincoln.com": "North Park",
-  "npsubaru.com": "North Park",
-  "onesubaru.com": "One",
-  "parkerauto.com": "Parker",
-  "patmillikenford.com": "Pat Milliken",
-  "penskeautomotive.com": "Penske",
-  "philsmithkia.com": "Phil Smith",
-  "phofnash.com": "Performance Honda Nashville",
-  "potamkinatlanta.com": "Potamkin Atlanta",
-  "potamkinhyundai.com": "Potamkin",
-  "powerautogroup.com": "Power",
-  "prestonmotor.com": "Preston Motor",
-  "pugmire.com": "Pugmire",
-  "racewayford.com": "Raceway",
-  "regalauto.com": "Regal",
-  "richmondford.com": "Richmond",
-  "ricart.com": "Ricart",
-  "rodbakerford.com": "Rod Baker",
-  "ronbouchardsautostores.com": "Ron Bouchard",
-  "route1usa.com": "Route 1",
-  "rt128honda.com": "Route 128",
-  "saabvw.com": "Saab VW",
-  "sanleandroford.com": "San Leandro",
-  "sandschevrolet.com": "Sands",
-  "saveatsterling.com": "Sterling",
-  "sbhyundai.com": "South Bay",
-  "scottclark.com": "Scott Clark",
-  "serpentinichevy.com": "Serpentini",
-  "sharpecars.com": "Sharpe",
-  "shoplynch.com": "Shop Lynch",
-  "shopsubaru.com": "Shop Subaru",
-  "shottenkirk.com": "Shottenkirk",
-  "signatureautony.com": "Signature NY",
-  "sjinfiniti.com": "San Jose Infiniti",
-  "slvdodge.com": "San Luis Valley Dodge",
-  "smithtowntoyota.com": "Smithtown",
-  "southcharlottechevy.com": "South Charlotte Chevy",
-  "southwestdealersgroup.com": "Southwest",
-  "starlingchevy.com": "Starling",
-  "startoyota.net": "Star Toyota",
-  "streetsideclassics.com": "Streetside",
-  "subaruofgwinnett.com": "Gwinnett",
-  "subaruofwakefield.com": "Wakefield",
-  "subiecity.com": "Subie City",
-  "sunnysideauto.com": "Sunnyside",
-  "swantgraber.com": "Swant Graber",
-  "tasca.com": "Tasca",
-  "taylorauto.com": "Taylor Auto",
-  "teamford.com": "Team Ford",
-  "tflauto.com": "TFL Auto",
-  "thechevyteam.com": "Chevy Team",
-  "thepremiercollection.com": "Premier Collection",
-  "thinkmidway.com": "Midway",
-  "tomhesser.com": "Tom Hesser",
-  "tommynixautogroup.com": "Tommy Nix",
-  "townandcountryford.com": "Town And Country",
-  "toyotacedarpark.com": "Cedar Park",
-  "toyotacv.com": "Chula Vista",
-  "trustandrew.com": "Andrew",
-  "tsands.com": "T Sands",
-  "tuscaloosatoyota.com": "Tuscaloosa",
-  "tuttleclick.com": "Tuttle Click",
-  "unionpark.com": "Union Park",
-  "uvwaudi.com": "University VW Audi",
-  "valleynissan.com": "Valley Nissan",
-  "vannuyscdjr.com": "Van Nuys",
-  "venturatoyota.com": "Ventura",
-  "vtaig.com": "VT Auto Group",
-  "vscc.com": "VSCC Auto",
-  "vwsouthclt.com": "South Charlotte",
-  "westgatecars.com": "Westgate",
-  "williamssubarucharlotte.com": "Williams",
-  "wilsonvilletoyota.com": "Wilsonville",
-  "yorkautomotive.com": "York",
-  "smartdrive.com": "Smart Drive",
-  "wickmail.com": "Wick Mail",
-  "bentleyauto.com": "Bentley",
-  "saabvw.com": "Saab VW"
-  "toyotaofslidell.net": "Toyota Slidell", // Updated to include brand
-  "lexusofneworleans.com": "Lexus New Orleans", // Updated to include brand
-  "cadillacoflasvegas.com": "Cadillac Las Vegas", // Updated to include brand
-  "mbofbrooklyn.com": "Mercedes-Benz Brooklyn", // Already correct
-  "kiaoflagrange.com": "Kia Lagrange", // Updated to include brand};
+  "acdealergroup.com": "AC Dealer", "acura4me.com": "Acura 4 Me", "akinsonline.com": "Akins",
+  "albanyfordsubaru.com": "Albany", "athensford.com": "Athens", "atamian.com": "Atamian",
+  "audicentralhouston.com": "Houston Audi", "audimv.com": "MV Audi", "audinorthaustin.com": "NA Audi",
+  "audinorthorlando.com": "NO Audi", "audinorthscottsdale.com": "NS Audi", "audinorthshore.com": "NS Audi",
+  "audisouthorlando.com": "SO Audi", "austininfiniti.com": "Austin Infiniti", "autobyfox.com": "Fox Auto",
+  "autonation.com": "AutoNation", "autonationchevrolet.com": "AutoNation", "autonationford.com": "AutoNation",
+  "autonationhonda.com": "AutoNation", "avisford.com": "Avis", "ballardtrucks.com": "Ballard",
+  "bearmtnadi.com": "Bear Mountain", "bentleynaples.com": "Naples Bentley", "bentleyauto.com": "Bentley Auto",
+  "bighorntoyota.com": "Bighorn", "billdube.com": "Bill Dube", "bloomingtoncjd.com": "Bloomington",
+  "bmwwestspringfield.com": "WS BMW", "bobjohnsonchevy.com": "Bob Johnson", "bondysford.com": "Bondy",
+  "boulevard4u.com": "Boulevard", "budschevy.com": "Bud", "bulldogkia.com": "Bulldog Kia",
+  "bulluckchevrolet.com": "Bulluck", "bwalkauto.com": "Bob Walk", "caldwellcountry.com": "Caldwell",
+  "caminorealchevrolet.com": "Camino Real", "campbellcars.com": "Campbell", "capital-honda.com": "Capital Honda",
+  "capitalbpg.com": "Capital BPG", "carlblack.com": "Carl Black", "carterseattle.com": "Carter",
+  "castlerockautoplex.com": "Castle Rock", "chapmanchoice.com": "Chapman", "charliesmm.com": "Charlie",
+  "chevyland.com": "Chevyland", "chevyexchange.com": "Chevy Exchange", "chmb.com": "Cherry Hill M.B.",
+  "chryslerwinona.com": "Winona Chrysler", "cincyjlr.com": "Cincinnati JLR", "citykia.com": "City Kia",
+  "classicbmw.com": "Classic BMW", "colonial-west.com": "Colonial West", "crossroadscars.com": "Crossroads",
+  "czag.net": "CZAG", "dancummins.com": "Dan Cummins", "davischevrolet.com": "Davis", "daytonandrews.com": "Dayton Andrews",
+  "demontrond.com": "DeMontrond", "devineford.com": "Devine", "dicklovett.co.uk": "Dick Lovett",
+  "dmautoleasing.com": "DM Auto", "donhattan.com": "Don Hattan", "donhindsford.com": "Don Hinds",
+  "drivedag.com": "DAG", "driveclassic.com": "Classic", "drivejoyce.com": "Joyce", "drivesunrise.com": "Sunrise",
+  "drivesuperior.com": "Drive Superior", "duvalford.com": "Duval", "dvbmw.com": "DV BMW", "dyerauto.com": "Dyer",
+  "ehchevy.com": "East Hills", "elwaydealers.net": "Elway", "firstautogroup.com": "First Auto",
+  "fivestaronline.net": "Five Star", "fletcherauto.com": "Fletcher", "fordofdalton.com": "Dalton",
+  "4porsche.com": "4Porsche", "garberchevrolet.com": "Garber", "garlynshelton.com": "Garlyn Shelton",
+  "geraldauto.com": "Gerald Auto", "germaincars.com": "Germain", "gilescars.com": "Giles",
+  "givemethevin.com": "Give Me The Vin", "goldenwestoil.com": "Golden West", "golfmillford.com": "Golf Mill",
+  "gomontrose.com": "Montrose", "gravityautos.com": "Gravity", "group1auto.com": "Group 1",
+  "gusmachadoford.com": "Gus Machado", "gychevy.com": "Gregg Young", "hemetcdjr.com": "Hemet",
+  "hgreglux.com": "HGreg Lux", "hileyhuntsville.com": "Hiley", "hillsidehonda.com": "Hillside Honda",
+  "hmtrs.com": "H Motors", "hondaofcolumbia.com": "Columbia Honda", "huntingtonbeachford.com": "HB Ford",
+  "idehonda.com": "Ide Honda", "infinitibhm.com": "Birmingham Infiniti", "jackpowell.com": "Jack Powell",
+  "jacksoncars.com": "Jackson", "jakesweeney.com": "Jake Sweeney", "jaxcjd.com": "JD",
+  "jeffdeals.com": "Jeff", "jetchevrolet.com": "Jet", "jimfalkmotorsofmaui.com": "Jim Falk",
+  "jimmybrittchevrolet.com": "Jimmy Britt", "jmlexus.com": "JM Lexus", "jtscars.com": "JT",
+  "karlchevroletstuart.com": "Karl Stuart", "kcmetroford.com": "KC", "kwic.com": "Kwic",
+  "lacitycars.com": "LA City", "lacscottsdale.com": "Luxury Auto Scottsdale", "lakelandtoyota.com": "Lakeland",
+  "landerscorp.com": "Landers", "laurelautogroup.com": "Laurel", "malouf.com": "Malouf",
+  "martinchevrolet.com": "Martin", "masano.com": "Masano", "mbbhm.com": "Birmingham M.B.",
+  "mbso.com": "SO M.B.", "mbusa.com": "M.B. USA", "mccarthyautogroup.com": "McCarthy",
+  "mclarennb.com": "NB McLaren", "mclartydaniel.com": "McLarty Daniel", "mercofselma.com": "Selma M.B.",
+  "metro-toyota.com": "Metro Toyota", "metrofordofmadison.com": "Madison Metro", "miamilakesautomall.com": "ML Auto",
+  "mikeshawtoyota.com": "Mike Shaw", "mterryautogroup.com": "M Terry", "myhappyhyundai.com": "Happy Hyundai",
+  "myhudsonnissan.com": "Hudson Nissan", "nadalcapital.com": "Nadal", "newhollandauto.com": "New Holland",
+  "nissanofec.com": "East Coast Nissan", "northcountyautomall.com": "North County", "northwestauto.com": "Northwest",
+  "nplincoln.com": "NP Lincoln", "npsubaru.com": "NP Subaru", "onesubaru.com": "Subaru One",
+  "parkerauto.com": "Parker", "patmillikenford.com": "Pat Milliken", "penskeautomotive.com": "Penske",
+  "philsmithkia.com": "Phil Smith", "phofnash.com": "Performance Honda", "potamkinatlanta.com": "Potamkin",
+  "potamkinhyundai.com": "Potamkin", "powerautogroup.com": "Power Auto", "prestonmotor.com": "Preston",
+  "pugmire.com": "Pugmire", "racewayford.com": "Raceway", "regalauto.com": "Regal",
+  "richmondford.com": "Richmond", "ricart.com": "Ricart", "rodbakerford.com": "Rod Baker",
+  "ronbouchardsautostores.com": "Ron Bouchard", "route1usa.com": "Route 1", "rt128honda.com": "Route 128",
+  "saabvw.com": "Saab VW", "sanleandroford.com": "SL Ford", "sandschevrolet.com": "Sands",
+  "saveatsterling.com": "Sterling", "sbhyundai.com": "SB Hyundai", "scottclark.com": "Scott Clark",
+  "serpentinichevy.com": "Serpentini", "sharpecars.com": "Sharpe", "shoplynch.com": "Shop Lynch",
+  "shopsubaru.com": "Shop Subaru", "shottenkirk.com": "Shottenkirk", "signatureautony.com": "Signature NY",
+  "sjinfiniti.com": "SJ Infiniti", "slvdodge.com": "SLV Dodge", "smithtowntoyota.com": "Smithtown",
+  "southcharlottechevy.com": "SC Chevy", "southwestdealersgroup.com": "Southwest", "starlingchevy.com": "Starling",
+  "startoyota.net": "Star Toyota", "streetsideclassics.com": "Streetside", "subaruofgwinnett.com": "Gwinnett Subaru",
+  "subaruofwakefield.com": "Wakefield Subaru", "subiecity.com": "Subie City", "sunnysideauto.com": "Sunnyside",
+  "swantgraber.com": "Swant Graber", "tasca.com": "Tasca", "taylorauto.com": "Taylor",
+  "teamford.com": "Team", "tflauto.com": "TFL", "thechevyteam.com": "Chevy Team",
+  "thepremiercollection.com": "Premier Collection", "thinkmidway.com": "Midway", "tomhesser.com": "Tom Hesser",
+  "tommynixautogroup.com": "Tommy Nix", "townandcountryford.com": "Town And Country", "toyotacedarpark.com": "Cedar Park",
+  "toyotacv.com": "CV Toyota", "trustandrew.com": "Andrew", "tsands.com": "T Sands",
+  "tuscaloosatoyota.com": "Tuscaloosa", "tuttleclick.com": "Tuttle Click", "unionpark.com": "Union Park",
+  "uvwaudi.com": "University VW", "valleynissan.com": "Valley", "vannuyscdjr.com": "Van Nuys",
+  "venturatoyota.com": "Ventura", "vtaig.com": "VT Auto", "vscc.com": "VSCC",
+  "vwsouthclt.com": "SC VW", "westgatecars.com": "Westgate", "williamssubarucharlotte.com": "Williams Subaru",
+  "wilsonvilletoyota.com": "Wilsonville", "yorkautomotive.com": "York", "smartdrive.com": "Smart Drive",
+  "wickmail.com": "Wick Mail", "toyotaofslidell.net": "Slidell Toyota", "lexusofneworleans.com": "N.O. Lexus",
+  "cadillacoflasvegas.com": "Vegas Cadillac", "mbofbrooklyn.com": "Brooklyn M.B.", "kiaoflagrange.com": "Lagrange Kia"
 };
 
 // Utility Functions
@@ -662,7 +534,7 @@ function capitalizeName(words) {
   if (typeof words === "string") words = normalizeText(words);
   return words
     .map((word, i) => {
-      if (word.length <= 4 && word === word.toUpperCase()) return word;
+      if (word.length <= 3 && word === word.toUpperCase()) return word; // Preserve initials
       if (["of", "the", "to", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
       if (/^[A-Z]{2,5}$/.test(word)) return word;
       let fixedWord = word
@@ -678,50 +550,7 @@ function capitalizeName(words) {
         .replace(/Uv(w)?/g, "University");
       return fixedWord.charAt(0).toUpperCase() + fixedWord.slice(1).toLowerCase();
     })
-    .join(" ")
-    .replace(/Mccarthy/g, "McCarthy")
-    .replace(/Mclarty/g, "McLarty")
-    .replace(/Mclartydaniel/g, "McLarty Daniel")
-    .replace(/Drivesuperior/g, "Drive Superior")
-    .replace(/Jimmybritt/g, "Jimmy Britt")
-    .replace(/Donhattan/g, "Don Hattan")
-    .replace(/Caminoreal/g, "Camino Real")
-    .replace(/Swantgraber/g, "Swant Graber")
-    .replace(/Tedbritt/g, "Ted Britt")
-    .replace(/Galeanasc/g, "Galean")
-    .replace(/De Montrond/g, "DeMontrond")
-    .replace(/Townandcountry/g, "Town And Country")
-    .replace(/Sanleandro/g, "San Leandro")
-    .replace(/Gusmachado/g, "Gus Machado")
-    .replace(/Rodbaker/g, "Rod Baker")
-    .replace(/Donhattan/g, "Don Hattan")
-    .replace(/Galeanasc/g, "Galean")
-    .replace(/Tedbritt/g, "Ted Britt")
-    .replace(/Autobyfox/g, "Auto By Fox")
-    .replace(/Shoplynch/g, "Shop Lynch")
-    .replace(/Czagnet/g, "Cz Agnet")
-    .replace(/Ehchevy/g, "East Hills")
-    .replace(/Scottclark/g, "Scott Clark")
-    .replace(/Signatureautony/g, "Signature Auto NY")
-    .replace(/Huntingtonbeach/g, "Huntington Beach")
-    .replace(/Exprealty/g, "Exp Realty")
-    .replace(/Jaywolfe/g, "Jay Wolfe")
-    .replace(/Thepremiercollection/g, "Premier Collection")
-    .replace(/Artmoehn/g, "Art Moehn")
-    .replace(/Tomhesser/g, "Tom Hesser")
-    .replace(/Executiveag/g, "Executive AG")
-    .replace(/Smartdrive/g, "Smart Drive")
-    .replace(/Allamericannet/g, "All American")
-    .replace(/Wickmail/g, "Wick Mail")
-    .replace(/Roberthorne/g, "Robert Thorne")
-    .replace(/Tommynixautogroup/g, "Tommy Nix")
-    .replace(/Kennedyauto/g, "Kennedy")
-    .replace(/Lousobh/g, "Lou Sobh")
-    .replace(/Hmtrs/g, "H Motors")
-    .replace(/Ph Nash/g, "Performance Honda Nashville")
-    .replace(/Lac Scottsdale/g, "Luxury Auto Scottsdale")
-    .replace(/Bear Mtn Adi/g, "Bear Mountain")
-    .replace(/Charlies Mm/g, "Charlie");
+    .join(" ");
 }
 
 function containsCarBrand(name) {
@@ -730,10 +559,12 @@ function containsCarBrand(name) {
 }
 
 function removeCarBrands(words) {
+  if (!Array.isArray(words)) words = normalizeText(words);
   return words.filter(word => !CAR_BRANDS.includes(word.toLowerCase()));
 }
 
 function removeForbiddenWords(words) {
+  if (!Array.isArray(words)) words = normalizeText(words);
   return words.filter(word => {
     const lower = word.toLowerCase();
     return !COMMON_WORDS.includes(lower) || KNOWN_PROPER_NOUNS.includes(lower);
@@ -741,10 +572,8 @@ function removeForbiddenWords(words) {
 }
 
 function removeGenericSuffixes(words) {
-  return words.filter(word => {
-    const lower = word.toLowerCase();
-    return !GENERIC_SUFFIXES.has(lower);
-  });
+  if (!Array.isArray(words)) words = normalizeText(words);
+  return words.filter(word => !GENERIC_SUFFIXES.has(word.toLowerCase()));
 }
 
 function addPossessive(name) {
@@ -777,10 +606,8 @@ function earlyCompoundSplit(text) {
 
 function levenshteinDistance(a, b) {
   const matrix = Array(b.length + 1).fill(null).map(() => Array(a.length + 1).fill(null));
-
   for (let i = 0; i <= a.length; i++) matrix[0][i] = i;
   for (let j = 0; j <= b.length; j++) matrix[j][0] = j;
-
   for (let j = 1; j <= b.length; j++) {
     for (let i = 1; i <= a.length; i++) {
       const indicator = a[i - 1] === b[j - 1] ? 0 : 1;
@@ -791,7 +618,6 @@ function levenshteinDistance(a, b) {
       );
     }
   }
-
   return matrix[b.length][a.length];
 }
 
@@ -807,7 +633,7 @@ function safeParseGPTJson(raw, fallbackObj) {
 async function callOpenAIWithRetry(prompt, options, retries = 3, delay = 1000) {
   for (let i = 0; i < retries; i++) {
     try {
-      const res = await callOpenAI(prompt, options);
+      const res = await callOpenAI({ prompt, ...options });
       return res;
     } catch (err) {
       if (i === retries - 1) throw err;
@@ -819,7 +645,6 @@ async function callOpenAIWithRetry(prompt, options, retries = 3, delay = 1000) {
 
 function logToReviewNeededTab(domain, suggestedOverride) {
   console.log(`[Review Needed] Suggested override: ${domain} → ${suggestedOverride}`);
-  // TODO: Integrate with Google Apps Script to append to "Review Needed" tab
 }
 
 async function validateCityWithOpenAI(domain, potentialCity) {
@@ -832,26 +657,17 @@ async function validateCityWithOpenAI(domain, potentialCity) {
 
   const prompt = `## Domain: ${domain}\n## Potential City: ${potentialCity}\n## Task: Determine if "${potentialCity}" is a city name in the context of U.S. car dealership naming conventions. Return a JSON object with the result.\n## Format: {"isCity": true/false, "correctedCity": "...", "isConfident": true/false}`;
   try {
-    const res = await callOpenAIWithRetry(prompt, {
-      model: "gpt-4-turbo",
-      max_tokens: 40,
-      temperature: 0.1,
-      timeoutMs: 15000,
-    });
+    const res = await callOpenAIWithRetry(prompt, { model: "gpt-4-turbo", max_tokens: 40, temperature: 0.1, timeoutMs: 15000 });
+    let isCity = false, correctedCity = potentialCity, isConfident = false, tokensUsed = res.tokens || 40;
 
-    let isCity = false;
-    let correctedCity = potentialCity;
-    let isConfident = false;
-    let tokensUsed = res.tokensUsed || 40;
-
-    if (typeof res.output !== "string" || !res.output.trim().startsWith("{")) {
-      console.warn(`Invalid OpenAI response for ${domain}: ${res.output}`);
+    if (typeof res.text !== "string" || !res.text.trim().startsWith("{")) {
+      console.warn(`Invalid OpenAI response for ${domain}: ${res.text}`);
       const result = { isCity: false, correctedCity: potentialCity, isConfident: false, tokens: tokensUsed };
       OPENAI_CITY_CACHE.set(cacheKey, result);
       return result;
     }
 
-    const parsed = safeParseGPTJson(res.output, { isCity: false, correctedCity: potentialCity, isConfident: false });
+    const parsed = safeParseGPTJson(res.text, { isCity: false, correctedCity: potentialCity, isConfident: false });
     isCity = parsed.isCity || false;
     correctedCity = parsed.correctedCity || potentialCity;
     isConfident = parsed.isConfident || false;
@@ -879,25 +695,17 @@ async function validateSpacingWithGPT(domain, inputName) {
 
   const prompt = `## Domain: ${domain}\n## Input Name: ${inputName}\n## Task: Check if this single-word name should be split into two words based on U.S. car dealership naming conventions (e.g., "Geraldauto" → "Gerald Auto"). Return the original name if no split is needed. Do NOT alter capitalization or generate new names.\n## Format: {"correctedName": "...", "isConfident": true/false}`;
   try {
-    const res = await callOpenAIWithRetry(prompt, {
-      model: "gpt-4-turbo",
-      max_tokens: 40,
-      temperature: 0.1,
-      timeoutMs: 15000,
-    });
+    const res = await callOpenAIWithRetry(prompt, { model: "gpt-4-turbo", max_tokens: 40, temperature: 0.1, timeoutMs: 15000 });
+    let correctedName = inputName, isConfident = false, tokensUsed = res.tokens || 40;
 
-    let correctedName = inputName;
-    let isConfident = false;
-    let tokensUsed = res.tokensUsed || 40;
-
-    if (typeof res.output !== "string" || !res.output.trim().startsWith("{")) {
-      console.warn(`Invalid OpenAI response for ${domain}: ${res.output}`);
+    if (typeof res.text !== "string" || !res.text.trim().startsWith("{")) {
+      console.warn(`Invalid OpenAI response for ${domain}: ${res.text}`);
       const result = { correctedName: inputName, isConfident: false, tokens: tokensUsed };
       OPENAI_SPACING_CACHE.set(cacheKey, result);
       return result;
     }
 
-    const parsed = safeParseGPTJson(res.output, { correctedName: inputName, isConfident: false });
+    const parsed = safeParseGPTJson(res.text, { correctedName: inputName, isConfident: false });
     if (parsed && parsed.correctedName) {
       correctedName = parsed.correctedName;
       isConfident = parsed.isConfident;
@@ -919,201 +727,181 @@ async function validateSpacingWithGPT(domain, inputName) {
   }
 }
 
+function applyCityShortName(cityName) {
+  if (!cityName || typeof cityName !== "string") return cityName;
+  const key = cityName.trim().toLowerCase();
+  const short = KNOWN_CITY_SHORT_NAMES[key];
+  if (short && typeof short === "string") {
+    return short;
+  }
+
+  // If no short name, return uppercase initials (e.g., "West Springfield" → "WS")
+  if (key.includes(" ")) {
+    const initials = key
+      .split(" ")
+      .filter(Boolean)
+      .map(w => w[0].toUpperCase())
+      .join("");
+    return initials.length >= 2 ? initials : capitalizeName(cityName);
+  }
+
+  return capitalizeName(cityName);
+}
+
 function extractBrandOfCityFromDomain(domain) {
   const domainLower = domain.toLowerCase().replace(/\.(com|net|org)$/, "");
+  
+  // [CarBrand]of[City]
   const brandOfRegex = new RegExp(`\\b(${CAR_BRANDS.join('|')})of([a-z]+)\\b`, 'i');
   const match = domainLower.match(brandOfRegex);
-
-  if (!match || match.length < 3) {
-    const prefix = Array.from(CAR_BRAND_PREFIXES).find(p => domainLower.startsWith(p));
-    if (!prefix) return null;
-
-    const brand = prefix.replace("of", "");
-    const city = domainLower.replace(prefix, "");
+  if (match && match.length >= 3) {
+    const brand = match[1];
+    const city = match[2];
     if (city.length < 3) return null;
-
-    let brandMatch = CAR_BRANDS.find(b => b.toLowerCase() === brand.toLowerCase());
-    if (!brandMatch) {
-      brandMatch = CAR_BRANDS.find(b => {
-        if (brand.length <= 4) {
-          return levenshteinDistance(brand.toLowerCase(), b.toLowerCase()) <= 1;
-        }
-        return false;
-      });
-    }
-
-    if (!brandMatch) return null;
-
-    const brandFormatted = BRAND_MAPPING[brandMatch.toLowerCase()] || capitalizeName(brandMatch);
+    const brandFormatted = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand);
     return { brand: brandFormatted, city };
   }
 
-  const brand = match[1];
-  const city = match[2];
-
-  if (city.length < 3) return null;
-
-  let brandMatch = CAR_BRANDS.find(b => b.toLowerCase() === brand.toLowerCase());
-  if (!brandMatch) {
-    brandMatch = CAR_BRANDS.find(b => {
-      if (brand.length <= 4) {
-        return levenshteinDistance(brand.toLowerCase(), b.toLowerCase()) <= 1;
-      }
-      return false;
-    });
+  // Prefix with [CarBrand]of
+  const prefix = Array.from(CAR_BRAND_PREFIXES).find(p => domainLower.startsWith(p));
+  if (prefix) {
+    const brand = prefix.replace("of", "");
+    const city = domainLower.replace(prefix, "");
+    if (city.length < 3) return null;
+    const brandFormatted = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand);
+    return { brand: brandFormatted, city };
   }
 
-  if (!brandMatch) return null;
+  // [Initials][CarBrand] or [CarBrand][Initials]
+  const initialsRegex = /^([a-z]{1,3})([a-z]+)|([a-z]+)([a-z]{1,3})$/i;
+  const initialsMatch = domainLower.match(initialsRegex);
+  if (initialsMatch) {
+    const parts = initialsMatch.slice(1).filter(Boolean);
+    let brand = parts.find(p => CAR_BRANDS.includes(p.toLowerCase()));
+    let other = parts.find(p => p !== brand);
+    if (brand && other && other.length <= 3) {
+      const brandFormatted = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand);
+      return { brand: brandFormatted, initials: other.toUpperCase() };
+    }
+  }
 
-  const brandFormatted = BRAND_MAPPING[brandMatch.toLowerCase()] || capitalizeName(brandMatch);
-  return { brand: brandFormatted, city };
+  return null;
 }
 
-// In humanize.js (updated for flexible Brand City ordering)
+// Main Function
 export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
     const domainLower = domain.toLowerCase();
     console.log(`Processing domain: ${domain}`);
 
-    // Check runtime overrides first
+    // Stage 1: Override Matching
     if (RUNTIME_OVERRIDES.has(domainLower)) {
       const name = RUNTIME_OVERRIDES.get(domainLower);
       console.log(`Runtime override applied for ${domain}: ${name}`);
       return { name: addPossessiveFlag ? addPossessive(name) : name, confidenceScore: 100, flags: ["RuntimeOverrideApplied"], tokens: 0 };
     }
-
-    // Handle CarBrand of City pattern with universal rule
-    const brandOfCityResult = extractBrandOfCityFromDomain(domainLower);
-    if (brandOfCityResult) {
-      const { brand, city } = brandOfCityResult;
-      let finalCity = city;
-      let confidenceScore = 95;
-      let flags = ["CarBrandOfCityPattern", "BrandOfPatternMatched"];
-      let tokens = 0;
-
-      if (KNOWN_CITIES_SET.has(city.toLowerCase())) {
-        finalCity = capitalizeName(city);
-        confidenceScore = 100; // Set confidence to 100 for known cities
-        flags.push("AutoPatternBypass"); // Skip OpenAI
-      } else {
-        const fuzzyMatch = Array.from(KNOWN_CITIES_SET).find(c => {
-          const dist = levenshteinDistance(city.toLowerCase(), c.toLowerCase());
-          return dist <= 2;
-        });
-        if (fuzzyMatch) {
-          finalCity = capitalizeName(fuzzyMatch);
-          flags.push("FuzzyCityMatch");
-          confidenceScore -= 5;
-          console.log(`Fuzzy city match for ${domain}: ${city} → ${fuzzyMatch}`);
-        } else {
-          const { isCity, correctedCity, isConfident, tokens: cityTokens } = await validateCityWithOpenAI(domain, city);
-          tokens += cityTokens;
-          if (isCity && isConfident) {
-            finalCity = capitalizeName(correctedCity);
-            flags.push("OpenAICityValidated");
-            console.log(`OpenAI validated city for ${domain}: ${city} → ${correctedCity}`);
-          } else {
-            confidenceScore -= 10;
-            finalCity = capitalizeName(city);
-            flags.push("UnverifiedCity");
-          }
-        }
-      }
-
-      // Format the brand using BRAND_MAPPING
-      const brandFormatted = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand);
-
-      // Determine the order based on possessive-friendliness
-      const brandEndsInS = brandFormatted.toLowerCase().endsWith('s');
-      const cityEndsInS = finalCity.toLowerCase().endsWith('s');
-      let name;
-      let orderFlag = "BrandCityOrder"; // Default order
-
-      // Rule 1: If one word ends in 's' and the other doesn't, place the non-'s' word last
-      if (brandEndsInS && !cityEndsInS) {
-        name = `${finalCity} ${brandFormatted}`; // e.g., "New Orleans Lexus"
-        orderFlag = "CityBrandOrder";
-      } else if (!brandEndsInS && cityEndsInS) {
-        name = `${brandFormatted} ${finalCity}`; // e.g., "Toyota Las Vegas"
-        orderFlag = "BrandCityOrder";
-      }
-      // Rule 2: If neither word ends in 's', prefer the city as the last word
-      else if (!brandEndsInS && !cityEndsInS) {
-        name = `${finalCity} ${brandFormatted}`; // e.g., "Slidell Toyota"
-        orderFlag = "CityBrandOrder";
-      }
-      // Rule 3: If both words end in 's', prefer the city as the last word
-      else {
-        name = `${finalCity} ${brandFormatted}`; // e.g., "Las Vegas Lexus"
-        orderFlag = "CityBrandOrder";
-      }
-
-      // If the heuristic is inconclusive, use OpenAI to determine possessive-friendliness (Vercel only)
-      if (!brandEndsInS && !cityEndsInS && process.env.OPENAI_API_KEY) {
-        const prompt = `Which of these two names sounds more natural in the phrase "{Company}'s CRM isn't broken-it's bleeding"? Option 1: "${brandFormatted} ${finalCity}" (e.g., "${brandFormatted}'s CRM"). Option 2: "${finalCity} ${brandFormatted}" (e.g., "${finalCity}'s CRM"). Respond with "Option 1" or "Option 2".`;
-        const response = await callOpenAI({ prompt, maxTokens: 10 });
-        tokens += response.tokens || 0;
-        if (response.text.includes("Option 1")) {
-          name = `${brandFormatted} ${finalCity}`;
-          orderFlag = "BrandCityOrder";
-          flags.push("OpenAIPossessiveValidated");
-        } else if (response.text.includes("Option 2")) {
-          name = `${finalCity} ${brandFormatted}`;
-          orderFlag = "CityBrandOrder";
-          flags.push("OpenAIPossessiveValidated");
-        }
-      }
-
-      if (orderFlag !== "BrandCityOrder") {
-        flags.push("PossessiveOrderAdjusted");
-      }
-
-      console.log(`Car brand of city pattern for ${domain}: ${name}`);
-      return {
-        name: addPossessiveFlag ? addPossessive(name) : name,
-        confidenceScore,
-        flags,
-        tokens
-      };
-    }
-
-    // Rest of the humanizeName function remains unchanged
-    // ...
-  } catch (err) {
-    console.error(`Error in humanizeName for ${domain}: ${err.stack}`);
-    return { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
-  }
-}
-
-    // Apply overrides after CarBrandOfCity check
     const override = KNOWN_OVERRIDES[domainLower];
     if (typeof override === 'string' && override.trim().length > 0) {
       let name = override.trim();
-      const flags = ["OverrideApplied"];
-      name = capitalizeName(removeCarBrands(normalizeText(name))).trim();
       console.log(`Override applied for ${domain}: ${name}`);
-      return { name: addPossessiveFlag ? addPossessive(name) : name, confidenceScore: 100, flags, tokens: 0 };
-    } else if (override !== undefined && override.trim() === "") {
-      console.log(`Empty override for ${domain}, proceeding to fallback`);
-      const flags = ["EmptyOverride", "OverrideEmptyBlocked", "FallbackFailed"];
-      return { name: "", confidenceScore: 0, flags, tokens: 0 };
+      return { name: addPossessiveFlag ? addPossessive(name) : name, confidenceScore: 100, flags: ["OverrideApplied"], tokens: 0 };
     }
 
     // Early non-dealership check
     const lowerInput = (inputName || domain).toLowerCase();
-    const hasCarBrand = containsCarBrand(inputName || domain);
+    const hasCarBrand = containsCarBrand(lowerInput);
     if (!hasCarBrand && !KNOWN_OVERRIDES[domainLower] && !lowerInput.includes("auto") &&
         NON_DEALERSHIP_KEYWORDS.some(keyword => lowerInput.includes(keyword))) {
       console.log(`Non-dealership domain detected: ${domain}`);
       return { name: "", confidenceScore: 0, flags: ["NonDealership"], tokens: 0 };
     }
 
-    let words = normalizeText(inputName || domain);
-    console.log(`Normalized input for ${domain}: ${words.join(" ")}`);
-    let flags = [];
-    let tokens = 0;
+    // Stage 2: Known Brand/City Parsing
+    let flags = [], tokens = 0, confidenceScore = 100;
+    const brandOfCityResult = extractBrandOfCityFromDomain(domainLower);
+    if (brandOfCityResult) {
+      let name, cityPart, brandPart;
+      flags.push("PatternMatched");
 
-    // Enhanced blob splitting
+      if (brandOfCityResult.city) {
+        // [CarBrand]of[City]
+        let finalCity = brandOfCityResult.city;
+        if (KNOWN_CITIES_SET.has(finalCity.toLowerCase())) {
+          finalCity = capitalizeName(finalCity);
+          flags.push("KnownCityMatch");
+        } else {
+          const fuzzyMatch = Array.from(KNOWN_CITIES_SET).find(c => levenshteinDistance(finalCity.toLowerCase(), c.toLowerCase()) <= 2);
+          if (fuzzyMatch) {
+            finalCity = capitalizeName(fuzzyMatch);
+            flags.push("FuzzyCityMatch");
+            confidenceScore -= 5;
+          } else {
+            const { isCity, correctedCity, isConfident, tokens: cityTokens } = await validateCityWithOpenAI(domain, finalCity);
+            tokens += cityTokens;
+            if (isCity && isConfident) {
+              finalCity = capitalizeName(correctedCity);
+              flags.push("OpenAICityValidated");
+            } else {
+              confidenceScore -= 10;
+              flags.push("UnverifiedCity");
+            }
+          }
+        }
+        cityPart = applyCityShortName(finalCity);
+        brandPart = BRAND_MAPPING[brandOfCityResult.brand.toLowerCase()] || capitalizeName(brandOfCityResult.brand);
+        flags.push("CarBrandOfCityPattern");
+      } else if (brandOfCityResult.initials) {
+        // [Initials][CarBrand] or [CarBrand][Initials]
+        cityPart = brandOfCityResult.initials;
+        brandPart = brandOfCityResult.brand;
+        flags.push("InitialsPattern");
+      }
+
+      // Stage 4: Possessive-Friendliness Ordering
+      const brandEndsInS = brandPart.toLowerCase().endsWith('s');
+      const cityEndsInS = cityPart.toLowerCase().endsWith('s');
+      if (brandEndsInS && !cityEndsInS) {
+        name = `${cityPart} ${brandPart}`;
+        flags.push("CityBrandOrder");
+      } else if (!brandEndsInS && cityEndsInS) {
+        name = `${brandPart} ${cityPart}`;
+        flags.push("BrandCityOrder");
+      } else if (!brandEndsInS && !cityEndsInS) {
+        name = `${cityPart} ${brandPart}`;
+        flags.push("CityBrandOrder");
+      } else {
+        name = `${cityPart} ${brandPart}`;
+        flags.push("CityBrandOrder");
+      }
+
+      if (process.env.OPENAI_API_KEY && !brandEndsInS && !cityEndsInS) {
+        const prompt = `Which sounds more natural in "{Company}'s CRM isn't broken—it’s bleeding"? Option 1: "${brandPart} ${cityPart}" (e.g., "${brandPart}'s CRM"). Option 2: "${cityPart} ${brandPart}" (e.g., "${cityPart}'s CRM"). Respond with "Option 1" or "Option 2".`;
+        const response = await callOpenAI({ prompt, maxTokens: 10 });
+        tokens += response.tokens || 0;
+        if (response.text.includes("Option 1")) name = `${brandPart} ${cityPart}`;
+        else name = `${cityPart} ${brandPart}`;
+        flags.push("OpenAIPossessiveValidated");
+      }
+
+      // Stage 4: Check for unreadable initials (e.g., "LV BA")
+      if (process.env.OPENAI_API_KEY && name.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
+        const prompt = `Is "${name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+        const response = await callOpenAI({ prompt, maxTokens: 40 });
+        tokens += response.tokens || 0;
+        const parsed = safeParseGPTJson(response.text, { isReadable: true, isConfident: false });
+        if (!parsed.isReadable && parsed.isConfident) {
+          name = `${capitalizeName(brandOfCityResult.city || brandOfCityResult.initials)} ${brandPart}`;
+          flags.push("InitialsExpanded");
+          confidenceScore -= 5;
+        }
+      }
+
+      console.log(`Pattern processed for ${domain}: ${name}`);
+      return { name: addPossessiveFlag ? addPossessive(name) : name, confidenceScore, flags, tokens };
+    }
+
+    // Stage 3: Abbreviation-to-Full Name Matching (Fallback for Blobs)
+    let words = normalizeText(inputName || domain);
     let cleanedName = words.join(" ");
     if (words.length === 1 && !cleanedName.includes(" ") && !KNOWN_PROPER_NOUNS.includes(cleanedName.toLowerCase())) {
       cleanedName = earlyCompoundSplit(cleanedName);
@@ -1125,60 +913,62 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
 
     words = cleanedName.split(" ");
     let hasCity = words.some(w => KNOWN_CITIES_SET.has(w.toLowerCase()));
-
-    // Handle "City Brand" pattern (e.g., "South Charlotte Chevy")
     const cityBrandPattern = hasCity && words.some(word => CAR_BRANDS.includes(word.toLowerCase()));
     if (cityBrandPattern) {
-      const city = words.find(word => KNOWN_CITIES_SET.has(word.toLowerCase()));
-      const brand = words.find(word => CAR_BRANDS.includes(word.toLowerCase()));
-      const mappedBrand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand);
-      const finalName = `${capitalizeName(city)} ${mappedBrand}`;
-      console.log(`City brand pattern for ${domain}: ${finalName}`);
-      return {
-        name: addPossessiveFlag ? addPossessive(finalName) : finalName,
-        confidenceScore: 100,
-        flags: ["CityBrandPattern"],
-        tokens
-      };
+      let city = words.find(word => KNOWN_CITIES_SET.has(word.toLowerCase()));
+      let brands = words.filter(word => CAR_BRANDS.includes(word.toLowerCase()));
+      let selectedBrand = brands[0];
+      if (brands.length > 1) {
+        selectedBrand = brands.reduce((best, curr) => {
+          const bestEndsInS = best.toLowerCase().endsWith('s');
+          const currEndsInS = curr.toLowerCase().endsWith('s');
+          return currEndsInS && !bestEndsInS ? best : curr;
+        });
+        flags.push("MultipleBrandsDetected", "BrandSelected");
+        confidenceScore -= 5;
+      }
+      const mappedBrand = BRAND_MAPPING[selectedBrand.toLowerCase()] || capitalizeName(selectedBrand);
+      const finalCity = applyCityShortName(city);
+      const brandEndsInS = mappedBrand.toLowerCase().endsWith('s');
+      const cityEndsInS = finalCity.toLowerCase().endsWith('s');
+      let name = brandEndsInS && !cityEndsInS ? `${finalCity} ${mappedBrand}` : `${mappedBrand} ${finalCity}`;
+      flags.push("CityBrandPattern");
+
+      // Stage 4: Check for unreadable initials
+      if (process.env.OPENAI_API_KEY && name.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
+        const prompt = `Is "${name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+        const response = await callOpenAI({ prompt, maxTokens: 40 });
+        tokens += response.tokens || 0;
+        const parsed = safeParseGPTJson(response.text, { isReadable: true, isConfident: false });
+        if (!parsed.isReadable && parsed.isConfident) {
+          name = `${capitalizeName(city)} ${mappedBrand}`;
+          flags.push("InitialsExpanded");
+          confidenceScore -= 5;
+        }
+      }
+
+      console.log(`City brand pattern for ${domain}: ${name}`);
+      return { name: addPossessiveFlag ? addPossessive(name) : name, confidenceScore, flags, tokens };
     }
 
+    // Stage 5: Fallbacks
     words = removeForbiddenWords(words);
     const beforeBrandRemoval = [...words];
     words = removeCarBrands(words);
     words = removeGenericSuffixes(words);
-    console.log(`After brand and generic suffix removal for ${domain}: ${words.join(" ")}`);
-
     let name = capitalizeName(words);
     if (words.length === 0 && beforeBrandRemoval.length > 0) {
       name = capitalizeName(beforeBrandRemoval);
       flags.push("CarBrandRemovalAdjusted");
     }
 
-    let confidenceScore = words.length >= 2 && flags.includes("FallbackBlobSplit") ? 85 : 100;
-
-    if (words.length === 1 && !hasCity && !hasCarBrand) {
-      const word = words[0].toLowerCase();
-      const fuzzyMatch = Array.from(KNOWN_CITIES_SET).find(city => {
-        const dist = levenshteinDistance(word, city.toLowerCase());
-        return dist <= 2;
-      });
-      if (fuzzyMatch) {
-        name = capitalizeName(fuzzyMatch);
-        flags.push("FuzzyCityMatch");
-        confidenceScore += 5;
-        hasCity = true;
-        console.log(`Fuzzy city match for ${domain}: ${word} → ${fuzzyMatch}`);
-      }
-    }
-
-    if (words.length === 1 && confidenceScore < 80 && !hasCity && !hasCarBrand) {
+    if (words.length === 1 && !hasCity && !hasCarBrand && confidenceScore >= 80) {
       const { correctedName, isConfident, tokens: gptTokens } = await validateSpacingWithGPT(domain, name);
       tokens += gptTokens;
       if (isConfident && correctedName.split(" ").length === 2) {
         name = correctedName;
         flags.push("GPTSpacingValidated");
         confidenceScore = 90;
-        console.log(`GPT spacing validated for ${domain}: ${name}`);
       }
     }
 
@@ -1187,52 +977,25 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
       return { name: "", confidenceScore: 0, flags: ["EmptyFallbackUsed", "FallbackFailed", ...flags], tokens };
     }
 
+    // Stage 6: Final Scoring/Flags
     const finalWords = name.split(" ");
-    const isCityOnly = finalWords.length === 1 && KNOWN_CITIES_SET.has(finalWords[0].toLowerCase()) && !hasCarBrand;
-    if (isCityOnly) flags.push("CityNameOnly");
+    if (finalWords.length === 1 && KNOWN_CITIES_SET.has(finalWords[0].toLowerCase()) && !hasCarBrand) flags.push("CityNameOnly");
+    if (finalWords.length === 1 && !KNOWN_PROPER_NOUNS.includes(finalWords[0].toLowerCase()) && !KNOWN_CITIES_SET.has(finalWords[0].toLowerCase()) && !hasCarBrand) flags.push("TooGeneric");
+    if (!isPossessiveFriendly(name)) flags.push("NotPossessiveFriendly");
+    if (finalWords.length === 2) confidenceScore = Math.max(confidenceScore, 85);
+    if (flags.includes("FallbackBlobSplit") || flags.includes("FuzzyCityMatch")) confidenceScore = Math.max(confidenceScore, 80);
+    if (flags.includes("TooGeneric") || flags.includes("CityNameOnly")) confidenceScore = Math.min(confidenceScore, 75);
+    if (flags.includes("NotPossessiveFriendly")) confidenceScore -= 10;
 
-    const isTooGeneric = finalWords.length === 1 && !KNOWN_PROPER_NOUNS.includes(finalWords[0].toLowerCase()) &&
-                        !KNOWN_CITIES_SET.has(finalWords[0].toLowerCase()) && !hasCarBrand;
-    if (isTooGeneric) flags.push("TooGeneric");
-
-    if (!isPossessiveFriendly(name)) {
-      flags.push("NotPossessiveFriendly");
-      confidenceScore = Math.min(confidenceScore, 80);
-    } else if (!flags.includes("TooGeneric") && !flags.includes("CityNameOnly")) {
-      confidenceScore = Math.max(confidenceScore, 85);
-      if (!flags.includes("PossessiveFriendlyBoost")) {
-        flags.push("PossessiveFriendlyBoost");
-      }
+    const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed"];
+    const isAcceptable = confidenceScore >= 70 && !criticalFlags.some(f => flags.includes(f));
+    if (isAcceptable) {
+      console.log(`Acceptable name for ${domain}: ${name}, score=${confidenceScore}`);
+    } else {
+      console.log(`Review needed for ${domain}: ${name}, score=${confidenceScore}, flags=${flags.join(", ")}`);
     }
 
-    if (finalWords.length === 2 && !flags.includes("CityNameOnly")) {
-      flags = flags.filter(f => f !== "TooGeneric");
-      confidenceScore = Math.max(confidenceScore, 85);
-      if (!flags.includes("PossessiveFriendlyBoost")) {
-        flags.push("PossessiveFriendlyBoost");
-      }
-    }
-
-    if (flags.includes("TooGeneric")) confidenceScore = Math.min(confidenceScore, 75);
-    if (flags.includes("CityNameOnly")) {
-      if (flags.includes("FallbackBlobSplit") || flags.includes("FuzzyCityMatch")) {
-        confidenceScore = Math.max(confidenceScore, 85);
-      } else {
-        confidenceScore = Math.min(confidenceScore, 75);
-      }
-    }
-
-    const safeFlags = ["PossessiveFriendlyBoost", "FallbackBlobSplit", "CarBrandRemovalAdjusted", "CityBrandPattern", "GPTSpacingValidated", "FuzzyCityMatch"];
-    const disqualifyingFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "NotPossessiveFriendly"];
-    const isSafeFallback = confidenceScore >= 75 && flags.every(f => !disqualifyingFlags.includes(f));
-    if (isSafeFallback) {
-      confidenceScore = Math.max(confidenceScore, 85);
-      console.log(`Safe fallback accepted for ${domain}: ${name}`);
-    }
-
-    const finalName = addPossessiveFlag ? addPossessive(name) : name;
-    console.log(`Final output for ${domain}: ${finalName} (score: ${confidenceScore}, flags: ${flags.join(", ")})`);
-    return { name: finalName, confidenceScore, flags, tokens };
+    return { name: addPossessiveFlag ? addPossessive(name) : name, confidenceScore, flags, tokens };
   } catch (err) {
     console.error(`Error in humanizeName for ${domain}: ${err.stack}`);
     return { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
@@ -1251,40 +1014,40 @@ function isPossessiveFriendly(name) {
 async function runUnitTests() {
   const mockOverrides = {
     "gusmachadoford.com": "Gus Machado",
-    "duvalford.com": "Duval",
+    "duvalford.com": "Duval Ford",
     "patmillikenford.com": "Pat Milliken",
     "karlchevroletstuart.com": "Karl Stuart",
-    "bentleyauto.com": "Bentley",
-    "hondaofcolumbia.com": "Columbia",
-    "devineford.com": "Devine",
+    "bentleyauto.com": "Bentley Auto",
+    "hondaofcolumbia.com": "Honda Columbia",
+    "devineford.com": "Devine Ford",
     "southcharlottechevy.com": "South Charlotte Chevy",
     "vscc.com": "VSCC Auto",
-    "athensford.com": "Athens",
+    "athensford.com": "Athens Ford",
     "geraldauto.com": "Gerald Auto",
     "taylorauto.com": "Taylor Auto",
-    "martinchevrolet.com": "Martin",
+    "martinchevrolet.com": "Martin Chevy",
     "townandcountryford.com": "Town And Country",
     "ricart.com": "Ricart",
     "andersonautogroup.com": "Anderson",
-    "kennedyauto.com": "Kennedy",
+    "kennedyauto.com": "Kennedy Auto",
     "smartdrive.com": "Smart Drive",
     "bmwoffreeport.com": "BMW Freeport",
     "calavancars.com": "Calavan",
-    "blakefauto.com": "Blakef Auto",
+    "blakefauto.com": "Blake F. Auto",
     "vsccauto.com": "VSCC Auto",
     "mbofbrooklyn.com": "MB Brooklyn",
-    "toyotaofkilleen.com": "Killeen",
+    "toyotaofkilleen.com": "Killeen Toyota",
     "mbofcaldwell.com": "MB Caldwell",
-    "toyotaofbrookhaven.com": "Brookhaven",
+    "toyotaofbrookhaven.com": "Toyota Brookhaven",
     "kiaoflagrange.com": "Lagrange",
-    "kiaofauburn.com": "Auburn",
-    "toyotaofmanhattan.com": "Manhattan",
+    "kiaofauburn.com": "Auburn Kia",
+    "toyotaofmanhattan.com": "Manhattan Toyota",
     "mbofstockton.com": "MB Stockton",
-    "kiaofalhambra.com": "Alhambra",
-    "nissanofchicago.com": "Chicago",
-    "chevroletofnaples.com": "Naples",
+    "kiaofalhambra.com": "Alhambra Kia",
+    "nissanofchicago.com": "Chicago Nisson",
+    "chevroletofnaples.com": "Naples Chevy",
     "mydealer-mbofstockton.com": "MB Stockton",
-    "usertoyotaofmanhattan.com": "Manhattan"
+    "usertoyotaofmanhattan.com": "Manhattan Toyota"
   };
 
   const originalOverrides = { ...KNOWN_OVERRIDES };
@@ -1292,12 +1055,12 @@ async function runUnitTests() {
 
   const tests = [
     { domain: "gusmachadoford.com", expected: "Gus Machado" },
-    { domain: "duvalford.com", expected: "Duval" },
+    { domain: "duvalford.com", expected: "Duval Ford" },
     { domain: "patmillikenford.com", expected: "Pat Milliken" },
     { domain: "karlchevroletstuart.com", expected: "Karl Stuart" },
-    { domain: "bentleyauto.com", expected: "Bentley" },
-    { domain: "hondaofcolumbia.com", expected: "Columbia" },
-    { domain: "devineford.com", expected: "Devine" },
+    { domain: "bentleyauto.com", expected: "Bentley Auto" },
+    { domain: "hondaofcolumbia.com", expected: "Honda Columbia" },
+    { domain: "devineford.com", expected: "Devine Ford" },
     { domain: "southcharlottechevy.com", expected: "South Charlotte Chevy" },
     { domain: "vscc.com", expected: "VSCC Auto" },
     { domain: "athensford.com", expected: "Athens" },
@@ -1311,21 +1074,21 @@ async function runUnitTests() {
     { domain: "smartdrive.com", expected: "Smart Drive" },
     { domain: "bmwoffreeport.com", expected: "BMW Freeport" },
     { domain: "calavancars.com", expected: "Calavan" },
-    { domain: "blakefauto.com", expected: "Blakef Auto" },
+    { domain: "blakefauto.com", expected: "Blake F. Auto" },
     { domain: "vsccauto.com", expected: "VSCC Auto" },
     { domain: "mbofbrooklyn.com", expected: "MB Brooklyn" },
-    { domain: "toyotaofkilleen.com", expected: "Killeen" },
+    { domain: "toyotaofkilleen.com", expected: "Killeen Toyota" },
     { domain: "mbofcaldwell.com", expected: "MB Caldwell" },
     { domain: "toyotaofbrookhaven.com", expected: "Brookhaven" },
-    { domain: "kiaoflagrange.com", expected: "Lagrange" },
-    { domain: "kiaofauburn.com", expected: "Auburn" },
-    { domain: "toyotaofmanhattan.com", expected: "Manhattan" },
+    { domain: "kiaoflagrange.com", expected: "Lagrange Kia" },
+    { domain: "kiaofauburn.com", expected: "Auburn Kia" },
+    { domain: "toyotaofmanhattan.com", expected: "Manhattan Toyota" },
     { domain: "mbofstockton.com", expected: "MB Stockton" },
-    { domain: "kiaofalhambra.com", expected: "Alhambra" },
-    { domain: "nissanofchicago.com", expected: "Chicago" },
-    { domain: "chevroletofnaples.com", expected: "Naples" },
+    { domain: "kiaofalhambra.com", expected: "Alhambra Kia" },
+    { domain: "nissanofchicago.com", expected: "Chicago Nissan" },
+    { domain: "chevroletofnaples.com", expected: "Naples Chevy" },
     { domain: "mydealer-mbofstockton.com", expected: "MB Stockton" },
-    { domain: "usertoyotaofmanhattan.com", expected: "Manhattan" }
+    { domain: "usertoyotaofmanhattan.com", expected: "Manhattan Toyota" }
   ];
 
   let passed = 0;
@@ -1345,7 +1108,7 @@ async function runUnitTests() {
   Object.assign(KNOWN_OVERRIDES, originalOverrides);
 }
 
-// Consolidated Exports
+// Exports
 export {
   humanizeName,
   CAR_BRANDS,
@@ -1355,6 +1118,5 @@ export {
   KNOWN_CITIES_SET,
   NON_DEALERSHIP_KEYWORDS,
   KNOWN_PROPER_NOUNS,
-  addPossessive,
-  runUnitTests
+  addPossessive
 };
