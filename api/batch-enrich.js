@@ -1,14 +1,12 @@
-// api/batch-enrich.js (Version 4.1.4 - Updated 2025-04-08)
+// api/batch-enrich.js (Version 4.1.5 - Updated 2025-04-09)
 // Changes:
-// - Fixed response format to match Apps Script expectation (successful field instead of results)
-// - Increased concurrency limit to 2 for better throughput
-// - Added per-domain timeout check to prevent exceeding Vercel’s 20s limit
-// - Enhanced fallback API response validation with default values
-// - Improved streamToString error handling with fallback
-// - Reduced logging verbosity for large batches
-// - Updated version to 4.1.4 to reflect the changes
+// - Aligned forceReviewFlags with batch-enrich-company-name-fallback.js (added UnverifiedCity)
+// - Added subdomain normalization for [CarBrand]of[City] patterns before humanizeName
+// - Enhanced fallbackTriggers logging with brand, city, and gptUsed details
+// - Added manual test for known CarBrandOfCity domains
+// - Updated version to 4.1.5 to reflect the changes
 
-import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET } from "./lib/humanize.js";
+import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
 
 // Concurrency limiter
@@ -74,14 +72,14 @@ const callFallbackAPI = async (domain, rowNum) => {
       }
       if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
       // Validate the response schema
-      if (!Array.isArray(result.results) || !result.results[0]) {
+      if (!Array.isArray(result.successful) || !result.successful[0]) {
         throw new Error(`Invalid fallback API response format: ${text}`);
       }
-      const fallbackResult = result.results[0];
+      const fallbackResult = result.successful[0];
       // Ensure required fields are present
       const validatedResult = {
         domain: fallbackResult.domain || domain,
-        companyName: typeof fallbackResult.name === "string" ? fallbackResult.name : "",
+        companyName: typeof fallbackResult.companyName === "string" ? fallbackResult.companyName : "",
         confidenceScore: typeof fallbackResult.confidenceScore === "number" ? fallbackResult.confidenceScore : 0,
         flags: Array.isArray(fallbackResult.flags) ? fallbackResult.flags : ["InvalidFallbackResponse"],
         tokens: typeof fallbackResult.tokens === "number" ? fallbackResult.tokens : 0
@@ -127,7 +125,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.4 - Updated 2025-04-08");
+  console.log("batch-enrich.js Version 4.1.5 - Updated 2025-04-09");
 
   try {
     // Parse the request body
@@ -184,7 +182,7 @@ export default async function handler(req, res) {
 
     const startTime = Date.now();
     const limit = pLimit(2); // Increased concurrency to 2 for better throughput
-    const successful = []; // Renamed from results to match Apps Script expectation
+    const successful = [];
     const manualReviewQueue = [];
     let totalTokens = 0;
     const fallbackTriggers = [];
@@ -211,7 +209,15 @@ export default async function handler(req, res) {
             return { domain, companyName: "", confidenceScore: 0, flags: ["SkippedDueToTimeout"], rowNum, tokens: 0 };
           }
 
-          const domainLower = domain.toLowerCase();
+          let domainLower = domain.toLowerCase();
+
+          // Normalize subdomains like mydealer-mbofstockton.com
+          const normalizedMatch = extractBrandOfCityFromDomain(domainLower);
+          if (normalizedMatch && !KNOWN_OVERRIDES[domainLower]) {
+            const normalizedDomain = `${normalizedMatch.brand.toLowerCase()}of${normalizedMatch.city.toLowerCase()}`;
+            console.log(`Row ${rowNum}: Normalized subdomain detected: ${domain} → ${normalizedDomain}`);
+            domainLower = normalizedDomain;
+          }
 
           // Fuzzy override matching with improved enforcement
           const matchedOverrideDomain = fuzzyMatchDomain(domainLower, Object.keys(KNOWN_OVERRIDES));
@@ -243,11 +249,19 @@ export default async function handler(req, res) {
 
           let finalResult;
           let tokensUsed = 0;
+          let brandDetected = null;
+          let cityDetected = null;
+
+          // Extract brand and city for logging
+          if (normalizedMatch) {
+            brandDetected = normalizedMatch.brand;
+            cityDetected = normalizedMatch.city;
+          }
 
           // Primary humanizeName call with retries
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
-              finalResult = await humanizeName(domain, domain, false);
+              finalResult = await humanizeName(domainLower, domainLower, false);
               tokensUsed = finalResult.tokens || 0;
               console.log(`Row ${rowNum}: humanizeName attempt ${attempt} success for ${domain}: name=${finalResult.name}, score=${finalResult.confidenceScore}`);
               break;
@@ -269,7 +283,8 @@ export default async function handler(req, res) {
             "BadPrefixOf",
             "CarBrandSuffixRemaining",
             "FuzzyCityMatch",
-            "NotPossessiveFriendly"
+            "NotPossessiveFriendly",
+            "UnverifiedCity" // Added for consistency with batch-enrich-company-name-fallback.js
           ];
           const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => criticalFlags.includes(f));
 
@@ -290,6 +305,7 @@ export default async function handler(req, res) {
             if (fallback.companyName && fallback.confidenceScore >= 75 && !fallback.flags.some(f => criticalFlags.includes(f))) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
               tokensUsed += fallback.tokens || 0;
+              console.log(`Row ${rowNum}: Fallback decision → name=${fallback.companyName}, score=${fallback.confidenceScore}, flags=${fallback.flags.join(", ")}`);
               console.log(`Row ${rowNum}: Fallback API used successfully: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
             } else {
               finalResult.flags.push("FallbackAPIFailed");
@@ -297,8 +313,16 @@ export default async function handler(req, res) {
                 domain, 
                 rowNum,
                 reason: "FallbackAPIFailed", 
-                details: `Score: ${fallback.confidenceScore}, Flags: ${fallback.flags.join(", ")}` 
+                details: { 
+                  score: fallback.confidenceScore, 
+                  flags: fallback.flags, 
+                  brand: brandDetected, 
+                  city: cityDetected, 
+                  gptUsed: fallback.flags.includes("GPTSpacingValidated") || fallback.flags.includes("OpenAICityValidated")
+                }, 
+                tokens: tokensUsed 
               });
+              console.log(`Row ${rowNum}: Fallback decision → name=${fallback.companyName}, score=${fallback.confidenceScore}, flags=${fallback.flags.join(", ")}`);
               console.log(`Row ${rowNum}: Fallback API failed, using primary result: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
             }
           }
@@ -344,5 +368,14 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Server error", details: err.message });
   }
 }
+
+/*
+Manual Test for CarBrandOfCity Domains
+Expected: All domains should resolve to Brand City without manual review or OpenAI fallback.
+- "toyotaofslidell.net" → "Toyota Slidell" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
+- "lexusofneworleans.com" → "Lexus New Orleans" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
+- "cadillacoflasvegas.com" → "Cadillac Las Vegas" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
+- "kiaoflagrange.com" → "Kia Lagrange" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
+*/
 
 export const config = { api: { bodyParser: false } };
