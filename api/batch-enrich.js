@@ -269,6 +269,7 @@ export default async function handler(req, res) {
               finalResult.flags.push("FallbackAPIFailed");
               fallbackTriggers.push({ 
                 domain, 
+                rowNum,
                 reason: "FallbackAPIFailed", 
                 details: `Score: ${fallback.confidenceScore}, Flags: ${fallback.flags.join(", ")}` 
               });
