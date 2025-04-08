@@ -1,7 +1,9 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.11 - Optimized 2025-04-07)
+// api/batch-enrich-company-name-fallback.js (Version 1.0.12 - Optimized 2025-04-07)
 // Changes:
-// - Added support for 'leads' field in payload (alongside leadList and domains)
-// - Updated version to 1.0.11 to reflect the change
+// - Added rowNum to fallbackTriggers for better traceability (ChatGPT #1)
+// - Added explicit type safety for finalResult.flags (ChatGPT #2)
+// - Added inline confidence classification flags (ChatGPT #3)
+// - Updated version to 1.0.12 to reflect the changes
 
 import { humanizeName, KNOWN_OVERRIDES } from "./lib/humanize.js"; // Aligned with single-export humanize.js
 
@@ -42,7 +44,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.11 - Optimized 2025-04-07");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.12 - Optimized 2025-04-07");
 
   try {
     // Check for OpenAI API key
@@ -154,14 +156,19 @@ export default async function handler(req, res) {
               console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed: ${err.message}, Stack: ${err.stack}`);
               if (attempt === 3) {
                 finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
-                fallbackTriggers.push({ domain, reason: "ProcessingError", details: err.message });
+                fallbackTriggers.push({ domain, rowNum, reason: "ProcessingError", details: err.message });
               }
               await new Promise(res => setTimeout(res, 1000));
             }
           }
 
-          // Add fallback flag
-          finalResult.flags = [...(finalResult.flags || []), "FallbackUsed"];
+          // Ensure flags is an array before adding "FallbackUsed"
+          finalResult.flags = Array.isArray(finalResult.flags) ? finalResult.flags : [];
+          finalResult.flags.push("FallbackUsed");
+
+          // Add confidence classification flag
+          const confidenceScore = finalResult.confidenceScore || 0;
+          finalResult.flags.push(confidenceScore >= 90 ? "HighConfidence" : confidenceScore >= 75 ? "MediumConfidence" : "LowConfidence");
 
           // Acceptability criteria (aligned with non-negotiable rules)
           const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
@@ -189,6 +196,7 @@ export default async function handler(req, res) {
             });
             fallbackTriggers.push({ 
               domain, 
+              rowNum,
               reason: reviewReason, 
               details: `Score: ${finalResult.confidenceScore}, Flags: ${finalResult.flags.join(", ")}` 
             });
