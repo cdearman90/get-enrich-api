@@ -1,11 +1,10 @@
-// api/batch-enrich.js (Version 4.1.7 - Updated 2025-04-11)
+// api/batch-enrich.js (Version 4.1.8 - Updated 2025-04-12)
 // Changes:
-// - Removed KNOWN_OVERRIDES dependency to align with humanize.js and batchCleanCompanyNames.gs
-// - Simplified normalization and fuzzy matching logic to rely solely on humanizeName
-// - Updated manual test outputs to reflect pattern-based results without overrides
-// - Bumped version to 4.1.7
+// - Synced with humanize.js: removed TooGeneric for single-word proper nouns, added TooVerbose penalty
+// - Adjusted OpenAI initials expansion to use updated scoring
+// - Bumped version to 4.1.8
 
-import { humanizeName, CAR_BRANDS, normalizeText, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
+import { humanizeName, CAR_BRANDS, normalizeText, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain, applyCityShortName, earlyCompoundSplit } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
 // Concurrency limiter
@@ -32,7 +31,7 @@ const domainCache = new Map();
 
 // Safe POST fallback endpoint with retry
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
-const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback";
+const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
 
 const callFallbackAPI = async (domain, rowNum) => {
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -106,7 +105,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.7 - Updated 2025-04-11");
+  console.log("batch-enrich.js Version 4.1.8 - Updated 2025-04-12");
 
   try {
     // Parse the request body
@@ -258,7 +257,7 @@ export default async function handler(req, res) {
             finalResult = {
               domain,
               companyName: finalResult.companyName || "",
-              confidenceScore: Math.max(finalResult.confidenceScore, 50), // Align with humanize.js min
+              confidenceScore: Math.max(finalResult.confidenceScore, 50),
               flags: [...finalResult.flags, "LowConfidence"],
               rowNum
             };
@@ -288,7 +287,14 @@ export default async function handler(req, res) {
           });
 
           totalTokens += tokensUsed;
-          return { ...finalResult, rowNum, tokens: tokensUsed };
+          return {
+            domain,
+            companyName: finalResult.companyName,
+            confidenceScore: finalResult.confidenceScore,
+            flags: finalResult.flags,
+            rowNum,
+            tokens: tokensUsed
+          };
         }))
       );
 
