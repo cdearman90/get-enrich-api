@@ -1,8 +1,9 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.19 - Optimized 2025-04-12)
+// api/batch-enrich-company-name-fallback.js (Version 1.0.20 - Optimized 2025-04-12)
 // Changes:
-// - Synced with humanize.js: removed TooGeneric for single-word proper nouns, added TooVerbose penalty
-// - Adjusted OpenAI initials expansion to use updated scoring
-// - Bumped version to 1.0.19
+// - Added excludeCarBrandIfPossessiveFriendly option to humanizeName calls
+// - Synced with humanize.js for car brand exclusion rule
+// - Added OpenAI validation for possessive form in initials check
+// - Bumped version to 1.0.20
 
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, earlyCompoundSplit } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
@@ -56,7 +57,7 @@ const capitalizeName = (words) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.19 - Optimized 2025-04-12");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.20 - Optimized 2025-04-12");
 
   try {
     if (!process.env.OPENAI_API_KEY) {
@@ -142,7 +143,7 @@ export default async function handler(req, res) {
 
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
-              finalResult = await humanizeName(domainLower, domainLower, false);
+              finalResult = await humanizeName(domainLower, domainLower, false, true);
               tokensUsed = finalResult.tokens || 0;
               console.log(`Row ${rowNum}: humanizeName attempt ${attempt} success: name=${finalResult.name}, score=${finalResult.confidenceScore}`);
               break;
