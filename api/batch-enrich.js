@@ -1,14 +1,12 @@
-// api/batch-enrich.js (Version 4.1.6 - Updated 2025-04-10)
+// api/batch-enrich.js (Version 4.1.7 - Updated 2025-04-11)
 // Changes:
-// - Integrated latest humanize.js with applyCityShortName for city short names
-// - Added OpenAI validation to avoid unreadable initials combos (e.g., "LV BA")
-// - Aligned forceReviewFlags with batch-enrich-company-name-fallback.js (UnverifiedCity)
-// - Enhanced fallbackTriggers logging with brand, city, and gptUsed details
-// - Updated manual test outputs to reflect short names (e.g., "Vegas Cadillac")
-// - Updated version to 4.1.6
+// - Removed KNOWN_OVERRIDES dependency to align with humanize.js and batchCleanCompanyNames.gs
+// - Simplified normalization and fuzzy matching logic to rely solely on humanizeName
+// - Updated manual test outputs to reflect pattern-based results without overrides
+// - Bumped version to 4.1.7
 
-import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
-import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
+import { humanizeName, CAR_BRANDS, normalizeText, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
+import { callOpenAI } from "./lib/openai.js";
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -32,25 +30,9 @@ const pLimit = (concurrency) => {
 // Cache
 const domainCache = new Map();
 
-// Fuzzy domain matcher
-const fuzzyMatchDomain = (inputDomain, knownDomains) => {
-  try {
-    const normalizedInput = inputDomain.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "").trim();
-    for (const knownDomain of knownDomains) {
-      const normalizedKnown = knownDomain.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "").trim();
-      if (normalizedInput === normalizedKnown) return knownDomain;
-      if (normalizedInput.includes(normalizedKnown) || normalizedKnown.includes(normalizedInput)) return knownDomain;
-    }
-    return null;
-  } catch (err) {
-    console.error(`Error fuzzy matching domain ${inputDomain}: ${err.message}, Stack: ${err.stack}`);
-    return null;
-  }
-};
-
 // Safe POST fallback endpoint with retry
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
-const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
+const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback";
 
 const callFallbackAPI = async (domain, rowNum) => {
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -105,7 +87,7 @@ const callFallbackAPI = async (domain, rowNum) => {
   }
 };
 
-// Stream to string helper with timeout and fallback
+// Stream to string helper with timeout
 const streamToString = async (stream) => {
   const chunks = [];
   const timeout = setTimeout(() => { throw new Error("Stream read timeout"); }, 5000); // 5s timeout
@@ -124,7 +106,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.6 - Updated 2025-04-10");
+  console.log("batch-enrich.js Version 4.1.7 - Updated 2025-04-11");
 
   try {
     // Parse the request body
@@ -196,33 +178,7 @@ export default async function handler(req, res) {
             return { domain, companyName: "", confidenceScore: 0, flags: ["SkippedDueToTimeout"], rowNum, tokens: 0 };
           }
 
-          let domainLower = domain.toLowerCase();
-          const normalizedMatch = extractBrandOfCityFromDomain(domainLower);
-          if (normalizedMatch && !KNOWN_OVERRIDES[domainLower]) {
-            const normalizedDomain = `${normalizedMatch.brand.toLowerCase()}of${normalizedMatch.city.toLowerCase()}`;
-            console.log(`Row ${rowNum}: Normalized subdomain detected: ${domain} → ${normalizedDomain}`);
-            domainLower = normalizedDomain;
-          }
-
-          const matchedOverrideDomain = fuzzyMatchDomain(domainLower, Object.keys(KNOWN_OVERRIDES));
-          if (matchedOverrideDomain) {
-            const override = KNOWN_OVERRIDES[matchedOverrideDomain];
-            if (typeof override === 'string' && override.trim().length > 0) {
-              const overrideName = override.trim();
-              console.log(`Row ${rowNum}: Fuzzy override match for ${domain}: ${overrideName}`);
-              return {
-                domain,
-                companyName: overrideName,
-                confidenceScore: 100,
-                flags: ["FuzzyOverrideMatched"],
-                rowNum,
-                tokens: 0
-              };
-            } else if (override !== undefined && override.trim() === "") {
-              console.log(`Row ${rowNum}: Empty override for ${domain}, proceeding to fallback`);
-              return { domain, companyName: "", confidenceScore: 0, flags: ["EmptyOverride"], rowNum, tokens: 0 };
-            }
-          }
+          const domainLower = domain.toLowerCase();
 
           if (domainCache.has(domainLower)) {
             const cachedResult = domainCache.get(domainLower);
@@ -232,8 +188,9 @@ export default async function handler(req, res) {
 
           let finalResult;
           let tokensUsed = 0;
-          let brandDetected = normalizedMatch?.brand || null;
-          let cityDetected = normalizedMatch?.city || null;
+          const normalizedMatch = extractBrandOfCityFromDomain(domainLower);
+          const brandDetected = normalizedMatch?.brand || null;
+          const cityDetected = normalizedMatch?.city || null;
 
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
@@ -301,21 +258,21 @@ export default async function handler(req, res) {
             finalResult = {
               domain,
               companyName: finalResult.companyName || "",
-              confidenceScore: Math.max(finalResult.confidenceScore, 60),
+              confidenceScore: Math.max(finalResult.confidenceScore, 50), // Align with humanize.js min
               flags: [...finalResult.flags, "LowConfidence"],
               rowNum
             };
             console.log(`Row ${rowNum}: Added to manual review: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
           }
 
-          // Stage 4: Check for unreadable initials (e.g., "LV BA")
+          // Check for unreadable initials (e.g., "LV BA")
           if (process.env.OPENAI_API_KEY && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
             const prompt = `Is "${finalResult.companyName}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
             const response = await callOpenAI({ prompt, maxTokens: 40 });
             tokensUsed += response.tokens || 0;
-            const parsed = safeParseGPTJson(response.text, { isReadable: true, isConfident: false });
+            const parsed = typeof response.text === "string" ? JSON.parse(response.text) : { isReadable: true, isConfident: false };
             if (!parsed.isReadable && parsed.isConfident) {
-              const fullCity = cityDetected ? capitalizeName(cityDetected) : finalResult.companyName.split(" ")[0];
+              const fullCity = cityDetected ? applyCityShortName(cityDetected) : finalResult.companyName.split(" ")[0];
               finalResult.companyName = `${fullCity} ${brandDetected || finalResult.companyName.split(" ")[1] || "Auto"}`;
               finalResult.flags.push("InitialsExpanded");
               finalResult.confidenceScore -= 5;
@@ -348,11 +305,11 @@ export default async function handler(req, res) {
 
 /*
 Manual Test for CarBrandOfCity Domains
-Expected: All domains resolve with short names where applicable, without manual review or excessive OpenAI calls.
-- "toyotaofslidell.net" → "Slidell Toyota" (confidence: 100, flags: ["OverrideApplied"])
-- "lexusofneworleans.com" → "N.O. Lexus" (confidence: 100, flags: ["OverrideApplied"])
-- "cadillacoflasvegas.com" → "Vegas Cadillac" (confidence: 100, flags: ["OverrideApplied"])
-- "kiaoflagrange.com" → "Lagrange Kia" (confidence: 100, flags: ["OverrideApplied"])
+Expected: All domains resolve with short names where applicable, relying on pattern matching.
+- "toyotaofslidell.net" → "Slidell Toyota" (confidence: 100, flags: ["PatternMatched", "CarBrandOfCityPattern"])
+- "lexusofneworleans.com" → "N.O. Lexus" (confidence: 100, flags: ["PatternMatched", "CarBrandOfCityPattern"])
+- "cadillacoflasvegas.com" → "Vegas Cadillac" (confidence: 100, flags: ["PatternMatched", "CarBrandOfCityPattern"])
+- "kiaoflagrange.com" → "Lagrange Kia" (confidence: 100, flags: ["PatternMatched", "CarBrandOfCityPattern"])
 */
 
 export const config = { api: { bodyParser: false } };
