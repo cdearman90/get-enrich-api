@@ -1,6 +1,11 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.9 - Optimized 2025-04-07)
-// Updated to accept 2-word fallbacks at 75+, align with humanize.js and batch-enrich.js v4.0,
-// enhance logging, sync acceptability thresholds, and add override enforcement
+// api/batch-enrich-company-name-fallback.js (Version 1.0.10 - Optimized 2025-04-07)
+// Changes:
+// - Updated payload parsing to match batch-enrich.js v4.1 (supports leadList/domains)
+// - Added detailed validation and error messages
+// - Improved logging for debugging
+// - Aligned with system architecture (3 retries, 1s delay, 18s timeout)
+// - Ensured non-negotiable rules (disqualification flags, threshold ≥ 75)
+// - Added environment variable check for OpenAI
 
 import { humanizeName, KNOWN_OVERRIDES } from "./lib/humanize.js"; // Aligned with single-export humanize.js
 
@@ -41,34 +46,73 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.9 - Optimized 2025-04-07");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.10 - Optimized 2025-04-07");
 
   try {
-    let leads;
+    // Check for OpenAI API key
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("Missing OPENAI_API_KEY environment variable");
+      return res.status(500).json({ error: "Server configuration error", details: "Missing OPENAI_API_KEY environment variable" });
+    }
+
+    // Parse the request body
+    let body;
     try {
       const rawBody = await streamToString(req);
-      leads = JSON.parse(rawBody);
-      console.log(`Received ${leads.length} leads for fallback processing`);
+      body = JSON.parse(rawBody);
+      console.log(`Received payload: ${JSON.stringify(body).slice(0, 300)}`);
     } catch (err) {
       console.error(`JSON parse error: ${err.message}, Stack: ${err.stack}`);
       return res.status(400).json({ error: "Invalid JSON", details: err.message });
     }
 
-    if (!Array.isArray(leads) || leads.length === 0) {
-      console.error("Missing or invalid lead list");
-      return res.status(400).json({ error: "Missing or invalid lead list" });
+    // Validate payload structure
+    if (!body || typeof body !== "object") {
+      console.error("Request body is missing or not an object");
+      return res.status(400).json({ error: "Request body is missing or not an object" });
     }
+
+    // Extract leads (support both 'leadList' and 'domains' for compatibility)
+    const leads = body.leadList || body.domains;
+    if (!leads) {
+      console.error("Missing 'leadList' or 'domains' field in payload");
+      return res.status(400).json({ error: "Missing 'leadList' or 'domains' field in payload" });
+    }
+    if (!Array.isArray(leads)) {
+      console.error("'leadList' or 'domains' must be an array");
+      return res.status(400).json({ error: "'leadList' or 'domains' must be an array" });
+    }
+    if (leads.length === 0) {
+      console.error("'leadList' or 'domains' array is empty");
+      return res.status(400).json({ error: "'leadList' or 'domains' array is empty" });
+    }
+
+    // Validate each lead entry
+    const validatedLeads = leads.map((lead, index) => {
+      if (!lead || typeof lead !== "object" || !lead.domain || typeof lead.domain !== "string" || lead.domain.trim() === "") {
+        console.error(`Invalid lead at index ${index}: ${JSON.stringify(lead)}`);
+        return null;
+      }
+      return { domain: lead.domain.trim().toLowerCase(), rowNum: lead.rowNum || (index + 1) };
+    }).filter(lead => lead !== null);
+
+    if (validatedLeads.length === 0) {
+      console.error("No valid leads after validation");
+      return res.status(400).json({ error: "No valid leads after validation" });
+    }
+
+    console.log(`Processing ${validatedLeads.length} valid leads in fallback`);
 
     const startTime = Date.now();
     const limit = pLimit(1); // Conservative concurrency for stability
     const results = [];
     const manualReviewQueue = [];
-    const fallbackTriggers = []; // Added for tracking manual review reasons
+    const fallbackTriggers = [];
     let totalTokens = 0;
 
-    const BATCH_SIZE = 5; // Aligned with batch-enrich.js v4.0 and Google Apps Script
-    const leadChunks = Array.from({ length: Math.ceil(leads.length / BATCH_SIZE) }, (_, i) =>
-      leads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+    const BATCH_SIZE = 5; // Aligned with system architecture
+    const leadChunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
+      validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
@@ -80,11 +124,6 @@ export default async function handler(req, res) {
       const chunkResults = await Promise.all(
         chunk.map(lead => limit(async () => {
           const { domain, rowNum } = lead;
-          if (!domain) {
-            console.error(`Row ${rowNum}: Missing domain`);
-            return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 };
-          }
-
           const domainLower = domain.toLowerCase();
 
           // Check for overrides first with improved enforcement
@@ -108,7 +147,7 @@ export default async function handler(req, res) {
           let finalResult;
           let tokensUsed = 0;
 
-          // Retry logic for humanizeName
+          // Retry logic for humanizeName (3 retries, 1s delay)
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
               finalResult = await humanizeName(domain, domain, false);
@@ -128,7 +167,8 @@ export default async function handler(req, res) {
           // Add fallback flag
           finalResult.flags = [...(finalResult.flags || []), "FallbackUsed"];
 
-          // Acceptability criteria synced with batch-enrich.js v4.0 and Google Apps Script
+          // Acceptability criteria (aligned with non-negotiable rules)
+          const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
           const forceReviewFlags = [
             "TooGeneric",
             "CityNameOnly",
@@ -138,10 +178,12 @@ export default async function handler(req, res) {
             "FuzzyCityMatch",
             "NotPossessiveFriendly"
           ];
-          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f));
+          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => criticalFlags.includes(f));
 
           if (!isAcceptable) {
-            const reviewReason = finalResult.confidenceScore < 75 ? "LowConfidence" : `ProblematicFlags: ${finalResult.flags.filter(f => forceReviewFlags.includes(f)).join(", ")}`;
+            const reviewReason = finalResult.confidenceScore < 75 
+              ? "LowConfidence" 
+              : `ProblematicFlags: ${finalResult.flags.filter(f => forceReviewFlags.includes(f)).join(", ")}`;
             manualReviewQueue.push({
               domain,
               name: finalResult.name,
@@ -149,7 +191,11 @@ export default async function handler(req, res) {
               flags: finalResult.flags,
               rowNum
             });
-            fallbackTriggers.push({ domain, reason: reviewReason, details: `Score: ${finalResult.confidenceScore}, Flags: ${finalResult.flags.join(", ")}` });
+            fallbackTriggers.push({ 
+              domain, 
+              reason: reviewReason, 
+              details: `Score: ${finalResult.confidenceScore}, Flags: ${finalResult.flags.join(", ")}` 
+            });
             finalResult = {
               name: finalResult.name || "",
               confidenceScore: Math.max(finalResult.confidenceScore, 60),
