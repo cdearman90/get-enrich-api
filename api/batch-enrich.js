@@ -1,8 +1,9 @@
-// api/batch-enrich.js (Version 4.1.8 - Updated 2025-04-12)
+// api/batch-enrich.js (Version 4.1.9 - Updated 2025-04-12)
 // Changes:
-// - Synced with humanize.js: removed TooGeneric for single-word proper nouns, added TooVerbose penalty
-// - Adjusted OpenAI initials expansion to use updated scoring
-// - Bumped version to 4.1.8
+// - Added excludeCarBrandIfPossessiveFriendly option to humanizeName calls
+// - Synced with humanize.js for car brand exclusion rule
+// - Added OpenAI validation for possessive form in initials check
+// - Bumped version to 4.1.9
 
 import { humanizeName, CAR_BRANDS, normalizeText, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain, applyCityShortName, earlyCompoundSplit } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
@@ -69,7 +70,7 @@ const callFallbackAPI = async (domain, rowNum) => {
     } catch (err) {
       console.error(`Fallback API attempt ${attempt} failed for ${domain} (row ${rowNum}): ${err.message}`);
       if (attempt === 3) {
-        const localResult = await humanizeName(domain, domain, false);
+        const localResult = await humanizeName(domain, domain, false, true);
         console.log(`Local fallback for ${domain} (row ${rowNum}) after API failure: name=${localResult.name}, score=${localResult.confidenceScore}`);
         return { 
           domain,
@@ -105,7 +106,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.8 - Updated 2025-04-12");
+  console.log("batch-enrich.js Version 4.1.9 - Updated 2025-04-12");
 
   try {
     // Parse the request body
@@ -193,7 +194,7 @@ export default async function handler(req, res) {
 
           for (let attempt = 1; attempt <= 2; attempt++) {
             try {
-              finalResult = await humanizeName(domainLower, domainLower, false);
+              finalResult = await humanizeName(domainLower, domainLower, false, true);
               tokensUsed = finalResult.tokens || 0;
               console.log(`Row ${rowNum}: humanizeName attempt ${attempt} success for ${domain}: name=${finalResult.name}, score=${finalResult.confidenceScore}`);
               break;
