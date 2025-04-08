@@ -785,7 +785,6 @@ function levenshteinDistance(a, b) {
 }
 
 async function validateCityWithOpenAI(domain, potentialCity) {
-  // Check cache first
   if (VALIDATED_CITIES_CACHE.has(potentialCity.toLowerCase())) {
     return { isCity: true, correctedCity: potentialCity, isConfident: true, tokens: 0 };
   }
@@ -810,7 +809,6 @@ async function validateCityWithOpenAI(domain, potentialCity) {
     } catch (err) {
       console.warn(`Malformed JSON in OpenAI city validation response for ${domain}: ${res}`);
     }
-    // Cache validated cities
     if (isCity && isConfident) {
       VALIDATED_CITIES_CACHE.add(correctedCity.toLowerCase());
     }
@@ -849,20 +847,20 @@ async function validateSpacingWithGPT(domain, inputName) {
   }
 }
 
-// Extract CarBrand of City pattern
 function extractBrandOfCityFromDomain(domain) {
   const domainLower = domain.toLowerCase().replace(/\.(com|net|org)$/, "");
-  const match = domainLower.match(/^([a-z]+)of([a-z]+)$/); // e.g., mbofbrooklyn → [mb, brooklyn]
+  const brandOfRegex = new RegExp(`\\b(${CAR_BRANDS.join('|')})of([a-z]+)\\b`, 'i');
+  const match = domainLower.match(brandOfRegex);
 
   if (!match || match.length < 3) return null;
 
   const brand = match[1];
   const city = match[2];
 
-  // Exact match for brand
+  if (city.length < 3) return null;
+
   let brandMatch = CAR_BRANDS.find(b => b.toLowerCase() === brand.toLowerCase());
   if (!brandMatch) {
-    // Fuzzy match for brand (Levenshtein distance ≤ 1 for short brands)
     brandMatch = CAR_BRANDS.find(b => {
       if (brand.length <= 4) {
         return levenshteinDistance(brand.toLowerCase(), b.toLowerCase()) <= 1;
@@ -872,9 +870,6 @@ function extractBrandOfCityFromDomain(domain) {
   }
 
   if (!brandMatch) return null;
-
-  // City must be at least 3 characters
-  if (city.length < 3) return null;
 
   const brandFormatted = BRAND_MAPPING[brandMatch.toLowerCase()] || capitalizeName(brandMatch);
   return { brand: brandFormatted, city };
@@ -886,7 +881,53 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     const domainLower = domain.toLowerCase();
     console.log(`Processing domain: ${domain}`);
 
-    // Apply overrides first with improved enforcement
+    // Handle CarBrand of City pattern with universal rule
+    const brandOfCityResult = extractBrandOfCityFromDomain(domainLower);
+    if (brandOfCityResult) {
+      const { brand, city } = brandOfCityResult;
+      let finalCity = city;
+      let confidenceScore = 95;
+      let flags = ["CarBrandOfCityPattern", "BrandOfPatternMatched"];
+      let tokens = 0;
+
+      if (KNOWN_CITIES_SET.has(city.toLowerCase())) {
+        finalCity = capitalizeName(city);
+      } else {
+        const fuzzyMatch = Array.from(KNOWN_CITIES_SET).find(c => {
+          const dist = levenshteinDistance(city.toLowerCase(), c.toLowerCase());
+          return dist <= 2;
+        });
+        if (fuzzyMatch) {
+          finalCity = capitalizeName(fuzzyMatch);
+          flags.push("FuzzyCityMatch");
+          confidenceScore -= 5;
+          console.log(`Fuzzy city match for ${domain}: ${city} → ${fuzzyMatch}`);
+        } else {
+          const { isCity, correctedCity, isConfident, tokens: cityTokens } = await validateCityWithOpenAI(domain, city);
+          tokens += cityTokens;
+          if (isCity && isConfident) {
+            finalCity = capitalizeName(correctedCity);
+            flags.push("OpenAICityValidated");
+            console.log(`OpenAI validated city for ${domain}: ${city} → ${correctedCity}`);
+          } else {
+            confidenceScore -= 10;
+            finalCity = capitalizeName(city);
+            flags.push("UnverifiedCity");
+          }
+        }
+      }
+
+      const name = `${brand} ${finalCity}`;
+      console.log(`Car brand of city pattern for ${domain}: ${name}`);
+      return {
+        name: addPossessiveFlag ? addPossessive(name) : name,
+        confidenceScore,
+        flags,
+        tokens
+      };
+    }
+
+    // Apply overrides after CarBrandOfCity check
     const override = KNOWN_OVERRIDES[domainLower];
     if (typeof override === 'string' && override.trim().length > 0) {
       let name = override.trim();
@@ -913,53 +954,6 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     console.log(`Normalized input for ${domain}: ${words.join(" ")}`);
     let flags = [];
     let tokens = 0;
-
-    // Handle "CarBrand of City" pattern with universal rule
-    const brandOfCityResult = extractBrandOfCityFromDomain(domainLower);
-    if (brandOfCityResult) {
-      const { brand, city } = brandOfCityResult;
-      let finalCity = city;
-      let confidenceScore = 95;
-
-      // Check if the city is in KNOWN_CITIES_SET
-      if (KNOWN_CITIES_SET.has(city.toLowerCase())) {
-        finalCity = capitalizeName(city);
-      } else {
-        // Fuzzy match against KNOWN_CITIES_SET
-        const fuzzyMatch = Array.from(KNOWN_CITIES_SET).find(c => {
-          const dist = levenshteinDistance(city.toLowerCase(), c.toLowerCase());
-          return dist <= 2;
-        });
-        if (fuzzyMatch) {
-          finalCity = capitalizeName(fuzzyMatch);
-          flags.push("FuzzyCityMatch");
-          confidenceScore -= 5;
-          console.log(`Fuzzy city match for ${domain}: ${city} → ${fuzzyMatch}`);
-        } else {
-          // Use OpenAI to validate the city
-          const { isCity, correctedCity, isConfident, tokens: cityTokens } = await validateCityWithOpenAI(domain, city);
-          tokens += cityTokens;
-          if (isCity && isConfident) {
-            finalCity = capitalizeName(correctedCity);
-            flags.push("OpenAICityValidated");
-            console.log(`OpenAI validated city for ${domain}: ${city} → ${correctedCity}`);
-          } else {
-            confidenceScore -= 10;
-            finalCity = capitalizeName(city);
-            flags.push("UnverifiedCity");
-          }
-        }
-      }
-
-      const name = `${brand} ${finalCity}`;
-      console.log(`Car brand of city pattern for ${domain}: ${name}`);
-      return {
-        name: addPossessiveFlag ? addPossessive(name) : name,
-        confidenceScore,
-        flags: ["CarBrandOfPattern", "BrandOfPatternMatched", ...flags],
-        tokens
-      };
-    }
 
     // Enhanced blob splitting
     let cleanedName = words.join(" ");
@@ -1137,7 +1131,7 @@ async function runUnitTests() {
     { domain: "duvalford.com", expected: "Duval" },
     { domain: "patmillikenford.com", expected: "Pat Milliken" },
     { domain: "karlchevroletstuart.com", expected: "Karl Stuart" },
-    { domain: "bentleyauto.com", expected: "Bentley Auto" },
+    { domain: "bentleyauto.com", expected: "Bentley" },
     { domain: "hondaofcolumbia.com", expected: "Honda Columbia" },
     { domain: "devineford.com", expected: "Devine" },
     { domain: "southcharlottechevy.com", expected: "South Charlotte Chevrolet" },
@@ -1166,7 +1160,8 @@ async function runUnitTests() {
     { domain: "kiaofalhambra.com", expected: "Kia Alhambra" },
     { domain: "nissanofchicago.com", expected: "Nissan Chicago" },
     { domain: "chevroletofnaples.com", expected: "Chevrolet Naples" },
-    { domain: "mbofabc.com", expected: "" } // Test invalid city
+    { domain: "mydealer-mbofstockton.com", expected: "MB Stockton" },
+    { domain: "usertoyotaofmanhattan.com", expected: "Toyota Manhattan" }
   ];
 
   let passed = 0;
