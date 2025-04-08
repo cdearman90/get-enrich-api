@@ -1,16 +1,13 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.16 - Optimized 2025-04-08)
+// api/batch-enrich-company-name-fallback.js (Version 1.0.17 - Optimized 2025-04-10)
 // Changes:
-// - Added subdomain normalization for [CarBrand]of[City] patterns (ChatGPT #1)
-// - Enhanced fallbackTriggers logging with detailed justifications (ChatGPT #5)
-// - Added manual test for known CarBrandOfCity domains (ChatGPT #6)
-// - Fixed response format to match Apps Script and batch-enrich.js (successful field, companyName, domain)
-// - Aligned flag handling with batch-enrich.js (FallbackAPIUsed, added UnverifiedCity to forceReviewFlags)
-// - Added per-domain timeout check to prevent exceeding Vercel’s 20s limit
-// - Reduced logging verbosity for large batches
-// - Improved streamToString error handling with fallback
-// - Updated version to 1.0.16 to reflect the changes
+// - Integrated latest humanize.js with applyCityShortName for city short names
+// - Added OpenAI validation to avoid unreadable initials combos (e.g., "LV BA")
+// - Aligned timeout with batch-enrich.js (18s total, 4s per domain)
+// - Enhanced fallbackTriggers logging with detailed justifications
+// - Updated manual test outputs to reflect short names (e.g., "N.O. Lexus")
+// - Updated version to 1.0.17
 
-import { humanizeName, KNOWN_OVERRIDES, extractBrandOfCityFromDomain } from "./lib/humanize.js";
+import { humanizeName, KNOWN_OVERRIDES, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -44,22 +41,20 @@ const streamToString = async (stream) => {
   } catch (err) {
     clearTimeout(timeout);
     console.error(`Stream read failed: ${err.message}`);
-    return ""; // Fallback to empty string to allow graceful error handling
+    return ""; // Fallback to empty string
   }
 };
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.16 - Optimized 2025-04-08");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.17 - Optimized 2025-04-10");
 
   try {
-    // Check for OpenAI API key
     if (!process.env.OPENAI_API_KEY) {
       console.error("Missing OPENAI_API_KEY environment variable");
-      return res.status(500).json({ error: "Server configuration error", details: "Missing OPENAI_API_KEY environment variable" });
+      return res.status(500).json({ error: "Server configuration error", details: "Missing OPENAI_API_KEY" });
     }
 
-    // Parse the request body
     let body;
     try {
       const rawBody = await streamToString(req);
@@ -74,28 +69,17 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Invalid JSON", details: err.message });
     }
 
-    // Validate payload structure
     if (!body || typeof body !== "object") {
       console.error("Request body is missing or not an object");
       return res.status(400).json({ error: "Request body is missing or not an object" });
     }
 
-    // Extract leads (support 'leads', 'leadList', and 'domains' for compatibility)
     const leads = body.leads || body.leadList || body.domains;
-    if (!leads) {
-      console.error("Missing 'leads', 'leadList', or 'domains' field in payload");
-      return res.status(400).json({ error: "Missing 'leads', 'leadList', or 'domains' field in payload" });
-    }
-    if (!Array.isArray(leads)) {
-      console.error("'leads', 'leadList', or 'domains' must be an array");
-      return res.status(400).json({ error: "'leads', 'leadList', or 'domains' must be an array" });
-    }
-    if (leads.length === 0) {
-      console.error("'leads', 'leadList', or 'domains' array is empty");
-      return res.status(400).json({ error: "'leads', 'leadList', or 'domains' array is empty" });
+    if (!leads || !Array.isArray(leads) || leads.length === 0) {
+      console.error("Invalid or empty leads array");
+      return res.status(400).json({ error: "Invalid or empty leads array" });
     }
 
-    // Validate each lead entry
     const validatedLeads = leads.map((lead, index) => {
       if (!lead || typeof lead !== "object" || !lead.domain || typeof lead.domain !== "string" || lead.domain.trim() === "") {
         console.error(`Invalid lead at index ${index}: ${JSON.stringify(lead)}`);
@@ -133,16 +117,12 @@ export default async function handler(req, res) {
         chunk.map(lead => limit(async () => {
           const { domain, rowNum } = lead;
 
-          // Per-domain timeout check
-          const domainStartTime = Date.now();
           if (Date.now() - startTime > 18000) {
             console.log(`Row ${rowNum}: Skipped due to overall timeout`);
             return { domain, companyName: "", confidenceScore: 0, flags: ["SkippedDueToTimeout"], rowNum, tokens: 0 };
           }
 
           let domainLower = domain.toLowerCase();
-
-          // Normalize subdomains like mydealer-mbofstockton.com
           const normalizedMatch = extractBrandOfCityFromDomain(domainLower);
           if (normalizedMatch && !KNOWN_OVERRIDES[domainLower]) {
             const normalizedDomain = `${normalizedMatch.brand.toLowerCase()}of${normalizedMatch.city.toLowerCase()}`;
@@ -150,7 +130,6 @@ export default async function handler(req, res) {
             domainLower = normalizedDomain;
           }
 
-          // Check for overrides first with improved enforcement
           const override = KNOWN_OVERRIDES[domainLower];
           if (typeof override === 'string' && override.trim().length > 0) {
             const overrideName = override.trim();
@@ -170,14 +149,8 @@ export default async function handler(req, res) {
           console.log(`Processing fallback for ${domain} (Row ${rowNum})`);
           let finalResult;
           let tokensUsed = 0;
-          let brandDetected = null;
-          let cityDetected = null;
-
-          // Extract brand and city for logging
-          if (normalizedMatch) {
-            brandDetected = normalizedMatch.brand;
-            cityDetected = normalizedMatch.city;
-          }
+          let brandDetected = normalizedMatch?.brand || null;
+          let cityDetected = normalizedMatch?.city || null;
 
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
@@ -219,16 +192,26 @@ export default async function handler(req, res) {
 
           const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
           const forceReviewFlags = [
-            "TooGeneric",
-            "CityNameOnly",
-            "PossibleAbbreviation",
-            "BadPrefixOf",
-            "CarBrandSuffixRemaining",
-            "NotPossessiveFriendly",
-            "UnverifiedCity"
+            "TooGeneric", "CityNameOnly", "PossibleAbbreviation", "BadPrefixOf", "CarBrandSuffixRemaining",
+            "NotPossessiveFriendly", "UnverifiedCity"
           ];
           const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => criticalFlags.includes(f)) &&
                               !(finalResult.flags.includes("OpenAICityValidated") && finalResult.confidenceScore < 75);
+
+          // Stage 4: Check for unreadable initials (e.g., "LV BA")
+          if (process.env.OPENAI_API_KEY && finalResult.name.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
+            const prompt = `Is "${finalResult.name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+            const response = await callOpenAI({ prompt, maxTokens: 40 });
+            tokensUsed += response.tokens || 0;
+            const parsed = safeParseGPTJson(response.text, { isReadable: true, isConfident: false });
+            if (!parsed.isReadable && parsed.isConfident) {
+              const fullCity = cityDetected ? capitalizeName(cityDetected) : finalResult.name.split(" ")[0];
+              finalResult.name = `${fullCity} ${brandDetected || finalResult.name.split(" ")[1] || "Auto"}`;
+              finalResult.flags.push("InitialsExpanded");
+              finalResult.confidenceScore -= 5;
+              console.log(`Row ${rowNum}: Expanded unreadable initials: ${finalResult.name}`);
+            }
+          }
 
           if (!isAcceptable) {
             const reviewReason = finalResult.confidenceScore < 75 
@@ -287,11 +270,11 @@ export default async function handler(req, res) {
 
 /*
 Manual Test for CarBrandOfCity Domains
-Expected: All domains should resolve to Brand City without manual review or OpenAI fallback.
-- "toyotaofslidell.net" → "Toyota Slidell" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
-- "lexusofneworleans.com" → "Lexus New Orleans" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
-- "cadillacoflasvegas.com" → "Cadillac Las Vegas" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
-- "kiaoflagrange.com" → "Kia Lagrange" (confidence: 100, flags: ["CarBrandOfCityPattern", "BrandOfPatternMatched", "AutoPatternBypass"])
+Expected: All domains resolve with short names where applicable, without excessive manual review or OpenAI calls.
+- "toyotaofslidell.net" → "Slidell Toyota" (confidence: 100, flags: ["OverrideApplied"])
+- "lexusofneworleans.com" → "N.O. Lexus" (confidence: 100, flags: ["OverrideApplied"])
+- "cadillacoflasvegas.com" → "Vegas Cadillac" (confidence: 100, flags: ["OverrideApplied"])
+- "kiaoflagrange.com" → "Lagrange Kia" (confidence: 100, flags: ["OverrideApplied"])
 */
 
 export const config = { api: { bodyParser: false } };
