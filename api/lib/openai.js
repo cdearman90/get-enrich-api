@@ -7,11 +7,11 @@ export async function callOpenAI(prompt, options = {}) {
 
   const defaultOptions = {
     model: "gpt-4-turbo",
-    max_tokens: 50, // Consider increasing to 100 for safety
+    max_tokens: 50,
     temperature: 0.3,
     systemMessage: "You are a helpful assistant.",
-    retries: 2, // New: max retry attempts
-    timeoutMs: 9000, // New: Vercel 9s buffer
+    retries: 2,
+    timeoutMs: 9000,
   };
   const finalOptions = { ...defaultOptions, ...options };
 
@@ -38,10 +38,10 @@ export async function callOpenAI(prompt, options = {}) {
           max_tokens: finalOptions.max_tokens,
           temperature: finalOptions.temperature,
         }),
-        signal: controller.signal, // New: Abort signal for timeout
+        signal: controller.signal,
       });
 
-      clearTimeout(timeoutId); // Clear timeout on success
+      clearTimeout(timeoutId);
 
       const status = response.status;
       const text = await response.text();
@@ -49,7 +49,7 @@ export async function callOpenAI(prompt, options = {}) {
       if (!response.ok) {
         const errorMsg = `❌ OpenAI API error (HTTP ${status}): ${text}`;
         console.error(errorMsg);
-        logToGPTErrorTab(prompt, errorMsg, status); // New: Structured logging
+        logToGPTErrorTab(prompt, errorMsg, status);
         if (status === 429 || status >= 500) throw new Error(`Retryable error: HTTP ${status}`);
         throw new Error(`OpenAI API returned HTTP ${status}`);
       }
@@ -72,15 +72,18 @@ export async function callOpenAI(prompt, options = {}) {
         throw new Error(errorMsg);
       }
 
-      // New: Warn if output might be truncated
       if (output.length >= finalOptions.max_tokens - 5) {
         console.warn(`⚠️ Output near max_tokens limit (${output.length}/${finalOptions.max_tokens})`);
       }
 
-      return output;
-
+      return {
+        output,
+        tokensUsed: data.usage?.total_tokens || finalOptions.max_tokens,
+        confidence: output.length > 10 ? "high" : "low",
+        source: "GPT"
+      };
     } catch (err) {
-      clearTimeout(timeoutId); // Ensure timeout is cleared on failure
+      clearTimeout(timeoutId);
       console.error(`🔥 callOpenAI() failed: ${err.message}`);
       
       if (err.name === "AbortError") {
@@ -90,7 +93,7 @@ export async function callOpenAI(prompt, options = {}) {
 
       if (attempt < finalOptions.retries && (err.message.includes("Retryable") || err.name === "AbortError")) {
         attempt++;
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt))); // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
         continue;
       }
       logToGPTErrorTab(prompt, err.message, "GENERIC_ERROR");
@@ -99,7 +102,6 @@ export async function callOpenAI(prompt, options = {}) {
   }
 }
 
-// Placeholder for Apps Script integration
 function logToGPTErrorTab(prompt, errorMsg, errorType) {
   console.log(`[GPT Error Log] Prompt: ${prompt} | Error: ${errorMsg} | Type: ${errorType}`);
   // TODO: Integrate with Google Apps Script to append to "GPT Error Log" tab
