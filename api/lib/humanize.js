@@ -748,22 +748,34 @@ async function validateSpacingWithGPT(domain, inputName) {
 }
 
 // Main Humanization Function
-export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
+async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
     const domainLower = domain.toLowerCase();
     console.log(`Processing domain: ${domain}`);
 
-    // Apply overrides first
-    if (KNOWN_OVERRIDES[domainLower]) {
-      let name = KNOWN_OVERRIDES[domainLower];
+    // Apply overrides first with improved enforcement
+    const override = KNOWN_OVERRIDES[domainLower];
+    if (typeof override === 'string' && override.trim().length > 0) {
+      let name = override.trim();
       const flags = ["OverrideApplied"];
-      if (!name) return { name: "", confidenceScore: 0, flags: ["NonDealership"], tokens: 0 };
       name = capitalizeName(removeCarBrands(normalizeText(name))).trim();
       console.log(`Override applied for ${domain}: ${name}`);
       return { name: addPossessiveFlag ? addPossessive(name) : name, confidenceScore: 100, flags, tokens: 0 };
+    } else if (override !== undefined && override.trim() === "") {
+      console.log(`Empty override for ${domain}, proceeding to fallback`);
+      // Continue to fallback logic instead of assuming non-dealership
+      const flags = ["EmptyOverride"];
+      // Early non-dealership check
+      const lowerInput = (inputName || domain).toLowerCase();
+      const hasCarBrand = containsCarBrand(inputName || domain);
+      if (!hasCarBrand && !lowerInput.includes("auto") &&
+          NON_DEALERSHIP_KEYWORDS.some(keyword => lowerInput.includes(keyword))) {
+        console.log(`Non-dealership domain detected: ${domain}`);
+        return { name: "", confidenceScore: 0, flags: ["NonDealership", ...flags], tokens: 0 };
+      }
     }
 
-    // Early non-dealership check
+    // Early non-dealership check (if no override or override is invalid)
     const lowerInput = (inputName || domain).toLowerCase();
     const hasCarBrand = containsCarBrand(inputName || domain);
     if (!hasCarBrand && !KNOWN_OVERRIDES[domainLower] && !lowerInput.includes("auto") &&
@@ -900,7 +912,7 @@ function isPossessiveFriendly(name) {
 }
 
 // Unit Tests
-export async function runUnitTests() {
+async function runUnitTests() {
   // Mock a minimal KNOWN_OVERRIDES for testing purposes since the full object is excluded
   const mockOverrides = {
     "gusmachadoford.com": "Gus Machado",
@@ -913,11 +925,13 @@ export async function runUnitTests() {
     "athensford.com": "Athens",
     "martinchevrolet.com": "Martin",
     "townandcountryford.com": "Town And Country",
-    "ricart.com": "Ricart"
+    "ricart.com": "Ricart",
+    "vscc.com": "VSCC Auto",
+    "testemptyoverride.com": "" // Test case for empty override
   };
 
   // Temporarily override KNOWN_OVERRIDES for the tests
-  const originalOverrides = KNOWN_OVERRIDES;
+  const originalOverrides = { ...KNOWN_OVERRIDES };
   Object.assign(KNOWN_OVERRIDES, mockOverrides);
 
   const tests = [
@@ -929,14 +943,15 @@ export async function runUnitTests() {
     { domain: "hondaofcolumbia.com", expected: "Honda of Columbia" },
     { domain: "devineford.com", expected: "Devine" },
     { domain: "southcharlottechevy.com", expected: "South Charlotte Chevy" },
-    { domain: "vscc.com", expected: "Vscc Auto" },
+    { domain: "vscc.com", expected: "VSCC Auto" },
     { domain: "athensford.com", expected: "Athens" },
     { domain: "geraldauto.com", expected: "Gerald Auto" },
     { domain: "taylorauto.com", expected: "Taylor Auto" },
     { domain: "martinchevrolet.com", expected: "Martin" },
     { domain: "townandcountryford.com", expected: "Town And Country" },
     { domain: "ricart.com", expected: "Ricart" },
-    { domain: "exprealty.com", expected: "" }
+    { domain: "exprealty.com", expected: "" },
+    { domain: "testemptyoverride.com", expected: "Testemptyoverride Auto" } // Expected fallback result
   ];
 
   let passed = 0;
