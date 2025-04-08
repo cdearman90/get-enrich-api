@@ -34,7 +34,7 @@ const BRAND_MAPPING = {
   "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
   "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
   "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevrolet",
-  "chevvy": "Chevrolet", "chevrolet": "Chevrolet", "chrysler": "Chrysler", "cjd": "Chrysler", "daewoo": "Daewoo",
+  "chevvy": "Chevrolet", "chevrolet": "Chevrolet", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
   "dodge": "Dodge", "eagle": "Eagle", "ferrari": "Ferrari", "fiat": "Fiat", "ford": "Ford", "genesis": "Genesis",
   "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
   "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
