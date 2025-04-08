@@ -203,7 +203,7 @@ export default async function handler(req, res) {
             const prompt = `Is "${finalResult.name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
             const response = await callOpenAI({ prompt, maxTokens: 40 });
             tokensUsed += response.tokens || 0;
-            const parsed = safeParseGPTJson(response.text, { isReadable: true, isConfident: false });
+            const parsed = safeParseGPTJson(response.output, { isReadable: true, isConfident: false });
             if (!parsed.isReadable && parsed.isConfident) {
               const fullCity = cityDetected ? capitalizeName(cityDetected) : finalResult.name.split(" ")[0];
               finalResult.name = `${fullCity} ${brandDetected || finalResult.name.split(" ")[1] || "Auto"}`;
@@ -265,6 +265,15 @@ export default async function handler(req, res) {
   } catch (err) {
     console.error(`Handler error: ${err.message}, Stack: ${err.stack}`);
     return res.status(500).json({ error: "Server error", details: err.message });
+  }
+}
+
+function safeParseGPTJson(raw, fallbackObj) {
+  try {
+    return JSON.parse(raw);
+  } catch (err) {
+    console.warn("Malformed GPT JSON:", raw);
+    return fallbackObj;
   }
 }
 
