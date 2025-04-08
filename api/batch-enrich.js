@@ -1,7 +1,7 @@
-// api/batch-enrich.js (Version 4.1.1 - Updated 2025-04-07)
+// api/batch-enrich.js (Version 4.1.2 - Updated 2025-04-07)
 // Changes:
-// - Added support for 'leads' field in payload (alongside leadList and domains)
-// - Updated version to 4.1.1 to reflect the change
+// - Fixed callFallbackAPI to send payload in the correct format ({ leads: [...] })
+// - Updated version to 4.1.2 to reflect the change
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
@@ -49,14 +49,14 @@ const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.ap
 const VERCEL_API_ENRICH_FALLBACK_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
 
 const callFallbackAPI = async (domain, rowNum) => {
-  for (let attempt = 1; attempt <= 3; attempt++) { // Aligned with system architecture: 3 retries
+  for (let attempt = 1; attempt <= 3; attempt++) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 4000); // 4s per retry
       const response = await fetch(VERCEL_API_ENRICH_FALLBACK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ domain, rowNum }]),
+        body: JSON.stringify({ leads: [{ domain, rowNum }] }), // Fixed payload format
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -100,7 +100,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.1 - Updated 2025-04-07");
+  console.log("batch-enrich.js Version 4.1.2 - Updated 2025-04-07");
 
   try {
     // Parse the request body
