@@ -1,10 +1,7 @@
-// api/batch-enrich.js (Version 4.1 - Updated 2025-04-07)
+// api/batch-enrich.js (Version 4.1.1 - Updated 2025-04-07)
 // Changes:
-// - Fixed payload parsing to accept { leadList: [...] } from Google Apps Script
-// - Added detailed validation error messages
-// - Improved logging for debugging
-// - Aligned with system architecture (batch size 5, 18s timeout, Node.js 22.x)
-// - Ensured non-negotiable rules (e.g., disqualification flags, threshold ≥ 75)
+// - Added support for 'leads' field in payload (alongside leadList and domains)
+// - Updated version to 4.1.1 to reflect the change
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
@@ -103,7 +100,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1 - Updated 2025-04-07");
+  console.log("batch-enrich.js Version 4.1.1 - Updated 2025-04-07");
 
   try {
     // Parse the request body
@@ -123,19 +120,19 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "Request body is missing or not an object" });
     }
 
-    // Extract leads (support both 'leadList' and 'domains' for compatibility)
-    const leads = body.leadList || body.domains;
+    // Extract leads (support 'leads', 'leadList', and 'domains' for compatibility)
+    const leads = body.leads || body.leadList || body.domains;
     if (!leads) {
-      console.error("Missing 'leadList' or 'domains' field in payload");
-      return res.status(400).json({ error: "Missing 'leadList' or 'domains' field in payload" });
+      console.error("Missing 'leads', 'leadList', or 'domains' field in payload");
+      return res.status(400).json({ error: "Missing 'leads', 'leadList', or 'domains' field in payload" });
     }
     if (!Array.isArray(leads)) {
-      console.error("'leadList' or 'domains' must be an array");
-      return res.status(400).json({ error: "'leadList' or 'domains' must be an array" });
+      console.error("'leads', 'leadList', or 'domains' must be an array");
+      return res.status(400).json({ error: "'leads', 'leadList', or 'domains' must be an array" });
     }
     if (leads.length === 0) {
-      console.error("'leadList' or 'domains' array is empty");
-      return res.status(400).json({ error: "'leadList' or 'domains' array is empty" });
+      console.error("'leads', 'leadList', or 'domains' array is empty");
+      return res.status(400).json({ error: "'leads', 'leadList', or 'domains' array is empty" });
     }
 
     // Validate each lead entry
