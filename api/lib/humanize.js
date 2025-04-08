@@ -513,12 +513,6 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     const domainLower = domain.toLowerCase();
     console.log(`Processing domain: ${domain}`);
 
-    // Check override first
-    if (KNOWN_OVERRIDES[domainLower]) {
-      const name = KNOWN_OVERRIDES[domainLower];
-      return { name: addPossessiveFlag ? `${name}'s` : name, confidenceScore: 100, flags: ["OverrideApplied"], tokens: 0 };
-    }
-
     // Non-dealership check
     if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
       return { name: "", confidenceScore: 0, flags: ["NonDealership"], tokens: 0 };
