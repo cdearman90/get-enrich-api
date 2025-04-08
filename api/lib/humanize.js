@@ -639,6 +639,11 @@ const KNOWN_OVERRIDES = {
   "wickmail.com": "Wick Mail",
   "bentleyauto.com": "Bentley",
   "saabvw.com": "Saab VW"
+  "toyotaofslidell.net": "Toyota Slidell", // Updated to include brand
+  "lexusofneworleans.com": "Lexus New Orleans", // Updated to include brand
+  "cadillacoflasvegas.com": "Cadillac Las Vegas", // Updated to include brand
+  "mbofbrooklyn.com": "Mercedes-Benz Brooklyn", // Already correct
+  "kiaoflagrange.com": "Kia Lagrange", // Updated to include brand};
 };
 
 // Utility Functions
@@ -964,7 +969,7 @@ function extractBrandOfCityFromDomain(domain) {
   return { brand: brandFormatted, city };
 }
 
-// In humanize.js, update the humanizeName function to skip OpenAI for known cities
+// In humanize.js (updated for brand inclusion in CarBrandOfCity patterns)
 export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
     const domainLower = domain.toLowerCase();
@@ -1015,12 +1020,9 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
         }
       }
 
-      let name;
-      if (brand === "MB") {
-        name = `${BRAND_MAPPING["mb"]} ${finalCity}`; // Apply BRAND_MAPPING
-      } else {
-        name = finalCity;
-      }
+      // Include the brand in the name for all CarBrandOfCity patterns
+      const brandFormatted = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand);
+      const name = `${brandFormatted} ${finalCity}`; // Always include brand and city
       console.log(`Car brand of city pattern for ${domain}: ${name}`);
       return {
         name: addPossessiveFlag ? addPossessive(name) : name,
