@@ -1,11 +1,10 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.12 - Optimized 2025-04-07)
+// api/batch-enrich-company-name-fallback.js (Version 1.0.14 - Optimized 2025-04-07)
 // Changes:
-// - Added rowNum to fallbackTriggers for better traceability (ChatGPT #1)
-// - Added explicit type safety for finalResult.flags (ChatGPT #2)
-// - Added inline confidence classification flags (ChatGPT #3)
-// - Updated version to 1.0.12 to reflect the changes
+// - Updated CarBrandOfCityPattern flag to CarBrandOfCityPattern for consistency with humanize.js
+// - Added logging for mydealer-mbofstockton.com and similar patterns
+// - Updated version to 1.0.14 to reflect the changes
 
-import { humanizeName, KNOWN_OVERRIDES } from "./lib/humanize.js"; // Aligned with single-export humanize.js
+import { humanizeName, KNOWN_OVERRIDES } from "./lib/humanize.js";
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -44,7 +43,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.12 - Optimized 2025-04-07");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.14 - Optimized 2025-04-07");
 
   try {
     // Check for OpenAI API key
@@ -99,22 +98,22 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: "No valid leads after validation" });
     }
 
-    console.log(`Processing ${validatedLeads.length} valid leads in fallback`);
+    console.log(`Processing ${validatedLeads.length} valid leads in Fallback Mode`);
 
     const startTime = Date.now();
-    const limit = pLimit(1); // Conservative concurrency for stability
+    const limit = pLimit(5);
     const results = [];
     const manualReviewQueue = [];
     const fallbackTriggers = [];
     let totalTokens = 0;
 
-    const BATCH_SIZE = 5; // Aligned with system architecture
+    const BATCH_SIZE = 5;
     const leadChunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
       validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of leadChunks) {
-      if (Date.now() - startTime > 18000) { // 18s timeout for Vercel paid tier
+      if (Date.now() - startTime > 18000) {
         console.log("Partial response due to timeout after 18s");
         return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
@@ -138,14 +137,12 @@ export default async function handler(req, res) {
             };
           } else if (override !== undefined && override.trim() === "") {
             console.log(`Row ${rowNum}: Empty override for ${domain}, proceeding to fallback`);
-            // Continue to humanizeName with EmptyOverride flag
           }
 
           console.log(`Processing fallback for ${domain} (Row ${rowNum})`);
           let finalResult;
           let tokensUsed = 0;
 
-          // Retry logic for humanizeName (3 retries, 1s delay)
           for (let attempt = 1; attempt <= 3; attempt++) {
             try {
               finalResult = await humanizeName(domain, domain, false);
@@ -156,21 +153,22 @@ export default async function handler(req, res) {
               console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed: ${err.message}, Stack: ${err.stack}`);
               if (attempt === 3) {
                 finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
-                fallbackTriggers.push({ domain, rowNum, reason: "ProcessingError", details: err.message });
+                fallbackTriggers.push({ domain, rowNum, reason: "ProcessingError", details: err.message, tokens: 0 });
               }
               await new Promise(res => setTimeout(res, 1000));
             }
           }
 
-          // Ensure flags is an array before adding "FallbackUsed"
           finalResult.flags = Array.isArray(finalResult.flags) ? finalResult.flags : [];
           finalResult.flags.push("FallbackUsed");
 
-          // Add confidence classification flag
           const confidenceScore = finalResult.confidenceScore || 0;
           finalResult.flags.push(confidenceScore >= 90 ? "HighConfidence" : confidenceScore >= 75 ? "MediumConfidence" : "LowConfidence");
 
-          // Acceptability criteria (aligned with non-negotiable rules)
+          if (finalResult.flags.includes("CarBrandOfCityPattern")) {
+            console.log(`Row ${rowNum}: CarBrandOfCity pattern detected for ${domain}: ${finalResult.name}`);
+          }
+
           const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
           const forceReviewFlags = [
             "TooGeneric",
@@ -178,10 +176,10 @@ export default async function handler(req, res) {
             "PossibleAbbreviation",
             "BadPrefixOf",
             "CarBrandSuffixRemaining",
-            "FuzzyCityMatch",
             "NotPossessiveFriendly"
           ];
-          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => criticalFlags.includes(f));
+          const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => criticalFlags.includes(f)) &&
+                              !(finalResult.flags.includes("OpenAICityValidated") && finalResult.confidenceScore < 75);
 
           if (!isAcceptable) {
             const reviewReason = finalResult.confidenceScore < 75 
@@ -192,13 +190,15 @@ export default async function handler(req, res) {
               name: finalResult.name,
               confidenceScore: finalResult.confidenceScore,
               flags: finalResult.flags,
-              rowNum
+              rowNum,
+              tokens: tokensUsed
             });
             fallbackTriggers.push({ 
               domain, 
               rowNum,
               reason: reviewReason, 
-              details: `Score: ${finalResult.confidenceScore}, Flags: ${finalResult.flags.join(", ")}` 
+              details: `Score: ${finalResult.confidenceScore}, Flags: ${finalResult.flags.join(", ")}`,
+              tokens: tokensUsed
             });
             finalResult = {
               name: finalResult.name || "",
