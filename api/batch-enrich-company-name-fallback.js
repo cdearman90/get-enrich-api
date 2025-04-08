@@ -1,8 +1,8 @@
-// api/batch-enrich-company-name-fallback.js (Version 1.0.8 - Optimized 2025-04-07)
+// api/batch-enrich-company-name-fallback.js (Version 1.0.9 - Optimized 2025-04-07)
 // Updated to accept 2-word fallbacks at 75+, align with humanize.js and batch-enrich.js v4.0,
-// enhance logging, and sync acceptability thresholds
+// enhance logging, sync acceptability thresholds, and add override enforcement
 
-import { humanizeName } from "./lib/humanize.js"; // Aligned with single-export humanize.js
+import { humanizeName, KNOWN_OVERRIDES } from "./lib/humanize.js"; // Aligned with single-export humanize.js
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -41,7 +41,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich-company-name-fallback.js Version 1.0.8 - Optimized 2025-04-07");
+  console.log("batch-enrich-company-name-fallback.js Version 1.0.9 - Optimized 2025-04-07");
 
   try {
     let leads;
@@ -63,6 +63,7 @@ export default async function handler(req, res) {
     const limit = pLimit(1); // Conservative concurrency for stability
     const results = [];
     const manualReviewQueue = [];
+    const fallbackTriggers = []; // Added for tracking manual review reasons
     let totalTokens = 0;
 
     const BATCH_SIZE = 5; // Aligned with batch-enrich.js v4.0 and Google Apps Script
@@ -73,7 +74,7 @@ export default async function handler(req, res) {
     for (const chunk of leadChunks) {
       if (Date.now() - startTime > 18000) { // 18s timeout for Vercel paid tier
         console.log("Partial response due to timeout after 18s");
-        return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: true });
+        return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
 
       const chunkResults = await Promise.all(
@@ -82,6 +83,25 @@ export default async function handler(req, res) {
           if (!domain) {
             console.error(`Row ${rowNum}: Missing domain`);
             return { name: "", confidenceScore: 0, flags: ["MissingDomain"], rowNum, tokens: 0 };
+          }
+
+          const domainLower = domain.toLowerCase();
+
+          // Check for overrides first with improved enforcement
+          const override = KNOWN_OVERRIDES[domainLower];
+          if (typeof override === 'string' && override.trim().length > 0) {
+            const overrideName = override.trim();
+            console.log(`Row ${rowNum}: Override applied for ${domain}: ${overrideName}`);
+            return {
+              name: overrideName,
+              confidenceScore: 100,
+              flags: ["OverrideApplied"],
+              rowNum,
+              tokens: 0
+            };
+          } else if (override !== undefined && override.trim() === "") {
+            console.log(`Row ${rowNum}: Empty override for ${domain}, proceeding to fallback`);
+            // Continue to humanizeName with EmptyOverride flag
           }
 
           console.log(`Processing fallback for ${domain} (Row ${rowNum})`);
@@ -99,6 +119,7 @@ export default async function handler(req, res) {
               console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed: ${err.message}, Stack: ${err.stack}`);
               if (attempt === 3) {
                 finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
+                fallbackTriggers.push({ domain, reason: "ProcessingError", details: err.message });
               }
               await new Promise(res => setTimeout(res, 1000));
             }
@@ -120,6 +141,7 @@ export default async function handler(req, res) {
           const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some(f => ["TooGeneric", "CityNameOnly"].includes(f));
 
           if (!isAcceptable) {
+            const reviewReason = finalResult.confidenceScore < 75 ? "LowConfidence" : `ProblematicFlags: ${finalResult.flags.filter(f => forceReviewFlags.includes(f)).join(", ")}`;
             manualReviewQueue.push({
               domain,
               name: finalResult.name,
@@ -127,6 +149,7 @@ export default async function handler(req, res) {
               flags: finalResult.flags,
               rowNum
             });
+            fallbackTriggers.push({ domain, reason: reviewReason, details: `Score: ${finalResult.confidenceScore}, Flags: ${finalResult.flags.join(", ")}` });
             finalResult = {
               name: finalResult.name || "",
               confidenceScore: Math.max(finalResult.confidenceScore, 60),
@@ -134,7 +157,7 @@ export default async function handler(req, res) {
               tokens: tokensUsed,
               rowNum
             };
-            console.log(`Row ${rowNum}: Added to manual review: ${JSON.stringify(finalResult)}`);
+            console.log(`Row ${rowNum}: Added to manual review due to ${reviewReason}: ${JSON.stringify(finalResult)}`);
           } else {
             console.log(`Row ${rowNum}: Acceptable fallback result: ${JSON.stringify(finalResult)}`);
           }
@@ -147,8 +170,8 @@ export default async function handler(req, res) {
       results.push(...chunkResults);
     }
 
-    console.log(`Fallback completed: ${results.length} results, ${manualReviewQueue.length} for review, Total tokens: ${totalTokens}`);
-    return res.status(200).json({ results, manualReviewQueue, totalTokens, partial: false });
+    console.log(`Fallback completed: ${results.length} results, ${manualReviewQueue.length} for review, ${totalTokens} tokens used, ${fallbackTriggers.length} fallback triggers`);
+    return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
 
   } catch (err) {
     console.error(`Handler error: ${err.message}, Stack: ${err.stack}`);
