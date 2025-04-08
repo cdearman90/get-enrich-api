@@ -1,9 +1,16 @@
 {
   "type": "module",
   "name": "get-enrich-api",
-  "version": "1.0.0",
-  "dependencies": {},
+  "version": "1.0.1",
+  "description": "ShowRevv Lead Enrichment System API for cleaning and enriching lead data",
+  "dependencies": {
+    "openai": "^4.0.0"
+  },
   "engines": {
     "node": ">=22"
+  },
+  "scripts": {
+    "start": "vercel dev",
+    "deploy": "vercel deploy --prod"
   }
 }
