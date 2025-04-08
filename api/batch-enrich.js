@@ -1,7 +1,10 @@
-// api/batch-enrich.js (Version 4.1.2 - Updated 2025-04-07)
+// api/batch-enrich.js (Version 4.1.3 - Updated 2025-04-07)
 // Changes:
-// - Fixed callFallbackAPI to send payload in the correct format ({ leads: [...] })
-// - Updated version to 4.1.2 to reflect the change
+// - Added rowNum to fallback result and local fallback for consistency (ChatGPT #1, #2)
+// - Added token counting to fallback response (ChatGPT #3)
+// - Added schema validation for fallback API response (ChatGPT #4)
+// - Added concise logging for fallback decisions (ChatGPT #5)
+// - Updated version to 4.1.3 to reflect the changes
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
@@ -56,7 +59,7 @@ const callFallbackAPI = async (domain, rowNum) => {
       const response = await fetch(VERCEL_API_ENRICH_FALLBACK_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ leads: [{ domain, rowNum }] }), // Fixed payload format
+        body: JSON.stringify({ leads: [{ domain, rowNum }] }),
         signal: controller.signal
       });
       clearTimeout(timeoutId);
@@ -68,14 +71,24 @@ const callFallbackAPI = async (domain, rowNum) => {
         throw new Error(`Invalid JSON response: ${text}`);
       }
       if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
+      // Validate the response schema
+      if (!Array.isArray(result.results) || !result.results[0]) {
+        throw new Error(`Invalid fallback API response format: ${text}`);
+      }
       console.log(`Fallback API success for ${domain}: ${JSON.stringify(result.results[0])}`);
-      return result.results[0] || { name: "", confidenceScore: 0, flags: ["FallbackAPIFailed"] };
+      return { ...result.results[0], rowNum, tokens: result.results[0]?.tokens || 0 };
     } catch (err) {
       console.error(`Fallback API attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
       if (attempt === 3) {
         const localResult = await humanizeName(domain, domain, false);
         console.log(`Local fallback for ${domain} after API failure: ${JSON.stringify(localResult)}`);
-        return { ...localResult, flags: [...localResult.flags, "FallbackAPIFailed", "LocalFallbackUsed"], error: err.message };
+        return { 
+          ...localResult, 
+          flags: [...localResult.flags, "FallbackAPIFailed", "LocalFallbackUsed"], 
+          rowNum, 
+          error: err.message,
+          tokens: localResult.tokens || 0 
+        };
       }
       await new Promise(res => setTimeout(res, 1000)); // 1s delay as per system architecture
     }
@@ -100,7 +113,7 @@ const streamToString = async (stream) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.2 - Updated 2025-04-07");
+  console.log("batch-enrich.js Version 4.1.3 - Updated 2025-04-07");
 
   try {
     // Parse the request body
@@ -250,6 +263,7 @@ export default async function handler(req, res) {
             if (fallback.name && fallback.confidenceScore >= 75 && !fallback.flags.some(f => criticalFlags.includes(f))) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
               tokensUsed += fallback.tokens || 0;
+              console.log(`Row ${rowNum}: Fallback decision → name=${fallback.name}, score=${fallback.confidenceScore}, flags=${fallback.flags.join(", ")}`);
               console.log(`Row ${rowNum}: Fallback API used successfully: ${JSON.stringify(finalResult)}`);
             } else {
               finalResult.flags.push("FallbackAPIFailed");
@@ -258,6 +272,7 @@ export default async function handler(req, res) {
                 reason: "FallbackAPIFailed", 
                 details: `Score: ${fallback.confidenceScore}, Flags: ${fallback.flags.join(", ")}` 
               });
+              console.log(`Row ${rowNum}: Fallback decision → name=${fallback.name}, score=${fallback.confidenceScore}, flags=${fallback.flags.join(", ")}`);
               console.log(`Row ${rowNum}: Fallback API failed, using primary result: ${JSON.stringify(finalResult)}`);
             }
           }
