@@ -1,10 +1,12 @@
-// api/batch-enrich.js (Version 4.1.3 - Updated 2025-04-07)
+// api/batch-enrich.js (Version 4.1.4 - Updated 2025-04-08)
 // Changes:
-// - Added rowNum to fallback result and local fallback for consistency (ChatGPT #1, #2)
-// - Added token counting to fallback response (ChatGPT #3)
-// - Added schema validation for fallback API response (ChatGPT #4)
-// - Added concise logging for fallback decisions (ChatGPT #5)
-// - Updated version to 4.1.3 to reflect the changes
+// - Fixed response format to match Apps Script expectation (successful field instead of results)
+// - Increased concurrency limit to 2 for better throughput
+// - Added per-domain timeout check to prevent exceeding Vercel’s 20s limit
+// - Enhanced fallback API response validation with default values
+// - Improved streamToString error handling with fallback
+// - Reduced logging verbosity for large batches
+// - Updated version to 4.1.4 to reflect the changes
 
 import { humanizeName, CAR_BRANDS, COMMON_WORDS, normalizeText, KNOWN_OVERRIDES, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js"; // Required for GPT fallback
@@ -75,16 +77,27 @@ const callFallbackAPI = async (domain, rowNum) => {
       if (!Array.isArray(result.results) || !result.results[0]) {
         throw new Error(`Invalid fallback API response format: ${text}`);
       }
-      console.log(`Fallback API success for ${domain}: ${JSON.stringify(result.results[0])}`);
-      return { ...result.results[0], rowNum, tokens: result.results[0]?.tokens || 0 };
+      const fallbackResult = result.results[0];
+      // Ensure required fields are present
+      const validatedResult = {
+        domain: fallbackResult.domain || domain,
+        companyName: typeof fallbackResult.name === "string" ? fallbackResult.name : "",
+        confidenceScore: typeof fallbackResult.confidenceScore === "number" ? fallbackResult.confidenceScore : 0,
+        flags: Array.isArray(fallbackResult.flags) ? fallbackResult.flags : ["InvalidFallbackResponse"],
+        tokens: typeof fallbackResult.tokens === "number" ? fallbackResult.tokens : 0
+      };
+      console.log(`Fallback API success for ${domain} (row ${rowNum}): name=${validatedResult.companyName}, score=${validatedResult.confidenceScore}`);
+      return { ...validatedResult, rowNum };
     } catch (err) {
-      console.error(`Fallback API attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
+      console.error(`Fallback API attempt ${attempt} failed for ${domain} (row ${rowNum}): ${err.message}`);
       if (attempt === 3) {
         const localResult = await humanizeName(domain, domain, false);
-        console.log(`Local fallback for ${domain} after API failure: ${JSON.stringify(localResult)}`);
+        console.log(`Local fallback for ${domain} (row ${rowNum}) after API failure: name=${localResult.name}, score=${localResult.confidenceScore}`);
         return { 
-          ...localResult, 
-          flags: [...localResult.flags, "FallbackAPIFailed", "LocalFallbackUsed"], 
+          domain,
+          companyName: localResult.name || "",
+          confidenceScore: localResult.confidenceScore || 0,
+          flags: [...(localResult.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"], 
           rowNum, 
           error: err.message,
           tokens: localResult.tokens || 0 
@@ -95,7 +108,7 @@ const callFallbackAPI = async (domain, rowNum) => {
   }
 };
 
-// Stream to string helper with timeout
+// Stream to string helper with timeout and fallback
 const streamToString = async (stream) => {
   const chunks = [];
   const timeout = setTimeout(() => { throw new Error("Stream read timeout"); }, 5000); // 5s timeout
@@ -107,21 +120,26 @@ const streamToString = async (stream) => {
     return Buffer.concat(chunks).toString("utf-8");
   } catch (err) {
     clearTimeout(timeout);
-    throw err;
+    console.error(`Stream read failed: ${err.message}`);
+    return ""; // Fallback to empty string to allow graceful error handling
   }
 };
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.3 - Updated 2025-04-07");
+  console.log("batch-enrich.js Version 4.1.4 - Updated 2025-04-08");
 
   try {
     // Parse the request body
     let body;
     try {
       const rawBody = await streamToString(req);
+      if (!rawBody) {
+        console.error("Request body is empty after stream read");
+        return res.status(400).json({ error: "Request body is empty" });
+      }
       body = JSON.parse(rawBody);
-      console.log(`Received payload: ${JSON.stringify(body).slice(0, 300)}`);
+      console.log(`Received payload with ${body.leads?.length || 0} leads`);
     } catch (err) {
       console.error(`JSON parse error: ${err.message}, Stack: ${err.stack}`);
       return res.status(400).json({ error: "Invalid JSON", details: err.message });
@@ -165,8 +183,8 @@ export default async function handler(req, res) {
     console.log(`Processing ${validatedLeads.length} valid leads`);
 
     const startTime = Date.now();
-    const limit = pLimit(1); // Conservative concurrency for stability
-    const results = [];
+    const limit = pLimit(2); // Increased concurrency to 2 for better throughput
+    const successful = []; // Renamed from results to match Apps Script expectation
     const manualReviewQueue = [];
     let totalTokens = 0;
     const fallbackTriggers = [];
@@ -179,12 +197,19 @@ export default async function handler(req, res) {
     for (const chunk of leadChunks) {
       if (Date.now() - startTime > 18000) { // 18s timeout for Vercel paid tier
         console.log("Partial response due to timeout after 18s");
-        return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
+        return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
 
       const chunkResults = await Promise.all(
         chunk.map(lead => limit(async () => {
           const { domain, rowNum } = lead;
+
+          // Per-domain timeout check
+          const domainStartTime = Date.now();
+          if (Date.now() - startTime > 18000) {
+            console.log(`Row ${rowNum}: Skipped due to overall timeout`);
+            return { domain, companyName: "", confidenceScore: 0, flags: ["SkippedDueToTimeout"], rowNum, tokens: 0 };
+          }
 
           const domainLower = domain.toLowerCase();
 
@@ -196,7 +221,8 @@ export default async function handler(req, res) {
               const overrideName = override.trim();
               console.log(`Row ${rowNum}: Fuzzy override match for ${domain}: ${overrideName}`);
               return {
-                name: overrideName,
+                domain,
+                companyName: overrideName,
                 confidenceScore: 100,
                 flags: ["FuzzyOverrideMatched"],
                 rowNum,
@@ -204,15 +230,15 @@ export default async function handler(req, res) {
               };
             } else if (override !== undefined && override.trim() === "") {
               console.log(`Row ${rowNum}: Empty override for ${domain}, proceeding to fallback`);
-              return { name: "", confidenceScore: 0, flags: ["EmptyOverride"], rowNum, tokens: 0 };
+              return { domain, companyName: "", confidenceScore: 0, flags: ["EmptyOverride"], rowNum, tokens: 0 };
             }
           }
 
           // Check cache
           if (domainCache.has(domainLower)) {
             const cachedResult = domainCache.get(domainLower);
-            console.log(`Row ${rowNum}: Cache hit for ${domain}: ${JSON.stringify(cachedResult)}`);
-            return { ...cachedResult, rowNum };
+            console.log(`Row ${rowNum}: Cache hit for ${domain}: name=${cachedResult.companyName}, score=${cachedResult.confidenceScore}`);
+            return { ...cachedResult, domain, rowNum };
           }
 
           let finalResult;
@@ -223,10 +249,10 @@ export default async function handler(req, res) {
             try {
               finalResult = await humanizeName(domain, domain, false);
               tokensUsed = finalResult.tokens || 0;
-              console.log(`Row ${rowNum}: humanizeName attempt ${attempt} success for ${domain}: ${JSON.stringify(finalResult)}`);
+              console.log(`Row ${rowNum}: humanizeName attempt ${attempt} success for ${domain}: name=${finalResult.name}, score=${finalResult.confidenceScore}`);
               break;
             } catch (err) {
-              console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed for ${domain}: ${err.message}, Stack: ${err.stack}`);
+              console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed for ${domain}: ${err.message}`);
               if (attempt === 2) {
                 finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
               }
@@ -249,22 +275,22 @@ export default async function handler(req, res) {
 
           if (isAcceptable) {
             domainCache.set(domainLower, {
-              name: finalResult.name,
+              domain,
+              companyName: finalResult.name,
               confidenceScore: finalResult.confidenceScore,
               flags: finalResult.flags
             });
-            console.log(`Row ${rowNum}: Acceptable result for ${domain}: ${JSON.stringify(finalResult)}`);
-            return { ...finalResult, rowNum, tokens: tokensUsed };
+            console.log(`Row ${rowNum}: Acceptable result for ${domain}: name=${finalResult.name}, score=${finalResult.confidenceScore}`);
+            return { domain, companyName: finalResult.name, confidenceScore: finalResult.confidenceScore, flags: finalResult.flags, rowNum, tokens: tokensUsed };
           }
 
           // Fallback to API if needed
           if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             const fallback = await callFallbackAPI(domain, rowNum);
-            if (fallback.name && fallback.confidenceScore >= 75 && !fallback.flags.some(f => criticalFlags.includes(f))) {
+            if (fallback.companyName && fallback.confidenceScore >= 75 && !fallback.flags.some(f => criticalFlags.includes(f))) {
               finalResult = { ...fallback, flags: [...(fallback.flags || []), "FallbackAPIUsed"], rowNum };
               tokensUsed += fallback.tokens || 0;
-              console.log(`Row ${rowNum}: Fallback decision → name=${fallback.name}, score=${fallback.confidenceScore}, flags=${fallback.flags.join(", ")}`);
-              console.log(`Row ${rowNum}: Fallback API used successfully: ${JSON.stringify(finalResult)}`);
+              console.log(`Row ${rowNum}: Fallback API used successfully: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
             } else {
               finalResult.flags.push("FallbackAPIFailed");
               fallbackTriggers.push({ 
@@ -273,8 +299,7 @@ export default async function handler(req, res) {
                 reason: "FallbackAPIFailed", 
                 details: `Score: ${fallback.confidenceScore}, Flags: ${fallback.flags.join(", ")}` 
               });
-              console.log(`Row ${rowNum}: Fallback decision → name=${fallback.name}, score=${fallback.confidenceScore}, flags=${fallback.flags.join(", ")}`);
-              console.log(`Row ${rowNum}: Fallback API failed, using primary result: ${JSON.stringify(finalResult)}`);
+              console.log(`Row ${rowNum}: Fallback API failed, using primary result: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
             }
           }
 
@@ -282,22 +307,24 @@ export default async function handler(req, res) {
           if (finalResult.confidenceScore < 75 || finalResult.flags.some(f => forceReviewFlags.includes(f))) {
             manualReviewQueue.push({
               domain,
-              name: finalResult.name,
+              name: finalResult.companyName,
               confidenceScore: finalResult.confidenceScore,
               flags: finalResult.flags,
               rowNum
             });
             finalResult = {
-              name: finalResult.name || "",
+              domain,
+              companyName: finalResult.companyName || "",
               confidenceScore: Math.max(finalResult.confidenceScore, 60),
               flags: [...finalResult.flags, "LowConfidence"],
               rowNum
             };
-            console.log(`Row ${rowNum}: Added to manual review due to low confidence or flags: ${JSON.stringify(finalResult)}`);
+            console.log(`Row ${rowNum}: Added to manual review: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
           }
 
           domainCache.set(domainLower, {
-            name: finalResult.name,
+            domain,
+            companyName: finalResult.companyName,
             confidenceScore: finalResult.confidenceScore,
             flags: finalResult.flags
           });
@@ -307,11 +334,11 @@ export default async function handler(req, res) {
         }))
       );
 
-      results.push(...chunkResults);
+      successful.push(...chunkResults);
     }
 
-    console.log(`Batch completed: ${results.length} results, ${manualReviewQueue.length} for review, ${totalTokens} tokens used, ${fallbackTriggers.length} fallback triggers`);
-    return res.status(200).json({ results, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
+    console.log(`Batch completed: ${successful.length} successful, ${manualReviewQueue.length} for review, ${totalTokens} tokens used, ${fallbackTriggers.length} fallback triggers`);
+    return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: false });
   } catch (err) {
     console.error(`Handler error: ${err.message}, Stack: ${err.stack}`);
     return res.status(500).json({ error: "Server error", details: err.message });
