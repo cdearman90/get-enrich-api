@@ -969,7 +969,7 @@ function extractBrandOfCityFromDomain(domain) {
   return { brand: brandFormatted, city };
 }
 
-// In humanize.js (updated for brand inclusion in CarBrandOfCity patterns)
+// In humanize.js (updated for flexible Brand City ordering)
 export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
   try {
     const domainLower = domain.toLowerCase();
@@ -1020,9 +1020,54 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
         }
       }
 
-      // Include the brand in the name for all CarBrandOfCity patterns
+      // Format the brand using BRAND_MAPPING
       const brandFormatted = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand);
-      const name = `${brandFormatted} ${finalCity}`; // Always include brand and city
+
+      // Determine the order based on possessive-friendliness
+      const brandEndsInS = brandFormatted.toLowerCase().endsWith('s');
+      const cityEndsInS = finalCity.toLowerCase().endsWith('s');
+      let name;
+      let orderFlag = "BrandCityOrder"; // Default order
+
+      // Rule 1: If one word ends in 's' and the other doesn't, place the non-'s' word last
+      if (brandEndsInS && !cityEndsInS) {
+        name = `${finalCity} ${brandFormatted}`; // e.g., "New Orleans Lexus"
+        orderFlag = "CityBrandOrder";
+      } else if (!brandEndsInS && cityEndsInS) {
+        name = `${brandFormatted} ${finalCity}`; // e.g., "Toyota Las Vegas"
+        orderFlag = "BrandCityOrder";
+      }
+      // Rule 2: If neither word ends in 's', prefer the city as the last word
+      else if (!brandEndsInS && !cityEndsInS) {
+        name = `${finalCity} ${brandFormatted}`; // e.g., "Slidell Toyota"
+        orderFlag = "CityBrandOrder";
+      }
+      // Rule 3: If both words end in 's', prefer the city as the last word
+      else {
+        name = `${finalCity} ${brandFormatted}`; // e.g., "Las Vegas Lexus"
+        orderFlag = "CityBrandOrder";
+      }
+
+      // If the heuristic is inconclusive, use OpenAI to determine possessive-friendliness (Vercel only)
+      if (!brandEndsInS && !cityEndsInS && process.env.OPENAI_API_KEY) {
+        const prompt = `Which of these two names sounds more natural in the phrase "{Company}'s CRM isn't broken-it's bleeding"? Option 1: "${brandFormatted} ${finalCity}" (e.g., "${brandFormatted}'s CRM"). Option 2: "${finalCity} ${brandFormatted}" (e.g., "${finalCity}'s CRM"). Respond with "Option 1" or "Option 2".`;
+        const response = await callOpenAI({ prompt, maxTokens: 10 });
+        tokens += response.tokens || 0;
+        if (response.text.includes("Option 1")) {
+          name = `${brandFormatted} ${finalCity}`;
+          orderFlag = "BrandCityOrder";
+          flags.push("OpenAIPossessiveValidated");
+        } else if (response.text.includes("Option 2")) {
+          name = `${finalCity} ${brandFormatted}`;
+          orderFlag = "CityBrandOrder";
+          flags.push("OpenAIPossessiveValidated");
+        }
+      }
+
+      if (orderFlag !== "BrandCityOrder") {
+        flags.push("PossessiveOrderAdjusted");
+      }
+
       console.log(`Car brand of city pattern for ${domain}: ${name}`);
       return {
         name: addPossessiveFlag ? addPossessive(name) : name,
