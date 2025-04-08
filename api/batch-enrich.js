@@ -1,9 +1,9 @@
-// api/batch-enrich.js (Version 4.1.9 - Updated 2025-04-12)
+// api/batch-enrich.js (Version 4.1.10 - Updated 2025-04-13)
 // Changes:
-// - Added excludeCarBrandIfPossessiveFriendly option to humanizeName calls
+// - Rewrote streamToString to handle req body as raw buffer in Vercel environment
+// - Fixed SyntaxError: Unexpected identifier 'Invalid' by removing for await...of loop
 // - Synced with humanize.js for car brand exclusion rule
-// - Added OpenAI validation for possessive form in initials check
-// - Bumped version to 4.1.9
+// - Bumped version to 4.1.10
 
 import { humanizeName, CAR_BRANDS, normalizeText, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain, applyCityShortName, earlyCompoundSplit } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
@@ -87,26 +87,34 @@ const callFallbackAPI = async (domain, rowNum) => {
   }
 };
 
-// Stream to string helper with timeout
-const streamToString = async (stream) => {
-  const chunks = [];
-  const timeout = setTimeout(() => { throw new Error("Stream read timeout"); }, 5000); // 5s timeout
-  try {
-    for await (const chunk of stream) {
+// Stream to string helper with timeout (rewritten for Vercel compatibility)
+const streamToString = async (req) => {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    const timeout = setTimeout(() => {
+      reject(new Error("Stream read timeout"));
+    }, 5000); // 5s timeout
+
+    req.on('data', (chunk) => {
       chunks.push(chunk);
-    }
-    clearTimeout(timeout);
-    return Buffer.concat(chunks).toString("utf-8");
-  } catch (err) {
-    clearTimeout(timeout);
-    console.error(`Stream read failed: ${err.message}`);
-    return "";
-  }
+    });
+
+    req.on('end', () => {
+      clearTimeout(timeout);
+      const buffer = Buffer.concat(chunks);
+      resolve(buffer.toString('utf-8'));
+    });
+
+    req.on('error', (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
 };
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.9 - Updated 2025-04-12");
+  console.log("batch-enrich.js Version 4.1.10 - Updated 2025-04-13");
 
   try {
     // Parse the request body
