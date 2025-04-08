@@ -413,13 +413,6 @@ const KNOWN_CITY_SHORT_NAMES = {
   "new britain": "NB", "new haven": "NH", "newark": "Newark", "newport": "Newport", "bay st. louis": "BSL"
 };
 
-// Known overrides for specific abbreviations (expand as needed)
-const ABBREVIATION_EXPANSIONS = {
-  "dv": "Don Vandercraft", // Example; adjust based on real-world data or metadata
-  "sc": "South County",
-  "nc": "North County"
-};
-
 // Utility Functions
 function normalizeText(name) {
   if (!name || typeof name !== "string") return [];
@@ -513,7 +506,7 @@ function extractBrandOfCityFromDomain(domain) {
 }
 
 // Main Function
-export async function humanizeName(inputName, domain, addPossessiveFlag = false) {
+export async function humanizeName(inputName, domain, addPossessiveFlag = false, excludeCarBrandIfPossessiveFriendly = false) {
   try {
     const domainLower = domain.toLowerCase();
     console.log(`Processing domain: ${domain}`);
@@ -532,6 +525,26 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     name = expandAbbreviations(name);
     if (name !== capitalizeName(domainLower)) flags.push("AbbreviationExpanded");
 
+    // Check if we can exclude the car brand
+    if (excludeCarBrandIfPossessiveFriendly && brand) {
+      const words = name.split(" ");
+      const brandIndex = words.findIndex(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]);
+      if (brandIndex !== -1) {
+        const prefixWords = words.slice(0, brandIndex);
+        const prefix = prefixWords.join(" ");
+        if (prefix) {
+          const isCity = KNOWN_CITIES_SET.has(prefix.toLowerCase());
+          const isHumanLike = /^[A-Z][a-z]+$/i.test(prefix) || KNOWN_PROPER_NOUNS.includes(prefix);
+          const isPossessiveFriendly = !prefix.split(" ").every(w => /^[A-Z]{1,3}$/.test(w)); // Not all initials
+          if (!isCity && isHumanLike && isPossessiveFriendly) {
+            name = prefix;
+            flags.push("CarBrandExcluded");
+            confidenceScore = confidence - 5; // Small penalty for excluding brand
+          }
+        }
+      }
+    }
+
     // Scoring and validation
     let confidenceScore = confidence;
     const words = name.split(" ");
@@ -542,7 +555,6 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     // Remove TooGeneric penalty for single-word proper nouns or human-like names
     if (words.length === 1 && !containsCarBrand(name) && !GENERIC_SUFFIXES.has(words[0].toLowerCase())) {
       if (!KNOWN_PROPER_NOUNS.includes(words[0].toLowerCase())) {
-        // Check if it looks like a human name (e.g., "Duval", "Gusmachado")
         const isHumanLike = /^[A-Z][a-z]+$/i.test(words[0]);
         if (!isHumanLike) {
           flags.push("TooGeneric");
@@ -553,7 +565,42 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false)
     // Penalize names with 4+ words to encourage brevity
     if (words.length >= 4) {
       flags.push("TooVerbose");
-      confidenceScore -= 5; // Small penalty to favor 1-3 words
+      confidenceScore -= 5;
+    }
+
+    // Fallback enhancement: Split compound words
+    if (flags.includes("FallbackToDomain")) {
+      const splitName = earlyCompoundSplit(name);
+      if (splitName.split(" ").length >= 2) {
+        name = splitName;
+        flags.push("FallbackBlobSplit");
+        confidenceScore = 70;
+        // Re-check for TooVerbose after splitting
+        const newWords = name.split(" ");
+        if (newWords.length >= 4) {
+          flags.push("TooVerbose");
+          confidenceScore -= 5;
+        }
+        // Re-check for car brand exclusion after splitting
+        if (excludeCarBrandIfPossessiveFriendly) {
+          const splitWords = name.split(" ");
+          const brandIndex = splitWords.findIndex(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]);
+          if (brandIndex !== -1) {
+            const prefixWords = splitWords.slice(0, brandIndex);
+            const prefix = prefixWords.join(" ");
+            if (prefix) {
+              const isCity = KNOWN_CITIES_SET.has(prefix.toLowerCase());
+              const isHumanLike = /^[A-Z][a-z]+$/i.test(prefix) || KNOWN_PROPER_NOUNS.includes(prefix);
+              const isPossessiveFriendly = !prefix.split(" ").every(w => /^[A-Z]{1,3}$/.test(w));
+              if (!isCity && isHumanLike && isPossessiveFriendly) {
+                name = prefix;
+                flags.push("CarBrandExcluded");
+                confidenceScore -= 5;
+              }
+            }
+          }
+        }
+      }
     }
 
     // Ensure minimum confidence
