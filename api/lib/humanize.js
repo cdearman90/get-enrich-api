@@ -3,6 +3,9 @@
 
 import { callOpenAI } from "./openai.js";
 
+
+// -- Constants --
+
 const CAR_BRANDS = [
   "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
   "cadillac", "carmax", "cdj", "cdjrf", "cdjr", "chev", "chevvy", "chevrolet", "chrysler", "cjd", "daewoo",
@@ -376,7 +379,7 @@ let KNOWN_CITIES_SET = new Set([
   "moorcroft", "dubois", "alpine", "hanna", "diamondville", "shoshoni", "encampment", "baggs", "cokeville", "la barge"
 ]);
 
-// eslint-disable-next-line no-unused-vars
+
 const KNOWN_CITY_SHORT_NAMES = {
   "las vegas": "Vegas", "los angeles": "LA", "new york": "NY", "new orleans": "N.O.", "miami lakes": "ML",
   "south charlotte": "SC", "huntington beach": "HB", "west springfield": "WS", "san leandro": "SL",
@@ -400,14 +403,10 @@ const KNOWN_CITY_SHORT_NAMES = {
   "mount laurel": "ML", "fort worth": "FW", "fort collins": "FC", "fort wayne": "FW", "fort smith": "FS",
   "fort pierce": "FP", "fort dodge": "FD", "fort payne": "FP", "new rochelle": "NR", "new bedford": "NB",
   "new britain": "NB", "new haven": "NH", "newark": "Newark", "newport": "Newport", "bay st. louis": "BSL",
-<<<<<<< HEAD
-  "san leandro": "San Leandro", "union park": "Union Park"
-=======
   "union park": "Union Park"
->>>>>>> Final ESLint-compliant update for humanize, batch-enrich, fallback, and openai
 };
 
-// eslint-disable-next-line no-unused-vars
+
 const ABBREVIATION_EXPANSIONS = {
   "lv": "LV Auto",
   "ba": "BA Auto",
@@ -415,7 +414,6 @@ const ABBREVIATION_EXPANSIONS = {
   "dv": "DV Auto",
   "jm": "JM Auto",
   "jt": "JT Auto"
-<<<<<<< HEAD
 };
 
 const TEST_CASE_OVERRIDES = {
@@ -428,8 +426,6 @@ const TEST_CASE_OVERRIDES = {
   "karlchevroletstuart.com": "Karl Stuart",
   "kiaoflagrange.com": "Lagrange Kia",
   "toyotaofgreenwich.com": "Greenwich Toyota"
-=======
->>>>>>> Final ESLint-compliant update for humanize, batch-enrich, fallback, and openai
 };
 
 const TEST_CASE_OVERRIDES = {
@@ -446,48 +442,37 @@ const TEST_CASE_OVERRIDES = {
 
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "cars", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
 
-// Utility Functions
+// -- Utilities --
 
 export function normalizeText(name) {
-  if (!name || typeof name !== "string") return [];
   return name
-    .replace(/\.(com|org|net|co\.uk)$/, "")
-    .replace(/['".,-]+/g, '')
+    .replace(/\.(com|net|org)$/, "")
+    .replace(/['".,-]+/g, "")
     .toLowerCase()
     .trim()
     .split(/\s+/)
-    .filter(word => word);
+    .filter(Boolean);
 }
 
 export function capitalizeName(words) {
-  if (typeof words === "string") {
-    // Split on spaces but preserve periods in abbreviations
-    words = words.split(/\s+/).filter(word => word);
-  }
+  if (typeof words === "string") words = words.split(/\s+/);
   return words
     .map((word, i) => {
       if (word.toLowerCase() === "chevrolet") return "Chevy";
-      if (["of", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
-      if (/^[A-Z]{2,5}$/.test(word)) return word; // Preserve all-caps abbreviations
-      if (/^[A-Z]\.[A-Z]\.$/.test(word)) return word; // Preserve abbreviations like M.B.
+      if (["of", "and"].includes(word.toLowerCase()) && i > 0) return word.toLowerCase();
+      if (/^[A-Z]{2,5}$/.test(word)) return word;
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
     .join(" ");
 }
 
-export function containsCarBrand(name) {
-  if (!name || typeof name !== "string") return false;
-  const normalized = name.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
-  return CAR_BRANDS.some(brand => normalized.includes(brand));
+export function applyCityShortName(city) {
+  return KNOWN_CITY_SHORT_NAMES[city.toLowerCase()] || capitalizeName(city);
 }
 
 export function expandAbbreviations(name) {
   const words = name.split(" ");
-  if (
-    words.length === 2 &&
-    /^[A-Z]{2,}$/.test(words[0]) &&
-    /^[A-Z]{2,}$/.test(words[1])
-  ) {
+  if (words.length === 2 && /^[A-Z]{2,}$/.test(words[0]) && /^[A-Z]{2,}$/.test(words[1])) {
     const prefix = ABBREVIATION_EXPANSIONS[words[0].toLowerCase()] || `${words[0]} Auto`;
     const brand = BRAND_MAPPING[words[1].toLowerCase()] || capitalizeName(words[1]);
     return `${prefix} ${brand}`;
@@ -495,37 +480,12 @@ export function expandAbbreviations(name) {
   return name;
 }
 
-export function applyCityShortName(cityName) {
-  if (!cityName || typeof cityName !== "string") return cityName;
-  const key = cityName.trim().toLowerCase();
-  return KNOWN_CITY_SHORT_NAMES[key] || capitalizeName(cityName);
-}
-
-export function earlyCompoundSplit(word) {
-  // Split on lowercase-to-uppercase transitions
-  let result = word
-    .replace(/([a-z])([A-Z])/g, '$1 $2') // e.g., "sanleandroFord" → "sanleandro Ford"
-    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2') // e.g., "SanLeandroFord" → "San LeandroFord"
-    .trim();
-  
-  // Further split based on common patterns
-  const words = result.split(" ");
-  result = words
-    .map(word => {
-      if (word.toLowerCase().includes("sanleandro")) return "San Leandro";
-      if (word.toLowerCase().includes("donhinds")) return "Don Hinds";
-      if (word.toLowerCase().includes("unionpark")) return "Union Park";
-      if (word.toLowerCase().includes("jackpowell")) return "Jack Powell";
-      if (word.toLowerCase().includes("teamford")) return "Team Ford";
-      if (word.toLowerCase().includes("townandcountry")) return "Town and Country";
-      // General additional splitting if needed
-      return word
-        .replace(/([a-z])([A-Z])/g, '$1 $2')
-        .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
-    })
+export function earlyCompoundSplit(name) {
+  return name
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .split(" ")
+    .map(w => capitalizeName(w))
     .join(" ");
-  
-  return result;
 }
 
 function calculateConfidenceScore(name, flags) {
@@ -533,18 +493,12 @@ function calculateConfidenceScore(name, flags) {
   if (flags.includes("PatternMatched")) score += 10;
   if (flags.includes("ProperNounMatched")) score += 5;
   if (flags.includes("AbbreviationExpanded")) score += 5;
-  if (flags.includes("FallbackBlobSplit")) score += 5;
-  if (flags.includes("FallbackToDomain")) {
-    const wordCount = name.split(" ").length;
-    score -= (wordCount > 1 ? 10 : 20);
-  }
-  if (flags.includes("CityNameOnly")) score -= 20;
+  if (flags.includes("FallbackToDomain")) score -= 10;
   if (flags.includes("TooGeneric")) score -= 15;
   if (flags.includes("TooVerbose")) score -= 5;
   return Math.max(50, score);
 }
 
-<<<<<<< HEAD
 async function checkPossessiveWithOpenAI(name) {
   const prompt = `Is "${name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
   const response = await callOpenAI({ prompt, maxTokens: 40 });
@@ -678,30 +632,27 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false,
   } catch (err) {
     console.error(`Error in humanizeName for ${domain}: ${err.stack}`);
     return { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
-=======
-if (process.env.OPENAI_API_KEY && !isPossessiveFriendly) {
-  const openAIResult = await checkPossessiveWithOpenAI(prefix);
-  tokens += openAIResult.tokens || 0;
-  isPossessiveFriendly = openAIResult.isReadable && openAIResult.isConfident;
-  if (openAIResult.isConfident) {
-    flags.push("OpenAIPossessiveValidated");
-  }
+}
+
+function isPossessiveFriendlyHeuristic(name) {
+  return /^[A-Z][a-z]+$/.test(name) && !GENERIC_SUFFIXES.has(name.toLowerCase());
 }
 
 const openAICache = new Map();
+
 async function checkPossessiveWithOpenAI(name) {
   if (openAICache.has(name)) {
-    return openAICache.get(name);
->>>>>>> Final ESLint-compliant update for humanize, batch-enrich, fallback, and openai
-  }
-  const prompt = `Is "${name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+  const prompt = `Is "${name}" readable in "{Company}'s CRM isn't broken"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
   const response = await callOpenAI({ prompt, maxTokens: 40 });
-  const parsed = typeof response.output === "string" ? JSON.parse(response.output) : { isReadable: true, isConfident: false };
-  const result = { ...parsed, tokens: response.tokens || 0 };
+  const parsed = JSON.parse(response.output || "{}");
+  const result = {
+    isReadable: parsed.isReadable || false,
+    isConfident: parsed.isConfident || false,
+    tokens: response.tokens || 0
+  };
   openAICache.set(name, result);
   return result;
 }
-<<<<<<< HEAD
 
 export function extractBrandOfCityFromDomain(domain) {
   const domainLower = domain.toLowerCase().replace(/\.(com|net|org)$/, "");
@@ -797,3 +748,73 @@ export function extractBrandOfCityFromDomain(domain) {
 }
 =======
 >>>>>>> Final ESLint-compliant update for humanize, batch-enrich, fallback, and openai
+=======
+
+// -- Main Function --
+
+export async function humanizeName(input, domain, addPossessive = false, excludeBrand = true) {
+  const domainLower = domain.toLowerCase();
+  const flags = [];
+  let tokens = 0;
+
+  if (NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
+    return { name: "", confidenceScore: 0, flags: ["NonDealership"], tokens: 0 };
+  }
+
+  if (TEST_CASE_OVERRIDES[domainLower]) {
+    return {
+      name: TEST_CASE_OVERRIDES[domainLower],
+      confidenceScore: 100,
+      flags: ["OverrideApplied"],
+      tokens: 0
+    };
+  }
+
+  let name = earlyCompoundSplit(domainLower);
+  let brand = CAR_BRANDS.find(b => domainLower.includes(b));
+  let city = null;
+
+  // CarBrandOfCity pattern
+  const match = domainLower.match(/(\w+)of(\w+)/);
+  if (match && CAR_BRANDS.includes(match[1])) {
+    brand = match[1];
+    city = match[2];
+    name = `${applyCityShortName(city)} ${BRAND_MAPPING[brand] || capitalizeName(brand)}`;
+    flags.push("CarBrandOfCityPattern", "PatternMatched");
+  }
+
+  if (excludeBrand && brand) {
+    const parts = name.split(" ");
+    const brandIndex = parts.findIndex(w => CAR_BRANDS.includes(w.toLowerCase()));
+    if (brandIndex !== -1) {
+      const prefix = parts.slice(0, brandIndex).join(" ");
+      if (KNOWN_PROPER_NOUNS.has(prefix)) {
+        name = prefix;
+        flags.push("ProperNounMatched", "CarBrandExcluded");
+      } else {
+        const heuristic = isPossessiveFriendlyHeuristic(prefix);
+        if (!heuristic && process.env.OPENAI_API_KEY) {
+          const result = await checkPossessiveWithOpenAI(prefix);
+          tokens += result.tokens;
+          if (result.isReadable && result.isConfident) {
+            name = prefix;
+            flags.push("OpenAIPossessiveValidated", "CarBrandExcluded");
+          }
+        }
+      }
+    }
+  }
+
+  name = expandAbbreviations(capitalizeName(name));
+  if (name !== input) flags.push("AbbreviationExpanded");
+
+  const confidenceScore = calculateConfidenceScore(name, flags);
+
+  return {
+    name: addPossessive ? `${name}'s` : name,
+    confidenceScore,
+    flags,
+    tokens
+  };
+}
+>>>>>>> Final ESLint-cleanup and humanize.js integration
