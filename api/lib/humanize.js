@@ -481,18 +481,26 @@ function earlyCompoundSplit(word) {
   return result;
 }
 
+javascript
+
 function calculateConfidenceScore(name, flags) {
   let score = 100;
   if (flags.includes("PatternMatched")) score += 10;
   if (flags.includes("ProperNounMatched")) score += 5;
   if (flags.includes("AbbreviationExpanded")) score += 5;
   if (flags.includes("FallbackBlobSplit")) score += 5;
-  if (flags.includes("FallbackToDomain")) score -= 20;
+  if (flags.includes("FallbackToDomain")) {
+    // Reduce penalty if the name contains multiple words (indicating a successful split)
+    const wordCount = name.split(" ").length;
+    score -= (wordCount > 1 ? 10 : 20); // Less penalty for multi-word names
+  }
   if (flags.includes("CityNameOnly")) score -= 20;
   if (flags.includes("TooGeneric")) score -= 15;
   if (flags.includes("TooVerbose")) score -= 5;
   return Math.max(50, score);
 }
+
+
 
 function extractBrandOfCityFromDomain(domain) {
   const domainLower = domain.toLowerCase().replace(/\.(com|net|org)$/, "");
