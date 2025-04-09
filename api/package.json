@@ -6,13 +6,18 @@
   "dependencies": {
     "openai": "4.0.0"
   },
+  "devDependencies": {
+    "eslint": "^9.24.0"
+  },
   "engines": {
     "node": ">=22"
   },
   "scripts": {
     "start": "vercel dev",
     "deploy": "vercel deploy --prod",
-    "test": "echo 'Run manual tests as described in script comments.'"
+    "test": "echo 'Run manual tests as described in script comments.'",
+    "lint": "eslint .",
+    "build": "npm run lint"
   },
   "repository": {
     "type": "git",
