@@ -45,6 +45,8 @@ const callWithRetries = async (fn, retries = 3, delay = 1000) => {
       await new Promise(res => setTimeout(res, delay));
     }
   }
+
+  return null; // ✅ Fix: makes sure the function *always* returns something
 };
 
 const callFallbackAPI = async (domain, rowNum) => {
@@ -91,20 +93,25 @@ const callFallbackAPI = async (domain, rowNum) => {
   } catch (err) {
     const localResult = await humanizeName(domain, domain, false, true);
     console.log(`Local fallback for ${domain} (row ${rowNum}) after API failure: name=${localResult.name}, score=${localResult.confidenceScore}`);
-    return { 
+    return {
       domain,
       companyName: localResult.name || "",
       confidenceScore: localResult.confidenceScore || 0,
-      flags: [...(localResult.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"], 
-      rowNum, 
+      flags: [...(localResult.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"],
+      rowNum,
       error: err.message,
-      tokens: localResult.tokens || 0 
+      tokens: localResult.tokens || 0
     };
   }
 };
 
+<<<<<<< HEAD
 Part 2: Stream Handling and Handler Function (1/2)
 javascript
+=======
+// Part 2: Stream Handling and Handler Function (1/2)
+// (rewritten for Vercel compatibility)
+>>>>>>> Final ESLint-compliant update for humanize, batch-enrich, fallback, and openai
 
 // Stream to string helper with timeout (rewritten for Vercel compatibility)
 const streamToString = async (req) => {
@@ -114,17 +121,17 @@ const streamToString = async (req) => {
       reject(new Error("Stream read timeout"));
     }, 5000); // 5s timeout
 
-    req.on('data', (chunk) => {
+    req.on("data", (chunk) => {
       chunks.push(chunk);
     });
 
-    req.on('end', () => {
+    req.on("end", () => {
       clearTimeout(timeout);
       const buffer = Buffer.concat(chunks);
-      resolve(buffer.toString('utf-8'));
+      resolve(buffer.toString("utf-8"));
     });
 
-    req.on('error', (err) => {
+    req.on("error", (err) => {
       clearTimeout(timeout);
       reject(err);
     });
@@ -185,9 +192,9 @@ export default async function handler(req, res) {
 
     if (validatedLeads.length === 0) {
       console.error("No valid leads after validation", validationErrors);
-      return res.status(400).json({ 
-        error: "No valid leads after validation", 
-        details: validationErrors.length > 0 ? validationErrors : "Leads array is empty" 
+      return res.status(400).json({
+        error: "No valid leads after validation",
+        details: validationErrors.length > 0 ? validationErrors : "Leads array is empty"
       });
     }
 
@@ -275,23 +282,23 @@ export default async function handler(req, res) {
               console.log(`Row ${rowNum}: Fallback API used successfully: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
             } else {
               finalResult.flags.push("FallbackAPIFailed");
-              fallbackTriggers.push({ 
-                domain, 
+              fallbackTriggers.push({
+                domain,
                 rowNum,
-                reason: "FallbackAPIFailed", 
-                details: { 
+                reason: "FallbackAPIFailed",
+                details: {
                   primaryResult: {
                     name: primaryResult.name,
                     confidenceScore: primaryResult.confidenceScore,
                     flags: primaryResult.flags
                   },
-                  score: fallback.confidenceScore, 
-                  flags: fallback.flags, 
-                  brand: brandDetected, 
-                  city: cityDetected, 
+                  score: fallback.confidenceScore,
+                  flags: fallback.flags,
+                  brand: brandDetected,
+                  city: cityDetected,
                   gptUsed: fallback.flags.includes("GPTSpacingValidated") || fallback.flags.includes("OpenAICityValidated")
-                }, 
-                tokens: tokensUsed 
+                },
+                tokens: tokensUsed
               });
               console.log(`Row ${rowNum}: Fallback API failed, using primary result: name=${finalResult.companyName}, score=${finalResult.confidenceScore}`);
             }

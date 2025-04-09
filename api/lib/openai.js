@@ -1,6 +1,6 @@
 // api/lib/openai.js
-// Fully patched version for ShowRevv Lead Processing Tools
-// Updated April 15, 2025, for error transparency and alignment with batchCleanCompanyNames.gs
+// Fully patched and ESLint-compliant version for ShowRevv Lead Processing Tools
+// Updated April 15, 2025, for error transparency and alignment 
 
 export async function callOpenAI(prompt, options = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
@@ -14,7 +14,7 @@ export async function callOpenAI(prompt, options = {}) {
     temperature: 0.3,
     systemMessage: "You are a helpful assistant.",
     retries: 2,
-    timeoutMs: 9000,
+    timeoutMs: 9000
   };
   const finalOptions = { ...defaultOptions, ...options };
 
@@ -24,24 +24,24 @@ export async function callOpenAI(prompt, options = {}) {
   let attempt = 0;
   while (attempt <= finalOptions.retries) {
     try {
-      console.log(`📡 [Attempt ${attempt + 1}/${finalOptions.retries + 1}] Calling OpenAI: ${finalOptions.model} | Prompt: ${prompt.slice(0, 80)}...`);
+      console.warn(`📡 [Attempt ${attempt + 1}/${finalOptions.retries + 1}] Calling OpenAI: ${finalOptions.model} | Prompt: ${prompt.slice(0, 80)}...`);
 
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
+          "Authorization": `Bearer ${apiKey}`
         },
         body: JSON.stringify({
           model: finalOptions.model,
           messages: [
             { role: "system", content: finalOptions.systemMessage },
-            { role: "user", content: prompt },
+            { role: "user", content: prompt }
           ],
           max_tokens: finalOptions.max_tokens,
-          temperature: finalOptions.temperature,
+          temperature: finalOptions.temperature
         }),
-        signal: controller.signal,
+        signal: controller.signal
       });
 
       clearTimeout(timeoutId);
@@ -88,7 +88,7 @@ export async function callOpenAI(prompt, options = {}) {
     } catch (err) {
       clearTimeout(timeoutId);
       console.error(`🔥 callOpenAI() failed: ${err.message}`);
-      
+
       if (err.name === "AbortError") {
         logToGPTErrorTab(prompt, "Request timed out after 9s", "TIMEOUT");
         throw new Error("OpenAI request timed out");
@@ -99,12 +99,17 @@ export async function callOpenAI(prompt, options = {}) {
         await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
         continue;
       }
+
       logToGPTErrorTab(prompt, err.message, "GENERIC_ERROR");
       throw err;
     }
   }
+
+  // Fallback return for consistent-return compliance
+  return null;
 }
 
+<<<<<<< HEAD
 async function logToGPTErrorTab(prompt, errorMsg, errorType) {
   console.log(`[GPT Error Log] Prompt: ${prompt} | Error: ${errorMsg} | Type: ${errorType}`);
 
@@ -137,4 +142,9 @@ async function logToGPTErrorTab(prompt, errorMsg, errorType) {
   } catch (err) {
     console.error(`Error logging to Google Apps Script: ${err.message}`);
   }
+=======
+function logToGPTErrorTab(prompt, errorMsg, errorType) {
+  console.warn(`[GPT Error Log] Prompt: ${prompt} | Error: ${errorMsg} | Type: ${errorType}`);
+  // Optional: Integrate with Google Sheets or external service
+>>>>>>> Final ESLint-compliant update for humanize, batch-enrich, fallback, and openai
 }

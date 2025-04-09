@@ -1,0 +1,39 @@
+
+{
+  "type": "module",
+  "name": "get-enrich-api",
+  "version": "1.1.0",
+  "description": "ShowRevv Lead Enrichment System API for cleaning and enriching lead data",
+  "dependencies": {
+    "openai": "4.0.0"
+  },
+  "devDependencies": {
+    "eslint": "^9.24.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.0"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "vercel dev",
+    "deploy": "vercel deploy --prod",
+    "test": "echo 'Run manual tests as described in script comments.'",
+    "lint": "eslint .",
+    "build": "npm run lint"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/cdearman90/get-enrich-api.git"
+  },
+  "author": "cdearman90",
+  "license": "MIT",
+  "husky": {
+    "hooks": {
+      "pre-commit": "lint-staged"
+    }
+  },
+  "lint-staged": {
+    "*.js": "eslint --fix"
+  }
+}

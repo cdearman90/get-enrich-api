@@ -1,3 +1,4 @@
+
 // api/batch-enrich-company-name-fallback.js (Version 1.0.20 - Optimized 2025-04-12)
 // Changes:
 // - Added excludeCarBrandIfPossessiveFriendly option to humanizeName calls
@@ -7,6 +8,7 @@
 
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
+
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -40,7 +42,7 @@ const streamToString = async (stream) => {
   } catch (err) {
     clearTimeout(timeout);
     console.error(`Stream read failed: ${err.message}`);
-    throw new Error(`Stream read failed: ${err.message}`);
+    throw new Error(`Stream read failed: ${err.message}`); // Use err to satisfy ESLint
   }
 };
 
@@ -140,18 +142,18 @@ export default async function handler(req, res) {
               console.error(`Row ${rowNum}: humanizeName attempt ${attempt} failed: ${err.message}`);
               if (attempt === 3) {
                 finalResult = { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
-                fallbackTriggers.push({ 
-                  domain, 
-                  rowNum, 
-                  reason: "ProcessingError", 
-                  details: { 
-                    flags: ["ProcessingError"], 
-                    score: 0, 
-                    brand: brandDetected, 
-                    city: cityDetected, 
-                    gptUsed: false 
-                  }, 
-                  tokens: 0 
+                fallbackTriggers.push({
+                  domain,
+                  rowNum,
+                  reason: "ProcessingError",
+                  details: {
+                    flags: ["ProcessingError"],
+                    score: 0,
+                    brand: brandDetected,
+                    city: cityDetected,
+                    gptUsed: false
+                  },
+                  tokens: 0
                 });
               }
               await new Promise(res => setTimeout(res, 1000));
@@ -191,8 +193,8 @@ export default async function handler(req, res) {
           }
 
           if (!isAcceptable) {
-            const reviewReason = finalResult.confidenceScore < 75 
-              ? "LowConfidence" 
+            const reviewReason = finalResult.confidenceScore < 75
+              ? "LowConfidence"
               : `ProblematicFlags: ${finalResult.flags.filter(f => forceReviewFlags.includes(f)).join(", ")}`;
             manualReviewQueue.push({
               domain,
@@ -202,18 +204,18 @@ export default async function handler(req, res) {
               rowNum,
               tokens: tokensUsed
             });
-            fallbackTriggers.push({ 
-              domain, 
+            fallbackTriggers.push({
+              domain,
               rowNum,
-              reason: reviewReason, 
-              details: { 
-                flags: finalResult.flags, 
-                score: finalResult.confidenceScore, 
-                brand: brandDetected, 
-                city: cityDetected, 
+              reason: reviewReason,
+              details: {
+                flags: finalResult.flags,
+                score: finalResult.confidenceScore,
+                brand: brandDetected,
+                city: cityDetected,
                 gptUsed: finalResult.flags.includes("GPTSpacingValidated") || finalResult.flags.includes("OpenAICityValidated")
-              }, 
-              tokens: tokensUsed 
+              },
+              tokens: tokensUsed
             });
             finalResult = {
               domain,
@@ -249,7 +251,7 @@ function safeParseGPTJson(raw, fallbackObj) {
   try {
     return JSON.parse(raw);
   } catch (err) {
-    console.warn("Malformed GPT JSON:", raw);
+    console.warn("Malformed GPT JSON:", raw, "Error:", err.message);
     return fallbackObj;
   }
 }
