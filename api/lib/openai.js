@@ -108,21 +108,27 @@ export async function callOpenAI(prompt, options = {}) {
 async function logToGPTErrorTab(prompt, errorMsg, errorType) {
   console.log(`[GPT Error Log] Prompt: ${prompt} | Error: ${errorMsg} | Type: ${errorType}`);
 
-  // Replace with your Google Apps Script web app URL (deployed from batchCleanCompanyNames.gs)
-  const googleAppsScriptUrl = "https://script.google.com/a/macros/ipsys.ai/s/AKfycbxRTWC8MNpCdsukETju2Ovhk5zvqdXHJ8RGxrg_nDa0EpmygTG6M5Nrld7V7X5UCQ3c/exec"; // Update with actual URL
+  const googleAppsScriptUrl = "https://script.google.com/a/macros/ipsys.ai/s/AKfycbxRTWC8MNpCdsukETju2Ovhk5zvqdXHJ8RGxrg_nDa0EpmygTG6M5Nrld7V7X5UCQ3c/exec";
+
+  const secret = process.env.GAS_SECRET;
+  if (!secret) {
+    console.warn("Missing GAS_SECRET in environment variables");
+    return;
+  }
 
   try {
     const response = await fetch(googleAppsScriptUrl, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json",
+        "Content-Type": "application/json"
       },
       body: JSON.stringify({
-        prompt: prompt.slice(0, 500), // Truncate to avoid exceeding cell limits
+        key: secret,
+        prompt: prompt.slice(0, 500),
         errorMsg,
         errorType,
-        timestamp: new Date().toISOString(),
-      }),
+        timestamp: new Date().toISOString()
+      })
     });
 
     if (!response.ok) {
