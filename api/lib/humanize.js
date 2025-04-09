@@ -373,11 +373,11 @@ let KNOWN_CITIES_SET = new Set([
   "cody", "rawlins", "lander", "torrington", "douglas", "powell", "worland", "buffalo", "wheatland", "newcastle",
   "mills", "thermopolis", "kemmerer", "afton", "greybull", "glenrock", "lovell", "lyman", "pinedale", "star valley ranch",
   "mountain view", "sundance", "basin", "saratoga", "pine bluffs", "guernsey", "wright", "moorcroft", "upton", "encampment",
-  "dubois", "alpine", "bar nunn", "hanna", "diamondville", "shoshoni", "burlington", "cowley", "byron", "big piney",
+  "dubois", "alpine", "bar nunn", "hanna", "diamondville", "shoshoni", "burlington", "cowley", "byron", "big piney", // Removed trailing comma
   // Additional cities/regions from domains
-  "shottenkirk", "riverview", "northwest", "southwest", "downtown", "uptown", "midtown",   "athens", "miami", "miamilakes", "columbia", "charlotte", "southcharlotte", "stuart", "devine",
+  "shottenkirk", "riverview", "northwest", "southwest", "downtown", "uptown", "midtown", "athens", "miami", "miamilakes", "columbia", "charlotte", "southcharlotte", "stuart", "devine",
   "brooklyn", "henderson", "lasvegas", "kingston", "irvine", "chattanooga", "lakewood", "waconia",
-  "deland", "taylor", "edwards", "keating",  "athens", "houston", "greenwich", "slidell", "brooklyn", "caldwell", "killeen", "brookhaven", "miami", "charlotte", "tampa", "manhattan",
+  "deland", "taylor", "edwards", "keating", "athens", "houston", "greenwich", "slidell", "brooklyn", "caldwell", "killeen", "brookhaven", "miami", "charlotte", "tampa", "manhattan",
   "auburn", "westchester", "centralhouston", "lagrange", "alhambra", "chicago", "naples", "stockton",
   "orlando", "gwinnett", "wakefield", "selma", "madison", "hemet", "san leandro", "union park"
 ]);
