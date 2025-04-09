@@ -1,14 +1,11 @@
-// api/lib/openai.js
-// Fully patched and ESLint-compliant version for ShowRevv Lead Processing Tools
-// Updated April 15, 2025, for error transparency and alignment 
+// api/lib/openai.js - Final Production Version
+// Updated April 2025 - Fully patched for ShowRevv Lead Enrichment System
 
 export async function callOpenAI(prompt, options = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) {
-    throw new Error("❌ OPENAI_API_KEY is not set in environment variables");
-  }
+  if (!apiKey) throw new Error("❌ OPENAI_API_KEY is not set");
 
-  const defaultOptions = {
+  const defaults = {
     model: "gpt-4-turbo",
     max_tokens: 50,
     temperature: 0.3,
@@ -16,117 +13,84 @@ export async function callOpenAI(prompt, options = {}) {
     retries: 2,
     timeoutMs: 9000
   };
-  const finalOptions = { ...defaultOptions, ...options };
+  const opts = { ...defaults, ...options };
 
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), finalOptions.timeoutMs);
+  const timeoutId = setTimeout(() => controller.abort(), opts.timeoutMs);
 
   let attempt = 0;
-  while (attempt <= finalOptions.retries) {
+  while (attempt <= opts.retries) {
     try {
-      console.warn(`📡 [Attempt ${attempt + 1}/${finalOptions.retries + 1}] Calling OpenAI: ${finalOptions.model} | Prompt: ${prompt.slice(0, 80)}...`);
+      console.warn(`📡 OpenAI [Attempt ${attempt + 1}]: ${prompt.slice(0, 80)}...`);
 
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`
+          "Authorization": `Bearer ${apiKey}`,
+          "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: finalOptions.model,
+          model: opts.model,
           messages: [
-            { role: "system", content: finalOptions.systemMessage },
+            { role: "system", content: opts.systemMessage },
             { role: "user", content: prompt }
           ],
-          max_tokens: finalOptions.max_tokens,
-          temperature: finalOptions.temperature
+          max_tokens: opts.max_tokens,
+          temperature: opts.temperature
         }),
         signal: controller.signal
       });
 
       clearTimeout(timeoutId);
-
-      const status = response.status;
-      const text = await response.text();
+      const raw = await response.text();
 
       if (!response.ok) {
-        const errorMsg = `❌ OpenAI API error (HTTP ${status}): ${text}`;
-        console.error(errorMsg);
-        logToGPTErrorTab(prompt, errorMsg, status);
-        if (status === 429 || status >= 500) throw new Error(`Retryable error: HTTP ${status}`);
-        throw new Error(`OpenAI API returned HTTP ${status}`);
+        logToGPTErrorTab(prompt, raw, `HTTP ${response.status}`);
+        if (response.status >= 500 || response.status === 429) throw new Error("Retryable error");
+        throw new Error(`OpenAI Error: ${raw}`);
       }
 
-      let data;
+      let json;
       try {
-        data = JSON.parse(text);
-      } catch (jsonErr) {
-        const errorMsg = `❌ Failed to parse OpenAI response JSON: ${jsonErr.message}`;
-        console.error(errorMsg);
-        logToGPTErrorTab(prompt, errorMsg, "JSON_PARSE_ERROR");
-        throw new Error("Invalid JSON from OpenAI");
+        json = JSON.parse(raw);
+      } catch (err) {
+        logToGPTErrorTab(prompt, raw, "Invalid JSON");
+        throw new Error("Malformed OpenAI JSON");
       }
 
-      const output = data.choices?.[0]?.message?.content?.trim();
-      if (!output || typeof output !== "string") {
-        const errorMsg = "❌ OpenAI returned empty or malformed content";
-        console.error(errorMsg);
-        logToGPTErrorTab(prompt, errorMsg, "MALFORMED_OUTPUT");
-        throw new Error(errorMsg);
-      }
-
-      if (output.length >= finalOptions.max_tokens - 5) {
-        console.warn(`⚠️ Output near max_tokens limit (${output.length}/${finalOptions.max_tokens})`);
-      }
+      const output = json.choices?.[0]?.message?.content?.trim();
+      if (!output) throw new Error("Empty OpenAI response");
 
       return {
         output,
-        tokens: data.usage?.total_tokens || finalOptions.max_tokens,
+        tokens: json.usage?.total_tokens || opts.max_tokens,
         confidence: output.length > 10 ? "high" : "low",
         source: "GPT"
       };
     } catch (err) {
-      clearTimeout(timeoutId);
-      console.error(`🔥 callOpenAI() failed: ${err.message}`);
-
-      if (err.name === "AbortError") {
-        logToGPTErrorTab(prompt, "Request timed out after 9s", "TIMEOUT");
-        throw new Error("OpenAI request timed out");
-      }
-
-      if (attempt < finalOptions.retries && (err.message.includes("Retryable") || err.name === "AbortError")) {
-        attempt++;
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
-        continue;
-      }
-
-      logToGPTErrorTab(prompt, err.message, "GENERIC_ERROR");
-      throw err;
+      attempt++;
+      if (attempt > opts.retries) throw err;
+      await new Promise(r => setTimeout(r, 1000 * attempt));
     }
   }
 
-  // Fallback return for consistent-return compliance
   return null;
 }
 
-<<<<<<< HEAD
+// Error logging to Google Apps Script
 async function logToGPTErrorTab(prompt, errorMsg, errorType) {
-  console.log(`[GPT Error Log] Prompt: ${prompt} | Error: ${errorMsg} | Type: ${errorType}`);
-
-  const googleAppsScriptUrl = "https://script.google.com/a/macros/ipsys.ai/s/AKfycbxRTWC8MNpCdsukETju2Ovhk5zvqdXHJ8RGxrg_nDa0EpmygTG6M5Nrld7V7X5UCQ3c/exec";
-
+  const gasUrl = "https://script.google.com/a/macros/ipsys.ai/s/AKfycbxRTWC8MNpCdsukETju2Ovhk5zvqdXHJ8RGxrg_nDa0EpmygTG6M5Nrld7V7X5UCQ3c/exec";
   const secret = process.env.GAS_SECRET;
+
   if (!secret) {
-    console.warn("Missing GAS_SECRET in environment variables");
+    console.warn("⚠️ GAS_SECRET not set — skipping GPT log");
     return;
   }
 
   try {
-    const response = await fetch(googleAppsScriptUrl, {
+    await fetch(gasUrl, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         key: secret,
         prompt: prompt.slice(0, 500),
@@ -135,16 +99,7 @@ async function logToGPTErrorTab(prompt, errorMsg, errorType) {
         timestamp: new Date().toISOString()
       })
     });
-
-    if (!response.ok) {
-      console.error(`Failed to log to Google Apps Script: HTTP ${response.status}`);
-    }
   } catch (err) {
-    console.error(`Error logging to Google Apps Script: ${err.message}`);
+    console.error("Failed to log GPT error:", err.message);
   }
-=======
-function logToGPTErrorTab(prompt, errorMsg, errorType) {
-  console.warn(`[GPT Error Log] Prompt: ${prompt} | Error: ${errorMsg} | Type: ${errorType}`);
-  // Optional: Integrate with Google Sheets or external service
->>>>>>> Final ESLint-compliant update for humanize, batch-enrich, fallback, and openai
 }
