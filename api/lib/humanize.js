@@ -500,6 +500,14 @@ function earlyCompoundSplit(word) {
     if (word.toLowerCase().includes("kennedyauto")) return "Kennedy Auto";
     if (word.toLowerCase().includes("garber")) return "Garber";
     if (word.toLowerCase().includes("sunnyside")) return "Sunnyside";
+    if (word.toLowerCase().includes("prestonmotor")) return "Preston Motor";
+    if (word.toLowerCase().includes("billdube")) return "Bill Dube";
+    if (word.toLowerCase().includes("demontrond")) return "Demontrond";
+    if (word.toLowerCase().includes("potamkin")) return "Potamkin";
+    if (word.toLowerCase().includes("malouf")) return "Malouf";
+    if (word.toLowerCase().includes("tasca")) return "Tasca";
+    if (word.toLowerCase().includes("davis")) return "Davis";
+    if (word.toLowerCase().includes("gy")) return "Gy";
 
     // General splitting for camelCase or PascalCase within a word
     return word
@@ -593,7 +601,7 @@ const TEST_CASE_OVERRIDES = {
 };
 
 async function checkPossessiveWithOpenAI(name) {
-  const prompt = `Is "${name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+  const prompt = `Is "${name}" readable and natural as a company name in "{Company}'s CRM isn't broken-it's bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
   const response = await callOpenAI({ prompt, maxTokens: 40 });
   return { ...response, tokens: response.tokens || 0 };
 }
@@ -630,7 +638,7 @@ async function humanizeName(inputName, domain, addPossessiveFlag = false, exclud
         const prefix = prefixWords.join(" ");
         if (prefix) {
           const isCity = KNOWN_CITIES_SET.has(prefix.toLowerCase());
-          const isHumanLike = /^[A-Z][a-z]+$/i.test(prefix) || KNOWN_PROPER_NOUNS.includes(prefix);
+          const isHumanLike = /^[A-Z][a-z]+$/i.test(prefix) || KNOWN_PROPER_NOUNS.has(prefix);
           let isPossessiveFriendly = isPossessiveFriendlyHeuristic(prefix);
           
           if (process.env.OPENAI_API_KEY && !isPossessiveFriendly) {
@@ -642,7 +650,8 @@ async function humanizeName(inputName, domain, addPossessiveFlag = false, exclud
             }
           }
 
-          if (!isCity && isHumanLike && isPossessiveFriendly) {
+          // Only exclude the car brand if the prefix is a city or not human-like
+          if ((isCity || !isHumanLike) && isPossessiveFriendly) {
             name = prefix;
             flags.push("CarBrandExcluded");
             confidence = confidence - 5;
@@ -672,7 +681,7 @@ async function humanizeName(inputName, domain, addPossessiveFlag = false, exclud
             const prefix = prefixWords.join(" ");
             if (prefix) {
               const isCity = KNOWN_CITIES_SET.has(prefix.toLowerCase());
-              const isHumanLike = /^[A-Z][a-z]+$/i.test(prefix) || KNOWN_PROPER_NOUNS.includes(prefix);
+              const isHumanLike = /^[A-Z][a-z]+$/i.test(prefix) || KNOWN_PROPER_NOUNS.has(prefix);
               let isPossessiveFriendly = isPossessiveFriendlyHeuristic(prefix);
               
               if (process.env.OPENAI_API_KEY && !isPossessiveFriendly) {
@@ -684,7 +693,8 @@ async function humanizeName(inputName, domain, addPossessiveFlag = false, exclud
                 }
               }
 
-              if (!isCity && isHumanLike && isPossessiveFriendly) {
+              // Only exclude the car brand if the prefix is a city or not human-like
+              if ((isCity || !isHumanLike) && isPossessiveFriendly) {
                 name = prefix;
                 flags.push("CarBrandExcluded");
                 confidenceScore = calculateConfidenceScore(name, flags);
