@@ -402,16 +402,16 @@ const KNOWN_CITY_SHORT_NAMES = {
   "cape coral": "CC", "weston": "Weston", "north port": "NP", "port charlotte": "PC", "port orange": "PO",
   "palm harbor": "PH", "north lauderdale": "NL", "north fort myers": "NFM",
 
-  // Fallback initials
-  "west chester": "WC", "white plains": "WP", "west covina": "WC", "west hollywood": "WH",
-  "east haven": "EH", "east orange": "EO", "north bergen": "NB", "north ridgeville": "NR",
-  "north olmsted": "NO", "north royalton": "NR", "north huntingdon": "NH", "north augusta": "NA",
-  "south gate": "SG", "south jordan": "SJ", "south ogden": "SO", "south el monte": "SEM",
-  "south san francisco": "SSF", "south boston": "SB", "mount prospect": "MP", "mount pleasant": "MP",
-  "mount laurel": "ML", "fort worth": "FW", "fort collins": "FC", "fort wayne": "FW", "fort smith": "FS",
-  "fort pierce": "FP", "fort dodge": "FD", "fort payne": "FP", "new rochelle": "NR", "new bedford": "NB",
-  "new britain": "NB", "new haven": "NH", "newark": "Newark", "newport": "Newport", "bay st. louis": "BSL"
-  "san leandro": "San Leandro", "union park": "Union Park"
+// Fallback initials
+"west chester": "WC", "white plains": "WP", "west covina": "WC", "west hollywood": "WH",
+"east haven": "EH", "east orange": "EO", "north bergen": "NB", "north ridgeville": "NR",
+"north olmsted": "NO", "north royalton": "NR", "north huntingdon": "NH", "north augusta": "NA",
+"south gate": "SG", "south jordan": "SJ", "south ogden": "SO", "south el monte": "SEM",
+"south san francisco": "SSF", "south boston": "SB", "mount prospect": "MP", "mount pleasant": "MP",
+"mount laurel": "ML", "fort worth": "FW", "fort collins": "FC", "fort wayne": "FW", "fort smith": "FS",
+"fort pierce": "FP", "fort dodge": "FD", "fort payne": "FP", "new rochelle": "NR", "new bedford": "NB",
+"new britain": "NB", "new haven": "NH", "newark": "Newark", "newport": "Newport", "bay st. louis": "BSL",
+"san leandro": "San Leandro", "union park": "Union Park"
 };
 
 const ABBREVIATION_EXPANSIONS = {
