@@ -436,12 +436,16 @@ export function normalizeText(name) {
 }
 
 export function capitalizeName(words) {
-  if (typeof words === "string") words = normalizeText(words);
+  if (typeof words === "string") {
+    // Split on spaces but preserve periods in abbreviations
+    words = words.split(/\s+/).filter(word => word);
+  }
   return words
     .map((word, i) => {
       if (word.toLowerCase() === "chevrolet") return "Chevy";
       if (["of", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
-      if (/^[A-Z]{2,5}$/.test(word)) return word;
+      if (/^[A-Z]{2,5}$/.test(word)) return word; // Preserve all-caps abbreviations
+      if (/^[A-Z]\.[A-Z]\.$/.test(word)) return word; // Preserve abbreviations like M.B.
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
     .join(" ");
