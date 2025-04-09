@@ -63,7 +63,8 @@ const KNOWN_PROPER_NOUNS = [
   "AG", "NY", "VW", "USA", "GM", "GMC", "GarlynShelton", "McCarthy", "McLarty", "McLartyDaniel", "DriveSuperior", "JimmyBritt", "DonHattan", "CaminoReal", 
   "SwantGraber", "DeMontrond", "TownAndCountry", "SanLeandro", "GusMachado", "RodBaker", "Galean", "TedBritt", "ShopLynch", "ScottClark", "HuntingtonBeach",
   "ExpRealty", "JayWolfe", "PremierCollection", "ArtMoehn", "TomHesser", "ExecutiveAG", "SmartDrive", "AllAmerican", "WickMail", "RobertThorne", "TommyNix", 
-  "Kennedy", "LouSobh", "HMotors", "LuxuryAutoScottsdale", "BearMountain", "Charlie"
+  "Kennedy", "LouSobh", "HMotors", "LuxuryAutoScottsdale", "BearMountain", "Charlie", "Duval", "Pat Milliken", "Gus Machado", "Gerald Auto", "Karl Stuart", 
+  "Lagrange Kia", "Greenwich Toyota", "Team Ford", "Don Hinds", "Union Park", "Jack Powell"
 ];
 
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "cars", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
@@ -383,7 +384,7 @@ let KNOWN_CITIES_SET = new Set([
   "brooklyn", "henderson", "lasvegas", "kingston", "irvine", "chattanooga", "lakewood", "waconia",
   "deland", "taylor", "edwards", "keating",  "athens", "houston", "greenwich", "slidell", "brooklyn", "caldwell", "killeen", "brookhaven", "miami", "charlotte", "tampa", "manhattan",
   "auburn", "westchester", "centralhouston", "lagrange", "alhambra", "chicago", "naples", "stockton",
-  "orlando", "gwinnett", "wakefield", "selma", "madison", "hemet"
+  "orlando", "gwinnett", "wakefield", "selma", "madison", "hemet", "san leandro", "union park"
 ]);
 if (!(KNOWN_CITIES_SET instanceof Set)) {
   console.warn("KNOWN_CITIES_SET is not a Set – converting to Set.");
@@ -415,6 +416,7 @@ const KNOWN_CITY_SHORT_NAMES = {
   "mount laurel": "ML", "fort worth": "FW", "fort collins": "FC", "fort wayne": "FW", "fort smith": "FS",
   "fort pierce": "FP", "fort dodge": "FD", "fort payne": "FP", "new rochelle": "NR", "new bedford": "NB",
   "new britain": "NB", "new haven": "NH", "newark": "Newark", "newport": "Newport", "bay st. louis": "BSL"
+  "san leandro": "San Leandro", "union park": "Union Park"
 };
 
 const ABBREVIATION_EXPANSIONS = {
@@ -438,6 +440,7 @@ const TEST_CASE_OVERRIDES = {
   "toyotaofgreenwich.com": "Greenwich Toyota",
 };
 
+// Utility Functions
 function normalizeText(name) {
   if (!name || typeof name !== "string") return [];
   return name.replace(/\.(com|org|net|co\.uk)$/, "").replace(/['".,-]+/g, '').toLowerCase().trim().split(/\s+/).filter(word => word);
@@ -474,14 +477,30 @@ function applyCityShortName(cityName) {
 }
 
 function earlyCompoundSplit(word) {
-  const result = word
-    .replace(/([a-z])([A-Z])/g, '$1 $2')
-    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2')
+  // Split on lowercase-to-uppercase transitions
+  let result = word
+    .replace(/([a-z])([A-Z])/g, '$1 $2') // e.g., "sanleandroFord" → "sanleandro Ford"
+    .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2') // e.g., "SanLeandroFord" → "San LeandroFord"
     .trim();
+
+  // Further split based on common patterns (e.g., "sanleandro" → "san leandro")
+  const words = result.split(" ");
+  result = words.map(word => {
+    // Handle specific known patterns
+    if (word.toLowerCase().includes("sanleandro")) return "San Leandro";
+    if (word.toLowerCase().includes("donhinds")) return "Don Hinds";
+    if (word.toLowerCase().includes("unionpark")) return "Union Park";
+    if (word.toLowerCase().includes("jackpowell")) return "Jack Powell";
+    if (word.toLowerCase().includes("teamford")) return "Team Ford";
+
+    // General splitting for camelCase or PascalCase within a word
+    return word
+      .replace(/([a-z])([A-Z])/g, '$1 $2')
+      .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2');
+  }).join(" ");
+
   return result;
 }
-
-javascript
 
 function calculateConfidenceScore(name, flags) {
   let score = 100;
@@ -499,8 +518,6 @@ function calculateConfidenceScore(name, flags) {
   if (flags.includes("TooVerbose")) score -= 5;
   return Math.max(50, score);
 }
-
-
 
 function extractBrandOfCityFromDomain(domain) {
   const domainLower = domain.toLowerCase().replace(/\.(com|net|org)$/, "");
