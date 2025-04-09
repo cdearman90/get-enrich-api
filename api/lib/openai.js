@@ -1,4 +1,7 @@
 // api/lib/openai.js
+// Fully patched version for ShowRevv Lead Processing Tools
+// Updated April 15, 2025, for error transparency and alignment with batchCleanCompanyNames.gs
+
 export async function callOpenAI(prompt, options = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
@@ -78,7 +81,7 @@ export async function callOpenAI(prompt, options = {}) {
 
       return {
         output,
-        tokensUsed: data.usage?.total_tokens || finalOptions.max_tokens,
+        tokens: data.usage?.total_tokens || finalOptions.max_tokens,
         confidence: output.length > 10 ? "high" : "low",
         source: "GPT"
       };
@@ -102,7 +105,30 @@ export async function callOpenAI(prompt, options = {}) {
   }
 }
 
-function logToGPTErrorTab(prompt, errorMsg, errorType) {
+async function logToGPTErrorTab(prompt, errorMsg, errorType) {
   console.log(`[GPT Error Log] Prompt: ${prompt} | Error: ${errorMsg} | Type: ${errorType}`);
-  // TODO: Integrate with Google Apps Script to append to "GPT Error Log" tab
+
+  // Replace with your Google Apps Script web app URL (deployed from batchCleanCompanyNames.gs)
+  const googleAppsScriptUrl = "https://script.google.com/macros/s/your-script-id/exec"; // Update with actual URL
+
+  try {
+    const response = await fetch(googleAppsScriptUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        prompt: prompt.slice(0, 500), // Truncate to avoid exceeding cell limits
+        errorMsg,
+        errorType,
+        timestamp: new Date().toISOString(),
+      }),
+    });
+
+    if (!response.ok) {
+      console.error(`Failed to log to Google Apps Script: HTTP ${response.status}`);
+    }
+  } catch (err) {
+    console.error(`Error logging to Google Apps Script: ${err.message}`);
+  }
 }
