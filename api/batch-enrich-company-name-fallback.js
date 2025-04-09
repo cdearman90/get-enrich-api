@@ -157,8 +157,8 @@ export default async function handler(req, res) {
               await new Promise(res => setTimeout(res, 1000));
             }
           }
-
-          finalResult.flags = Array.isArray(finalResult.flags) ? finalResult.flags : [];
+          
+                   finalResult.flags = Array.isArray(finalResult.flags) ? finalResult.flags : [];
           finalResult.flags.push("FallbackAPIUsed");
 
           const confidenceScore = finalResult.confidenceScore || 0;
