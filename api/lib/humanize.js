@@ -440,7 +440,9 @@ function capitalizeName(words) {
 }
 
 function containsCarBrand(name) {
-  return normalizeText(name).some(word => CAR_BRANDS.includes(word.toLowerCase()));
+  if (!name || typeof name !== "string") return false;
+  const normalized = name.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
+  return CAR_BRANDS.some(brand => normalized.includes(brand));
 }
 
 function expandAbbreviations(name) {
