@@ -109,7 +109,7 @@ async function logToGPTErrorTab(prompt, errorMsg, errorType) {
   console.log(`[GPT Error Log] Prompt: ${prompt} | Error: ${errorMsg} | Type: ${errorType}`);
 
   // Replace with your Google Apps Script web app URL (deployed from batchCleanCompanyNames.gs)
-  const googleAppsScriptUrl = "https://script.google.com/macros/s/your-script-id/exec"; // Update with actual URL
+  const googleAppsScriptUrl = "https://script.google.com/a/macros/ipsys.ai/s/AKfycbxRTWC8MNpCdsukETju2Ovhk5zvqdXHJ8RGxrg_nDa0EpmygTG6M5Nrld7V7X5UCQ3c/exec"; // Update with actual URL
 
   try {
     const response = await fetch(googleAppsScriptUrl, {
