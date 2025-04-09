@@ -663,4 +663,21 @@ export async function humanizeName(inputName, domain, addPossessiveFlag = false,
   }
 }
 
-export { CAR_BRANDS, BRAND_MAPPING, KNOWN_PROPER_NOUNS, ABBREVIATION_EXPANSIONS, normalizeText, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, applyCityShortName };
+export { 
+  CAR_BRANDS, 
+  BRAND_MAPPING, 
+  KNOWN_PROPER_NOUNS, 
+  GENERIC_SUFFIXES, 
+  NON_DEALERSHIP_KEYWORDS, 
+  KNOWN_CITIES_SET, 
+  KNOWN_CITY_SHORT_NAMES, 
+  normalizeText, 
+  capitalizeName, 
+  containsCarBrand, 
+  expandAbbreviations, 
+  applyCityShortName, 
+  earlyCompoundSplit, 
+  calculateConfidenceScore, 
+  extractBrandOfCityFromDomain, 
+  TEST_CASE_OVERRIDES 
+};
