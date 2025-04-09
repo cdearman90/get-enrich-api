@@ -5,7 +5,7 @@
 // - Added OpenAI validation for possessive form in initials check
 // - Bumped version to 1.0.20
 
-import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, earlyCompoundSplit } from "./lib/humanize.js";
+import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
 // Concurrency limiter
@@ -40,19 +40,8 @@ const streamToString = async (stream) => {
   } catch (err) {
     clearTimeout(timeout);
     console.error(`Stream read failed: ${err.message}`);
-    return "";
+    throw new Error(`Stream read failed: ${err.message}`);
   }
-};
-
-// Capitalize name (synced with humanize.js)
-const capitalizeName = (words) => {
-  if (typeof words === "string") words = words.split(/\s+/).filter(word => word);
-  return words.map((word, i) => {
-    if (word.toLowerCase() === "chevrolet") return "Chevy";
-    if (["of", "and"].includes(word.toLowerCase()) && i !== 0) return word.toLowerCase();
-    if (/^[A-Z]{2,5}$/.test(word)) return word;
-    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-  }).join(" ");
 };
 
 // Entry point
