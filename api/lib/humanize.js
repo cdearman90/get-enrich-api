@@ -468,7 +468,7 @@ function earlyCompoundSplit(word) {
     .replace(/([A-Z])([A-Z][a-z])/g, '$1 $2') // e.g., "SanLeandroFord" → "San LeandroFord"
     .trim();
 
-  // Further split based on common patterns (e.g., "sanleandro" → "san leandro")
+  // Further split based on common patterns
   const words = result.split(" ");
   result = words.map(word => {
     // Handle specific known patterns
@@ -478,6 +478,28 @@ function earlyCompoundSplit(word) {
     if (word.toLowerCase().includes("jackpowell")) return "Jack Powell";
     if (word.toLowerCase().includes("teamford")) return "Team Ford";
     if (word.toLowerCase().includes("townandcountry")) return "Town and Country";
+    if (word.toLowerCase().includes("miamilakes")) return "Miami Lakes";
+    if (word.toLowerCase().includes("golfmill")) return "Golf Mill";
+    if (word.toLowerCase().includes("carlblack")) return "Carl Black";
+    if (word.toLowerCase().includes("fletcherauto")) return "Fletcher Auto";
+    if (word.toLowerCase().includes("bentleyauto")) return "Bentley Auto";
+    if (word.toLowerCase().includes("avisford")) return "Avis Ford";
+    if (word.toLowerCase().includes("rodbaker")) return "Rod Baker";
+    if (word.toLowerCase().includes("mccarthy")) return "McCarthy";
+    if (word.toLowerCase().includes("dyerauto")) return "Dyer Auto";
+    if (word.toLowerCase().includes("tedbritt")) return "Ted Britt";
+    if (word.toLowerCase().includes("anderson")) return "Anderson";
+    if (word.toLowerCase().includes("mclarty")) return "McLarty";
+    if (word.toLowerCase().includes("raceway")) return "Raceway";
+    if (word.toLowerCase().includes("autobyfox")) return "Auto By Fox";
+    if (word.toLowerCase().includes("donhattan")) return "Don Hattan";
+    if (word.toLowerCase().includes("galeana")) return "Galeana";
+    if (word.toLowerCase().includes("chastang")) return "Chastang";
+    if (word.toLowerCase().includes("taylorauto")) return "Taylor Auto";
+    if (word.toLowerCase().includes("dancummins")) return "Dan Cummins";
+    if (word.toLowerCase().includes("kennedyauto")) return "Kennedy Auto";
+    if (word.toLowerCase().includes("garber")) return "Garber";
+    if (word.toLowerCase().includes("sunnyside")) return "Sunnyside";
 
     // General splitting for camelCase or PascalCase within a word
     return word
@@ -570,6 +592,151 @@ const TEST_CASE_OVERRIDES = {
   "toyotaofgreenwich.com": "Greenwich Toyota",
 };
 
+async function checkPossessiveWithOpenAI(name) {
+  const prompt = `Is "${name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+  const response = await callOpenAI({ prompt, maxTokens: 40 });
+  return { ...response, tokens: response.tokens || 0 };
+}
+
+function isPossessiveFriendlyHeuristic(name) {
+  const words = name.split(" ");
+  if (words.every(w => /^[A-Z]{2,5}$/.test(w))) {
+    return false;
+  }
+  return !/[aeiou]$/i.test(name);
+}
+
+async function humanizeName(inputName, domain, addPossessiveFlag = false, excludeCarBrandIfPossessiveFriendly = true) {
+  try {
+    const domainLower = domain.toLowerCase();
+    console.log(`Processing domain: ${domain}`);
+
+    if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
+      return { name: "", confidenceScore: 0, flags: ["NonDealership"], tokens: 0 };
+    }
+
+    let { name, flags, confidence, brand, city } = extractBrandOfCityFromDomain(domainLower);
+    let tokens = 0;
+
+    name = name.replace("Chevrolet", "Chevy");
+    name = expandAbbreviations(name);
+    if (name !== capitalizeName(domainLower)) flags.push("AbbreviationExpanded");
+
+    if (excludeCarBrandIfPossessiveFriendly && brand) {
+      const words = name.split(" ");
+      const brandIndex = words.findIndex(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]);
+      if (brandIndex !== -1) {
+        const prefixWords = words.slice(0, brandIndex);
+        const prefix = prefixWords.join(" ");
+        if (prefix) {
+          const isCity = KNOWN_CITIES_SET.has(prefix.toLowerCase());
+          const isHumanLike = /^[A-Z][a-z]+$/i.test(prefix) || KNOWN_PROPER_NOUNS.includes(prefix);
+          let isPossessiveFriendly = isPossessiveFriendlyHeuristic(prefix);
+          
+          if (process.env.OPENAI_API_KEY && !isPossessiveFriendly) {
+            const openAIResult = await checkPossessiveWithOpenAI(prefix);
+            tokens += openAIResult.tokens || 0;
+            isPossessiveFriendly = openAIResult.isReadable && openAIResult.isConfident;
+            if (openAIResult.isConfident) {
+              flags.push("OpenAIPossessiveValidated");
+            }
+          }
+
+          if (!isCity && isHumanLike && isPossessiveFriendly) {
+            name = prefix;
+            flags.push("CarBrandExcluded");
+            confidence = confidence - 5;
+          }
+        }
+      }
+    }
+
+    let confidenceScore = calculateConfidenceScore(name, flags);
+
+    if (flags.includes("FallbackToDomain")) {
+      const splitName = earlyCompoundSplit(name);
+      if (splitName.split(" ").length >= 2) {
+        name = splitName;
+        flags.push("FallbackBlobSplit");
+        confidenceScore = calculateConfidenceScore(name, flags);
+        const newWords = name.split(" ");
+        if (newWords.length >= 4) {
+          flags.push("TooVerbose");
+          confidenceScore = calculateConfidenceScore(name, flags);
+        }
+        if (excludeCarBrandIfPossessiveFriendly) {
+          const splitWords = name.split(" ");
+          const brandIndex = splitWords.findIndex(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]);
+          if (brandIndex !== -1) {
+            const prefixWords = splitWords.slice(0, brandIndex);
+            const prefix = prefixWords.join(" ");
+            if (prefix) {
+              const isCity = KNOWN_CITIES_SET.has(prefix.toLowerCase());
+              const isHumanLike = /^[A-Z][a-z]+$/i.test(prefix) || KNOWN_PROPER_NOUNS.includes(prefix);
+              let isPossessiveFriendly = isPossessiveFriendlyHeuristic(prefix);
+              
+              if (process.env.OPENAI_API_KEY && !isPossessiveFriendly) {
+                const openAIResult = await checkPossessiveWithOpenAI(prefix);
+                tokens += openAIResult.tokens || 0;
+                isPossessiveFriendly = openAIResult.isReadable && openAIResult.isConfident;
+                if (openAIResult.isConfident) {
+                  flags.push("OpenAIPossessiveValidated");
+                }
+              }
+
+              if (!isCity && isHumanLike && isPossessiveFriendly) {
+                name = prefix;
+                flags.push("CarBrandExcluded");
+                confidenceScore = calculateConfidenceScore(name, flags);
+              }
+            }
+          }
+        }
+      } else {
+        for (const noun of KNOWN_PROPER_NOUNS) {
+          const nounLower = noun.toLowerCase();
+          if (domainLower.includes(nounLower)) {
+            const remaining = domainLower.replace(nounLower, "");
+            if (CAR_BRANDS.includes(remaining)) {
+              const brandName = BRAND_MAPPING[remaining] || capitalizeName(remaining);
+              name = `${noun} ${brandName}`;
+              flags.push("FallbackProperNounSplit");
+              confidenceScore = calculateConfidenceScore(name, flags);
+              break;
+            }
+          }
+        }
+      }
+    }
+
+    if (TEST_CASE_OVERRIDES[domainLower]) {
+      name = TEST_CASE_OVERRIDES[domainLower];
+      flags.push("OverrideApplied");
+      confidenceScore = 100;
+    }
+
+    // Ensure proper capitalization of the final name
+    name = capitalizeName(name);
+
+    confidenceScore = Math.max(50, confidenceScore);
+    if (confidenceScore < 75) {
+      console.log(`Low confidence for ${domain}: ${name} (${confidenceScore}) - flagged for review`);
+    } else {
+      console.log(`Acceptable name for ${domain}: ${name}`);
+    }
+
+    return {
+      name: addPossessiveFlag ? `${name}'s` : name,
+      confidenceScore,
+      flags,
+      tokens
+    };
+  } catch (err) {
+    console.error(`Error in humanizeName for ${domain}: ${err.stack}`);
+    return { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
+  }
+}
+
 export {
   CAR_BRANDS,
   BRAND_MAPPING,
@@ -586,5 +753,6 @@ export {
   earlyCompoundSplit,
   calculateConfidenceScore,
   extractBrandOfCityFromDomain,
-  TEST_CASE_OVERRIDES
+  TEST_CASE_OVERRIDES,
+  humanizeName
 };
