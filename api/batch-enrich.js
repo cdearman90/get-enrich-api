@@ -6,7 +6,17 @@
 // - Added attempt number to Fallback API success logs
 // - Added "Processing Started" logs for each domain
 
-import { humanizeName, CAR_BRANDS, normalizeText, KNOWN_PROPER_NOUNS, KNOWN_CITIES_SET, extractBrandOfCityFromDomain, applyCityShortName, earlyCompoundSplit } from "./lib/humanize.js";
+// api/batch-enrich.js
+import { 
+  humanizeName, 
+  CAR_BRANDS, 
+  normalizeText, 
+  KNOWN_PROPER_NOUNS, 
+  KNOWN_CITIES_SET, 
+  extractBrandOfCityFromDomain, 
+  applyCityShortName, 
+  earlyCompoundSplit 
+} from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
 // Concurrency limiter
