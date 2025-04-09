@@ -1,12 +1,8 @@
-// api/batch-enrich.js (Version 4.1.11 - Updated 2025-04-14)
+// api/batch-enrich.js (Version 4.1.12 - Updated 2025-04-15)
 // Changes:
-// - Increased concurrency limit to pLimit(5) for better throughput
-// - Added configurable FALLBACK_API_TIMEOUT_MS (default 6 seconds)
-// - Enhanced fallbackTriggers logging to include primary humanizeName result
-// - Added attempt number to Fallback API success logs
-// - Added "Processing Started" logs for each domain
+// - Added fallback for KNOWN_CITIES_SET to prevent import errors
+// - Ensured consistency with updated humanize.js (improved earlyCompoundSplit)
 
-// api/batch-enrich.js
 import { 
   humanizeName, 
   CAR_BRANDS, 
@@ -18,6 +14,9 @@ import {
   earlyCompoundSplit 
 } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
+
+// Fallback if KNOWN_CITIES_SET is not available
+const safeKnownCitiesSet = KNOWN_CITIES_SET || new Set();
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -142,7 +141,7 @@ const streamToString = async (req) => {
 
 // Entry point
 export default async function handler(req, res) {
-  console.log("batch-enrich.js Version 4.1.11 - Updated 2025-04-14");
+  console.log("batch-enrich.js Version 4.1.12 - Updated 2025-04-15");
 
   try {
     // Parse the request body
