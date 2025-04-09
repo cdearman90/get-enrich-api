@@ -1,10 +1,5 @@
 // humanize.js - Fully patched version for ShowRevv Lead Processing Tools
-// Updated April 14, 2025, for precision, scalability, and error transparency
-// Changes:
-// - Defined ABBREVIATION_EXPANSIONS to fix export errors
-// - Added TEST_CASE_OVERRIDES to enforce test case outputs
-// - Refined calculateConfidenceScore with adjusted penalties and FallbackBlobSplit boost
-// - Enhanced pattern matching for proper nouns and fallback splitting
+// Updated April 15, 2025, for precision, scalability, and error transparency
 
 import { callOpenAI } from './openai.js';
 
@@ -70,11 +65,11 @@ const KNOWN_PROPER_NOUNS = [
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "cars", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
 
 const NON_DEALERSHIP_KEYWORDS = [
-  "realty", "insurance", "leasing", "rental", "offroad", "powersports", "rent",
+  "realty", "insurance", "leasing", "rental", "offroad", "powersports", "rent", "lease",
   "broker", "brokering", "consult", "consulting", "equipment", "tow", "towing", "tint", "tinting", "glass",
-  "machinery", "car wash", "detail", "detailing", "transmission", "insurance", "loan",
+  "machinery", "car wash", "wash", "detail", "detailing", "collision", "transmission", "insurance", "loan",
   "financial", "finance", "body shop", "boat", "watersports", "ATV", "tractor", "lawn", "real estate", "realtor",
-  "construction"                   
+  "construction"               
 ];
 
 let KNOWN_CITIES_SET = new Set([
@@ -428,18 +423,6 @@ const ABBREVIATION_EXPANSIONS = {
   "jt": "JT Auto",
 };
 
-const TEST_CASE_OVERRIDES = {
-  "duvalford.com": "Duval",
-  "patmillikenford.com": "Pat Milliken",
-  "athensford.com": "Athens",
-  "gusmachadoford.com": "Gus Machado",
-  "geraldauto.com": "Gerald Auto",
-  "mbofbrooklyn.com": "M.B. Brooklyn",
-  "karlchevroletstuart.com": "Karl Stuart",
-  "kiaoflagrange.com": "Lagrange Kia",
-  "toyotaofgreenwich.com": "Greenwich Toyota",
-};
-
 // Utility Functions
 function normalizeText(name) {
   if (!name || typeof name !== "string") return [];
@@ -492,6 +475,7 @@ function earlyCompoundSplit(word) {
     if (word.toLowerCase().includes("unionpark")) return "Union Park";
     if (word.toLowerCase().includes("jackpowell")) return "Jack Powell";
     if (word.toLowerCase().includes("teamford")) return "Team Ford";
+    if (word.toLowerCase().includes("townandcountry")) return "Town and Country";
 
     // General splitting for camelCase or PascalCase within a word
     return word
