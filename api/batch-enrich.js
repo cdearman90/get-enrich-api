@@ -1,22 +1,11 @@
 // api/batch-enrich.js (Version 4.1.12 - Updated 2025-04-15)
 // Changes:
-// - Added fallback for KNOWN_CITIES_SET to prevent import errors
+// - Streamlined validation logic for leads
+// - Removed unused imports (CAR_BRANDS, normalizeText, KNOWN_PROPER_NOUNS, earlyCompoundSplit, KNOWN_CITIES_SET)
 // - Ensured consistency with updated humanize.js (improved earlyCompoundSplit)
 
-import { 
-  humanizeName, 
-  CAR_BRANDS, 
-  normalizeText, 
-  KNOWN_PROPER_NOUNS, 
-  KNOWN_CITIES_SET, 
-  extractBrandOfCityFromDomain, 
-  applyCityShortName, 
-  earlyCompoundSplit 
-} from "./lib/humanize.js";
+import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
-
-// Fallback if KNOWN_CITIES_SET is not available
-const safeKnownCitiesSet = KNOWN_CITIES_SET || new Set();
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -76,7 +65,7 @@ const callFallbackAPI = async (domain, rowNum) => {
         try {
           result = JSON.parse(text);
         } catch (jsonErr) {
-          throw new Error(`Invalid JSON response: ${text}`);
+          throw new Error(`Invalid JSON response: ${text} - ${jsonErr.message}`);
         }
         if (!response.ok) throw new Error(`Fallback API HTTP ${response.status}: ${result.error || "Unknown error"}`);
         if (!Array.isArray(result.successful) || !result.successful[0]) {
@@ -113,6 +102,9 @@ const callFallbackAPI = async (domain, rowNum) => {
     };
   }
 };
+
+Part 2: Stream Handling and Handler Function (1/2)
+javascript
 
 // Stream to string helper with timeout (rewritten for Vercel compatibility)
 const streamToString = async (req) => {
@@ -166,22 +158,37 @@ export default async function handler(req, res) {
     }
 
     const leads = body.leads || body.leadList || body.domains;
-    if (!leads || !Array.isArray(leads) || leads.length === 0) {
-      console.error("Invalid or empty leads array");
-      return res.status(400).json({ error: "Invalid or empty leads array" });
+    if (!leads || !Array.isArray(leads)) {
+      console.error("Leads must be an array");
+      return res.status(400).json({ error: "Leads must be an array" });
     }
 
-    const validatedLeads = leads.map((lead, index) => {
-      if (!lead || typeof lead !== "object" || !lead.domain || typeof lead.domain !== "string" || lead.domain.trim() === "") {
-        console.error(`Invalid lead at index ${index}: ${JSON.stringify(lead)}`);
-        return null;
+    const validatedLeads = [];
+    const validationErrors = [];
+
+    leads.forEach((lead, index) => {
+      if (!lead || typeof lead !== "object") {
+        validationErrors.push(`Lead at index ${index} is not an object: ${JSON.stringify(lead)}`);
+        return;
       }
-      return { domain: lead.domain.trim().toLowerCase(), rowNum: lead.rowNum || (index + 1) };
-    }).filter(lead => lead !== null);
+      if (!lead.domain || typeof lead.domain !== "string") {
+        validationErrors.push(`Lead at index ${index} has invalid domain (must be a string): ${JSON.stringify(lead)}`);
+        return;
+      }
+      const trimmedDomain = lead.domain.trim();
+      if (trimmedDomain === "") {
+        validationErrors.push(`Lead at index ${index} has an empty domain: ${JSON.stringify(lead)}`);
+        return;
+      }
+      validatedLeads.push({ domain: trimmedDomain.toLowerCase(), rowNum: lead.rowNum || (index + 1) });
+    });
 
     if (validatedLeads.length === 0) {
-      console.error("No valid leads after validation");
-      return res.status(400).json({ error: "No valid leads after validation" });
+      console.error("No valid leads after validation", validationErrors);
+      return res.status(400).json({ 
+        error: "No valid leads after validation", 
+        details: validationErrors.length > 0 ? validationErrors : "Leads array is empty" 
+      });
     }
 
     console.log(`Processing ${validatedLeads.length} valid leads`);
@@ -313,7 +320,7 @@ export default async function handler(req, res) {
             const prompt = `Is "${finalResult.companyName}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
             const response = await callOpenAI({ prompt, maxTokens: 40 });
             tokensUsed += response.tokens || 0;
-            const parsed = typeof response.text === "string" ? JSON.parse(response.text) : { isReadable: true, isConfident: false };
+            const parsed = typeof response.output === "string" ? JSON.parse(response.output) : { isReadable: true, isConfident: false };
             if (!parsed.isReadable && parsed.isConfident) {
               const fullCity = cityDetected ? applyCityShortName(cityDetected) : finalResult.companyName.split(" ")[0];
               finalResult.companyName = `${fullCity} ${brandDetected || finalResult.companyName.split(" ")[1] || "Auto"}`;
