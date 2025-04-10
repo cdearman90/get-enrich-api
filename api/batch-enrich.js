@@ -83,16 +83,29 @@ const callFallbackAPI = async (domain, rowNum) => {
     };
   } catch (err) {
     console.error(`Fallback API failed for domain ${domain}: ${err.message}`);
-    const local = await humanizeName(domain, domain, false, true);
-    return {
-      domain,
-      companyName: local.name || "",
-      confidenceScore: local.confidenceScore || 0,
-      flags: [...(local.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"],
-      tokens: local.tokens || 0,
-      rowNum,
-      error: err.message,
-    };
+    try {
+      const local = await humanizeName(domain, domain, false, true);
+      return {
+        domain,
+        companyName: local.name || "",
+        confidenceScore: local.confidenceScore || 0,
+        flags: [...(local.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"],
+        tokens: local.tokens || 0,
+        rowNum,
+        error: err.message,
+      };
+    } catch (fallbackErr) {
+      console.error(`Fallback humanizeName failed for domain ${domain}: ${fallbackErr.message}`);
+      return {
+        domain,
+        companyName: "",
+        confidenceScore: 0,
+        flags: ["FallbackAPIFailed", "LocalFallbackFailed"],
+        tokens: 0,
+        rowNum,
+        error: fallbackErr.message,
+      };
+    }
   }
 };
 
@@ -106,7 +119,7 @@ const validateLeads = (leads) => {
   }
 
   leads.forEach((lead, index) => {
-    if (!lead || typeof lead !== "object") {
+    if (!lead || typeof lead !== "object" || !lead.domain) {
       validationErrors.push(`Index ${index} not object`);
       return;
     }
