@@ -438,6 +438,12 @@ const TEST_CASE_OVERRIDES = {
 
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "cars", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
 
+function containsCarBrand(name) {
+  if (!name || typeof name !== "string") return false;
+  const normalized = name.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
+  return CAR_BRANDS.some(brand => normalized.includes(brand));
+}
+
 // -- Utilities --
 
 function normalizeText(name) {
@@ -586,7 +592,7 @@ function extractBrandOfCityFromDomain(domain) {
   };
 }
 
-function humanizeName(inputName, domain, addPossessiveFlag = false, excludeCarBrandIfPossessiveFriendly = true) {
+async function humanizeName(inputName, domain, addPossessiveFlag = false, excludeCarBrandIfPossessiveFriendly = true) {
   try {
     const domainLower = domain.toLowerCase();
     console.log(`🔍 Processing domain: ${domain}`);
