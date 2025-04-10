@@ -152,6 +152,7 @@ const processLead = async (lead, domainCache, fallbackTriggers) => {
   try {
     finalResult = await humanizeName(domain, domain, false, true);
     tokensUsed = finalResult.tokens || 0;
+    console.error(`humanizeName result for ${domain}: ${JSON.stringify(finalResult)}`);
   } catch (_err) {
     console.error(`humanizeName error for domain ${domain}: ${_err.message}`);
     finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
@@ -203,6 +204,7 @@ const processLead = async (lead, domainCache, fallbackTriggers) => {
   // Add to manual review if the result is weak
   const reviewFlags = ["TooGeneric", "CityNameOnly", "PossibleAbbreviation", "NotPossessiveFriendly"];
   if (finalResult.confidenceScore < 75 || finalResult.flags.some((f) => reviewFlags.includes(f))) {
+    console.error(`Flagging for manual review: ${JSON.stringify(finalResult)}`);
     return {
       manualReview: {
         domain,
@@ -228,14 +230,15 @@ const processLead = async (lead, domainCache, fallbackTriggers) => {
     typeof finalResult.name === "string" &&
     finalResult.name.split(" ").every((w) => /^[A-Z]{1,3}$/.test(w))
   ) {
-    const prompt = `Is "${finalResult.name}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+    console.error(`Triggering OpenAI readability validation for ${finalResult.name}`);
+    const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${finalResult.name}" is readable and natural in the sentence "{Company}'s CRM isn't broken—it’s bleeding". Do not include any additional text outside the JSON object.`;
     try {
       const response = await callOpenAI({ prompt, maxTokens: 40 });
       tokensUsed += response.tokens || 0;
 
       let parsed;
       try {
-        console.error(`Raw OpenAI response for ${domain}: ${response.output}`); // Log the raw response for debugging
+        console.error(`Raw OpenAI response for ${domain}: ${response.output}`);
         parsed = JSON.parse(response.output || "{}");
       } catch (err) {
         console.error(`Failed to parse OpenAI response for ${domain}: ${err.message}`);
@@ -260,6 +263,8 @@ const processLead = async (lead, domainCache, fallbackTriggers) => {
       console.error(`OpenAI readability check failed for ${domain}: ${err.message}`);
       finalResult.flags.push("OpenAIError");
     }
+  } else {
+    console.error(`Skipping OpenAI readability validation for ${finalResult.name}`);
   }
 
   // Cache the final result
