@@ -264,8 +264,9 @@ export default async function handler(req, res) {
             const parsed = JSON.parse(response.output || "{}");
             if (!parsed.isReadable && parsed.isConfident) {
             const nameToSplit = finalResult.companyName || "";
-            const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : nameToSplit.split(" ")[0];
-            const fallbackBrand = brandDetected || nameToSplit.split(" ")[1] || "Auto";
+            const safeName = finalResult.companyName || "";
+            const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
+            const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
               finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
               finalResult.flags.push("InitialsExpanded");
               finalResult.confidenceScore -= 5;
