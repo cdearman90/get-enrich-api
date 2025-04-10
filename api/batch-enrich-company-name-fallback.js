@@ -19,24 +19,23 @@ const pLimit = (concurrency) => {
   });
 };
 
-const streamToString = async (stream) => {
-  const chunks = [];
-  const timeout = setTimeout(() => {
-    throw new Error("Stream read timeout");
-  }, 5000);
+const streamToString = (stream) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
+    const timeout = setTimeout(() => {
+      reject(new Error("Stream read timeout"));
+    }, 5000);
 
-  try {
-    for await (const chunk of stream) {
-      chunks.push(chunk);
-    }
-    clearTimeout(timeout);
-    return Buffer.concat(chunks).toString("utf-8");
-  } catch (err) {
-    clearTimeout(timeout);
-    console.error(`❌ Stream read error: ${err.message}`);
-    throw err;
-  }
-};
+    stream.on("data", (chunk) => chunks.push(chunk));
+    stream.on("end", () => {
+      clearTimeout(timeout);
+      resolve(Buffer.concat(chunks).toString("utf-8"));
+    });
+    stream.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
 
 export default async function handler(req, res) {
   console.log("🛟 batch-enrich-company-name-fallback.js v1.0.21");
