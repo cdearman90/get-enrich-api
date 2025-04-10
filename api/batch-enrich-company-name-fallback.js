@@ -1,13 +1,28 @@
-// api/company-name-fallback.js — Version 1.0.22
-// April 2025 - Fallback API for domain enrichment, aligned with humanize.js
-
+// api/company-name-fallback.js — Version 1.0.24
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
 // Constants for API configuration
-const BATCH_SIZE = 5;
+const BATCH_SIZE = 10;
 const CONCURRENCY_LIMIT = 5;
 const PROCESSING_TIMEOUT_MS = 18000;
+
+// Known sets (for local expansion, aligned with humanize.js)
+const KNOWN_CITY_SHORT_NAMES = {
+  "las vegas": "Vegas", "los angeles": "LA", "new york": "NY", "new orleans": "N.O.", "miami lakes": "Miami Lakes",
+  "orlando": "Orlando", "new york city": "NYC", "austin": "Austin",
+  "brookhaven": "Brookhaven", "redlands": "Redlands", "lakeway": "Lakeway",
+  "killeen": "Killeen", "tuscaloosa": "Tuscaloosa", "milwaukeenorth": "Milwaukee North",
+  "manhattan": "Manhattan", "fairoaks": "Fair Oaks", "northborough": "Northborough",
+  "columbia": "Columbia", "freeport": "Freeport", "wakefield": "Wakefield",
+  "gwinnett": "Gwinnett", "elyria": "Elyria", "kingsport": "Kingsport",
+  "bloomington": "Bloomington", "alhambra": "Alhambra", "slidell": "Slidell",
+  "shelbyville": "Shelbyville"
+};
+
+const BRAND_MAPPING = {
+  "mercedes-benz": "M.B.", "volkswagen": "VW", "chevrolet": "Chevy", "toyota": "Toyota", "ford": "Ford"
+};
 
 // Utility to limit concurrency for parallel operations
 const pLimit = (concurrency) => {
@@ -67,6 +82,43 @@ const validateLeads = (leads) => {
   return { validatedLeads, validationErrors };
 };
 
+// Check if a name is initials-only
+const isInitialsOnly = (name) => {
+  const words = name.split(" ");
+  return words.every(w => /^[A-Z]{1,3}$/.test(w));
+};
+
+// Expand initials-only names using domain context
+const expandInitials = (name, domain, brandDetected, cityDetected) => {
+  let expanded = [];
+  const words = name.split(" ");
+
+  words.forEach(word => {
+    if (/^[A-Z]{1,3}$/.test(word)) {
+      const cityMatch = Object.entries(KNOWN_CITY_SHORT_NAMES).find(([full, short]) => short.toUpperCase() === word);
+      const nounMatch = Object.entries(BRAND_MAPPING).find(([full, short]) => short.toUpperCase() === word);
+
+      if (cityMatch) {
+        expanded.push(cityMatch[1]);
+      } else if (nounMatch) {
+        expanded.push(nounMatch[1]);
+      } else if (cityDetected && word === cityDetected.toUpperCase().slice(0, word.length)) {
+        expanded.push(applyCityShortName(cityDetected));
+      } else if (brandDetected && word === brandDetected.toUpperCase().slice(0, word.length)) {
+        expanded.push(brandDetected);
+      } else {
+        const domainParts = domain.split(".")[0].split(/[^a-zA-Z]/);
+        const matchingPart = domainParts.find(part => part.toUpperCase().startsWith(word));
+        expanded.push(matchingPart ? matchingPart.charAt(0).toUpperCase() + matchingPart.slice(1) : word);
+      }
+    } else {
+      expanded.push(word);
+    }
+  });
+
+  return expanded.join(" ");
+};
+
 // Process a single lead (domain enrichment logic)
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
@@ -81,9 +133,9 @@ const processLead = async (lead, fallbackTriggers) => {
   const brandDetected = match.brand || null;
   const cityDetected = match.city || null;
 
-  // Attempt to humanize the domain name with retries
+  // Attempt to humanize the domain name
   try {
-    result = await humanizeName(domain, domain, false, true);
+    result = await humanizeName(domain, domain, true);
     tokensUsed = result.tokens || 0;
     console.error(`humanizeName result for ${domain}: ${JSON.stringify(result)}`);
   } catch (_err) {
@@ -102,8 +154,18 @@ const processLead = async (lead, fallbackTriggers) => {
 
   const isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
 
-  // OpenAI readability validation (only if every word is 1–3 uppercase letters)
-  if (process.env.OPENAI_API_KEY && result.name.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
+  // Local initials expansion before OpenAI
+  if (isInitialsOnly(result.name)) {
+    const expandedName = expandInitials(result.name, domain, brandDetected, cityDetected);
+    if (expandedName !== result.name) {
+      result.name = expandedName;
+      result.flags.push("InitialsExpandedLocally");
+      result.confidenceScore -= 5;
+    }
+  }
+
+  // OpenAI readability validation (only as a last resort)
+  if (process.env.OPENAI_API_KEY && isInitialsOnly(result.name)) {
     console.error(`Triggering OpenAI readability validation for ${result.name}`);
     const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${result.name}" is readable and natural as a company name in the sentence "{Company}'s CRM isn't broken—it's bleeding". Do not include any additional text outside the JSON object.`;
     try {
@@ -123,7 +185,7 @@ const processLead = async (lead, fallbackTriggers) => {
       if (!parsed.isReadable && parsed.isConfident) {
         const cityName = cityDetected ? applyCityShortName(cityDetected) : result.name.split(" ")[0];
         result.name = `${cityName} ${brandDetected || result.name.split(" ")[1] || "Auto"}`;
-        result.flags.push("InitialsExpanded");
+        result.flags.push("InitialsExpandedByOpenAI");
         result.confidenceScore -= 5;
       }
     } catch (err) {
@@ -132,6 +194,31 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   } else {
     console.error(`Skipping OpenAI readability validation for ${result.name}`);
+  }
+
+  // Boost confidence for known patterns
+  if (
+    Object.values(KNOWN_CITY_SHORT_NAMES).some(city => result.name.includes(city)) ||
+    Object.values(BRAND_MAPPING).some(brand => result.name.includes(brand))
+  ) {
+    result.confidenceScore += 5;
+    result.flags.push("ConfidenceBoosted");
+  }
+
+  // Log fallback trigger reason
+  if (!isAcceptable) {
+    fallbackTriggers.push({
+      domain,
+      rowNum,
+      reason: "UnacceptableResult",
+      details: {
+        confidenceScore: result.confidenceScore,
+        flags: result.flags,
+        brand: brandDetected,
+        city: cityDetected
+      },
+      tokens: tokensUsed
+    });
   }
 
   if (!isAcceptable || result.flags.some(f => forceReviewFlags.includes(f))) {
@@ -175,7 +262,7 @@ const processLead = async (lead, fallbackTriggers) => {
 // Main handler function for the API
 export default async function handler(req, res) {
   try {
-    console.error("🛟 company-name-fallback.js v1.0.22 – Fallback Processing Start");
+    console.error("🛟 company-name-fallback.js v1.0.24 – Fallback Processing Start");
 
     // Check for required environment variables
     if (!process.env.OPENAI_API_KEY) {
