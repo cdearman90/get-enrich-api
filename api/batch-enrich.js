@@ -103,16 +103,12 @@ const streamToString = async (req) => {
 };
 
 export default async function handler(req, res) {
-  console.log("🧠 batch-enrich.js v4.2.0 – Domain Processing Start");
-
-  let body;
   try {
-    const raw = await streamToString(req);
-    if (!raw) return res.status(400).json({ error: "Empty body" });
-    body = JSON.parse(raw);
-  } catch (err) {
-    return res.status(400).json({ error: "Invalid JSON", details: err.message });
-  }
+    console.log("🧠 batch-enrich.js v4.2.0 – Domain Processing Start");
+
+  const raw = await streamToString(req);
+  if (!raw) return res.status(400).json({ error: "Empty body" });
+  const body = JSON.parse(raw);
 
   const leads = body.leads || body.leadList || body.domains;
   if (!Array.isArray(leads)) {
@@ -310,10 +306,10 @@ export default async function handler(req, res) {
     totalTokens,
     partial: false
   });
-} catch (err) {
-  console.error(`❌ Handler error: ${err.message}\n${err.stack}`);
-  return res.status(500).json({ error: "Internal server error", details: err.message });
-}
+  } catch (err) {
+    console.error(`❌ Handler error: ${err.message}\n${err.stack}`);
+    return res.status(500).json({ error: "Internal server error", details: err.message });
+  }
 }
 
 // Disable body parser to handle stream manually
