@@ -91,217 +91,217 @@ const streamToString = async (req) => {
 
 export default async function handler(req, res) {
   try {
-    console.log("🧠 batch-enrich.js v4.2.0 – Domain Processing Start");
+    console.error("🧠 batch-enrich.js v4.2.0 – Domain Processing Start");
 
-  const raw = await streamToString(req);
-  if (!raw) return res.status(400).json({ error: "Empty body" });
-  const body = JSON.parse(raw);
+    const raw = await streamToString(req);
+    if (!raw) return res.status(400).json({ error: "Empty body" });
+    const body = JSON.parse(raw);
 
-  const leads = body.leads || body.leadList || body.domains;
-  if (!Array.isArray(leads)) {
-    return res.status(400).json({ error: "Leads must be an array" });
-  }
-
-  const validatedLeads = [];
-  const validationErrors = [];
-
-  leads.forEach((lead, i) => {
-    if (!lead || typeof lead !== "object") {
-      validationErrors.push(`Index ${i} not object`);
-      return;
+    const leads = body.leads || body.leadList || body.domains;
+    if (!Array.isArray(leads)) {
+      return res.status(400).json({ error: "Leads must be an array" });
     }
 
-    const domain = (lead.domain || "").trim().toLowerCase();
-    if (!domain) {
-      validationErrors.push(`Index ${i} missing domain`);
-      return;
+    const validatedLeads = [];
+    const validationErrors = [];
+
+    leads.forEach((lead, i) => {
+      if (!lead || typeof lead !== "object") {
+        validationErrors.push(`Index ${i} not object`);
+        return;
+      }
+
+      const domain = (lead.domain || "").trim().toLowerCase();
+      if (!domain) {
+        validationErrors.push(`Index ${i} missing domain`);
+        return;
+      }
+
+      validatedLeads.push({ domain, rowNum: lead.rowNum || i + 1 });
+    });
+
+    if (validatedLeads.length === 0) {
+      return res.status(400).json({ error: "No valid leads", details: validationErrors });
     }
 
-    validatedLeads.push({ domain, rowNum: lead.rowNum || i + 1 });
-  });
+    const limit = pLimit(5);
+    const startTime = Date.now();
+    const successful = [];
+    const manualReviewQueue = [];
+    const fallbackTriggers = [];
+    let totalTokens = 0;
 
-  if (validatedLeads.length === 0) {
-    return res.status(400).json({ error: "No valid leads", details: validationErrors });
-  }
+    const BATCH_SIZE = 5;
+    const chunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
+      validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+    );
 
-  const limit = pLimit(5);
-  const startTime = Date.now();
-  const successful = [];
-  const manualReviewQueue = [];
-  const fallbackTriggers = [];
-  let totalTokens = 0;
+    for (const chunk of chunks) {
+      if (Date.now() - startTime > 18000) {
+        return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
+      }
 
-  const BATCH_SIZE = 5;
-  const chunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
-    validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
-  );
+      const chunkResults = await Promise.all(
+        chunk.map(lead => limit(async () => {
+          const { domain, rowNum } = lead;
+          const domainKey = domain.toLowerCase();
 
-  for (const chunk of chunks) {
-    if (Date.now() - startTime > 18000) {
-      return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
-    }
+          if (domainCache.has(domainKey)) {
+            const cached = domainCache.get(domainKey);
+            return { ...cached, rowNum, domain };
+          }
 
-    const chunkResults = await Promise.all(
-      chunk.map(lead => limit(async () => {
-        const { domain, rowNum } = lead;
-        const domainKey = domain.toLowerCase();
+          let finalResult;
+          let tokensUsed = 0;
 
-        if (domainCache.has(domainKey)) {
-          const cached = domainCache.get(domainKey);
-          return { ...cached, rowNum, domain };
-        }
+          const match = extractBrandOfCityFromDomain(domainKey);
+          const brandDetected = match.brand || null;
+          const cityDetected = match.city || null;
 
-        let finalResult;
-        let tokensUsed = 0;
+          try {
+            finalResult = await humanizeName(domain, domain, false, true);
+            tokensUsed = finalResult.tokens || 0;
+          } catch (_err) {
+            console.error(`humanizeName error: ${_err.message}`);
+            finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
+          }
 
-        const match = extractBrandOfCityFromDomain(domainKey);
-        const brandDetected = match.brand || null;
-        const cityDetected = match.city || null;
+          // Check quality
+          const criticalFlags = ["TooGeneric", "CityNameOnly", "FallbackFailed", "Skipped"];
+          const isAcceptable = finalResult.confidenceScore >= 75 &&
+            !finalResult.flags.some(f => criticalFlags.includes(f));
 
-        try {
-          finalResult = await humanizeName(domain, domain, false, true);
-          tokensUsed = finalResult.tokens || 0;
-        } catch (err) {
-          console.error(`humanizeName error: ${err.message}`);
-          finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
-        }
+          if (isAcceptable) {
+            domainCache.set(domainKey, {
+              companyName: finalResult.name,
+              confidenceScore: finalResult.confidenceScore,
+              flags: finalResult.flags
+            });
+          } else {
+            const primary = { ...finalResult };
+            const fallback = await callFallbackAPI(domain, rowNum);
 
-        // Check quality
-        const criticalFlags = ["TooGeneric", "CityNameOnly", "FallbackFailed", "Skipped"];
-        const isAcceptable = finalResult.confidenceScore >= 75 &&
-          !finalResult.flags.some(f => criticalFlags.includes(f));
+            if (
+              fallback.companyName &&
+              fallback.confidenceScore >= 75 &&
+              !fallback.flags.some(f => criticalFlags.includes(f))
+            ) {
+              finalResult = {
+                ...fallback,
+                flags: [...(fallback.flags || []), "FallbackAPIUsed"],
+                rowNum
+              };
+              tokensUsed += fallback.tokens || 0;
+            } else {
+              finalResult.flags.push("FallbackAPIFailed");
+              fallbackTriggers.push({
+                domain,
+                rowNum,
+                reason: "FallbackAPIFailed",
+                details: {
+                  primary: {
+                    name: primary.name,
+                    confidenceScore: primary.confidenceScore,
+                    flags: primary.flags
+                  },
+                  fallbackScore: fallback.confidenceScore,
+                  fallbackFlags: fallback.flags,
+                  brand: brandDetected,
+                  city: cityDetected
+                },
+                tokens: tokensUsed
+              });
+            }
+          }
 
+          // Add to manual review if weak
+          const reviewFlags = ["TooGeneric", "CityNameOnly", "PossibleAbbreviation", "NotPossessiveFriendly"];
+          if (
+            finalResult.confidenceScore < 75 ||
+            finalResult.flags.some(f => reviewFlags.includes(f))
+          ) {
+            manualReviewQueue.push({
+              domain,
+              name: finalResult.name,
+              confidenceScore: finalResult.confidenceScore,
+              flags: finalResult.flags,
+              rowNum
+            });
 
-              if (isAcceptable) {
+            finalResult = {
+              domain,
+              companyName: finalResult.name || "",
+              confidenceScore: Math.max(finalResult.confidenceScore, 50),
+              flags: [...finalResult.flags, "LowConfidence"],
+              rowNum
+            };
+          }
+
+          // OpenAI readability validation (only if every word is initials)
+          if (
+            process.env.OPENAI_API_KEY &&
+            finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))
+          ) {
+            const prompt = `Is "${finalResult.companyName}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+            const response = await callOpenAI({ prompt, maxTokens: 40 });
+            tokensUsed += response.tokens || 0;
+
+            try {
+              const parsed = JSON.parse(response.output || "{}");
+
+              if (!parsed.isReadable && parsed.isConfident) {
+                const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
+
+                // Fallback safety net if name is missing entirely
+                if (!safeName) {
+                  finalResult.companyName = "Generic Auto";
+                  finalResult.confidenceScore = 50;
+                  finalResult.flags.push("EmptyCompanyNameFallback");
+                } else {
+                  const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
+                  const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
+                  finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
+                  finalResult.flags.push("InitialsExpanded");
+                  finalResult.confidenceScore -= 5;
+                }
+              }
+            } catch (err) {
+              finalResult.flags.push("OpenAIParseError");
+            }
+          }
+
           domainCache.set(domainKey, {
-            companyName: finalResult.name,
+            companyName: finalResult.companyName,
             confidenceScore: finalResult.confidenceScore,
             flags: finalResult.flags
           });
-        } else {
-          const primary = { ...finalResult };
-          const fallback = await callFallbackAPI(domain, rowNum);
 
-          if (
-            fallback.companyName &&
-            fallback.confidenceScore >= 75 &&
-            !fallback.flags.some(f => criticalFlags.includes(f))
-          ) {
-            finalResult = {
-              ...fallback,
-              flags: [...(fallback.flags || []), "FallbackAPIUsed"],
-              rowNum
-            };
-            tokensUsed += fallback.tokens || 0;
-          } else {
-            finalResult.flags.push("FallbackAPIFailed");
-            fallbackTriggers.push({
-              domain,
-              rowNum,
-              reason: "FallbackAPIFailed",
-              details: {
-                primary: {
-                  name: primary.name,
-                  confidenceScore: primary.confidenceScore,
-                  flags: primary.flags
-                },
-                fallbackScore: fallback.confidenceScore,
-                fallbackFlags: fallback.flags,
-                brand: brandDetected,
-                city: cityDetected
-              },
-              tokens: tokensUsed
-            });
-          }
-        }
-
-        // Add to manual review if weak
-        const reviewFlags = ["TooGeneric", "CityNameOnly", "PossibleAbbreviation", "NotPossessiveFriendly"];
-        if (
-          finalResult.confidenceScore < 75 ||
-          finalResult.flags.some(f => reviewFlags.includes(f))
-        ) {
-          manualReviewQueue.push({
+          totalTokens += tokensUsed;
+          return {
             domain,
-            name: finalResult.name,
+            companyName: finalResult.companyName,
             confidenceScore: finalResult.confidenceScore,
             flags: finalResult.flags,
-            rowNum
-          });
-
-          finalResult = {
-            domain,
-            companyName: finalResult.name || "",
-            confidenceScore: Math.max(finalResult.confidenceScore, 50),
-            flags: [...finalResult.flags, "LowConfidence"],
-            rowNum
+            rowNum,
+            tokens: tokensUsed
           };
-        }
+        }))
+      );
 
-        // OpenAI readability validation (only if every word is initials)
-if (
-  process.env.OPENAI_API_KEY &&
-  finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))
-) {
-  const prompt = `Is "${finalResult.companyName}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
-  const response = await callOpenAI({ prompt, maxTokens: 40 });
-  tokensUsed += response.tokens || 0;
-
-  try {
-    const parsed = JSON.parse(response.output || "{}");
-
-    if (!parsed.isReadable && parsed.isConfident) {
-      const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
-
-      // Fallback safety net if name is missing entirely
-      if (!safeName) {
-        finalResult.companyName = "Generic Auto";
-        finalResult.confidenceScore = 50;
-        finalResult.flags.push("EmptyCompanyNameFallback");
-      } else {
-        const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
-        const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
-        finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
-        finalResult.flags.push("InitialsExpanded");
-        finalResult.confidenceScore -= 5;
-      }
+      successful.push(...chunkResults);
     }
-  } catch (err) {
-    finalResult.flags.push("OpenAIParseError");
-  }
-} // Add this closing brace to close the if block
 
-domainCache.set(domainKey, {
-  companyName: finalResult.companyName,
-  confidenceScore: finalResult.confidenceScore,
-  flags: finalResult.flags
-});
+    console.error(
+      `Batch complete: ${successful.length} enriched, ${manualReviewQueue.length} to review, ${fallbackTriggers.length} fallbacks, ${totalTokens} tokens used`
+    );
 
-totalTokens += tokensUsed;
-return {
-  domain,
-  companyName: finalResult.companyName,
-  confidenceScore: finalResult.confidenceScore,
-  flags: finalResult.flags,
-  rowNum,
-  tokens: tokensUsed
-};
-}))  
-
-    successful.push(...chunkResults);
-  }
-
-    console.log(
-    `Batch complete: ${successful.length} enriched, ${manualReviewQueue.length} to review, ${fallbackTriggers.length} fallbacks, ${totalTokens} tokens used`
-  );
-
-  return res.status(200).json({
-    successful,
-    manualReviewQueue,
-    fallbackTriggers,
-    totalTokens,
-    partial: false
-  });
+    return res.status(200).json({
+      successful,
+      manualReviewQueue,
+      fallbackTriggers,
+      totalTokens,
+      partial: false
+    });
   } catch (err) {
     console.error(`❌ Handler error: ${err.message}\n${err.stack}`);
     return res.status(500).json({ error: "Internal server error", details: err.message });
