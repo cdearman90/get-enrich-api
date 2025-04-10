@@ -202,8 +202,11 @@ const processLead = async (lead, domainCache, fallbackTriggers) => {
   }
 
   // Add to manual review if the result is weak
-  const reviewFlags = ["TooGeneric", "CityNameOnly", "PossibleAbbreviation", "NotPossessiveFriendly"];
-  if (finalResult.confidenceScore < 75 || finalResult.flags.some((f) => reviewFlags.includes(f))) {
+  const reviewFlags = ["TooGeneric", "CityNameOnly", "PossibleAbbreviation"];
+  if (
+    finalResult.confidenceScore < 75 ||
+    finalResult.flags.some((f) => reviewFlags.includes(f))
+  ) {
     console.error(`Flagging for manual review: ${JSON.stringify(finalResult)}`);
     return {
       manualReview: {
@@ -222,49 +225,6 @@ const processLead = async (lead, domainCache, fallbackTriggers) => {
       },
       tokensUsed,
     };
-  }
-
-  // OpenAI readability validation (only if every word is initials)
-  if (
-    process.env.OPENAI_API_KEY &&
-    typeof finalResult.name === "string" &&
-    finalResult.name.split(" ").every((w) => /^[A-Z]{1,3}$/.test(w))
-  ) {
-    console.error(`Triggering OpenAI readability validation for ${finalResult.name}`);
-    const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${finalResult.name}" is readable and natural in the sentence "{Company}'s CRM isn't broken—it’s bleeding". Do not include any additional text outside the JSON object.`;
-    try {
-      const response = await callOpenAI({ prompt, maxTokens: 40 });
-      tokensUsed += response.tokens || 0;
-
-      let parsed;
-      try {
-        console.error(`Raw OpenAI response for ${domain}: ${response.output}`);
-        parsed = JSON.parse(response.output || "{}");
-      } catch (err) {
-        console.error(`Failed to parse OpenAI response for ${domain}: ${err.message}`);
-        parsed = { isReadable: true, isConfident: false };
-      }
-
-      if (!parsed.isReadable && parsed.isConfident) {
-        const safeName = typeof finalResult.name === "string" ? finalResult.name : "";
-        if (!safeName) {
-          finalResult.name = "Generic Auto";
-          finalResult.confidenceScore = 50;
-          finalResult.flags.push("EmptyCompanyNameFallback");
-        } else {
-          const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
-          const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
-          finalResult.name = `${fallbackCity} ${fallbackBrand}`;
-          finalResult.flags.push("InitialsExpanded");
-          finalResult.confidenceScore -= 5;
-        }
-      }
-    } catch (err) {
-      console.error(`OpenAI readability check failed for ${domain}: ${err.message}`);
-      finalResult.flags.push("OpenAIError");
-    }
-  } else {
-    console.error(`Skipping OpenAI readability validation for ${finalResult.name}`);
   }
 
   // Cache the final result
