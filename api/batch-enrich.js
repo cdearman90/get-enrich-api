@@ -252,57 +252,53 @@ export default async function handler(req, res) {
         }
 
         // OpenAI readability validation (only if every word is initials)
-        if (
-          process.env.OPENAI_API_KEY &&
-          finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))
-        ) {
-          const prompt = `Is "${finalResult.companyName}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
-          const response = await callOpenAI({ prompt, maxTokens: 40 });
-          tokensUsed += response.tokens || 0;
+if (
+  process.env.OPENAI_API_KEY &&
+  finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))
+) {
+  const prompt = `Is "${finalResult.companyName}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+  const response = await callOpenAI({ prompt, maxTokens: 40 });
+  tokensUsed += response.tokens || 0;
 
-try {
-  const parsed = JSON.parse(response.output || "{}");
+  try {
+    const parsed = JSON.parse(response.output || "{}");
 
-  if (!parsed.isReadable && parsed.isConfident) {
-    const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
+    if (!parsed.isReadable && parsed.isConfident) {
+      const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
 
-    // Fallback safety net if name is missing entirely
-    if (!safeName) {
-      finalResult.companyName = "Generic Auto";
-      finalResult.confidenceScore = 50;
-      finalResult.flags.push("EmptyCompanyNameFallback");
-    } else {
-      const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
-      const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
-      finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
-      finalResult.flags.push("InitialsExpanded");
-      finalResult.confidenceScore -= 5;
+      // Fallback safety net if name is missing entirely
+      if (!safeName) {
+        finalResult.companyName = "Generic Auto";
+        finalResult.confidenceScore = 50;
+        finalResult.flags.push("EmptyCompanyNameFallback");
+      } else {
+        const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
+        const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
+        finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
+        finalResult.flags.push("InitialsExpanded");
+        finalResult.confidenceScore -= 5;
+      }
     }
+  } catch (err) {
+    finalResult.flags.push("OpenAIParseError");
   }
-} catch (err) {
-  finalResult.flags.push("OpenAIParseError");
-}
+} // Add this closing brace to close the if block
 
+domainCache.set(domainKey, {
+  companyName: finalResult.companyName,
+  confidenceScore: finalResult.confidenceScore,
+  flags: finalResult.flags
+});
 
-
-
-        domainCache.set(domainKey, {
-          companyName: finalResult.companyName,
-          confidenceScore: finalResult.confidenceScore,
-          flags: finalResult.flags
-        });
-
-        totalTokens += tokensUsed;
-        return {
-          domain,
-          companyName: finalResult.companyName,
-          confidenceScore: finalResult.confidenceScore,
-          flags: finalResult.flags,
-          rowNum,
-          tokens: tokensUsed
-        };
-      }))
-    );
+totalTokens += tokensUsed;
+return {
+  domain,
+  companyName: finalResult.companyName,
+  confidenceScore: finalResult.confidenceScore,
+  flags: finalResult.flags,
+  rowNum,
+  tokens: tokensUsed
+};
 
     successful.push(...chunkResults);
   }
