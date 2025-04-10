@@ -28,19 +28,6 @@ const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.ap
 const FALLBACK_API_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
 const FALLBACK_API_TIMEOUT_MS = parseInt(process.env.FALLBACK_API_TIMEOUT_MS, 10) || 6000;
 
-const callWithRetries = async (fn, retries = 3, delay = 1000) => {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      return { result: await fn(), attempt };
-    } catch (err) {
-      if (attempt === retries) throw err;
-      console.error(`Retry ${attempt} failed: ${err.message}`);
-      await new Promise((res) => setTimeout(res, delay));
-    }
-  }
-  return null;
-};
-
 const callFallbackAPI = async (domain, rowNum) => {
   try {
     const controller = new AbortController();
