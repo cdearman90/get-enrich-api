@@ -260,11 +260,12 @@ export default async function handler(req, res) {
           const response = await callOpenAI({ prompt, maxTokens: 40 });
           tokensUsed += response.tokens || 0;
 
-    try {
-      const parsed = JSON.parse(response.output || "{}");
-      if (!parsed.isReadable && parsed.isConfident) {
-        const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
-    
+try {
+  const parsed = JSON.parse(response.output || "{}");
+
+  if (!parsed.isReadable && parsed.isConfident) {
+    const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
+
     // Fallback safety net if name is missing entirely
     if (!safeName) {
       finalResult.companyName = "Generic Auto";
@@ -281,6 +282,7 @@ export default async function handler(req, res) {
 } catch (err) {
   finalResult.flags.push("OpenAIParseError");
 }
+
 
 
         domainCache.set(domainKey, {
