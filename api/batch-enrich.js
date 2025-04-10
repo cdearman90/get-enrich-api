@@ -235,6 +235,7 @@ const processLead = async (lead, domainCache, fallbackTriggers) => {
 
       let parsed;
       try {
+        console.error(`Raw OpenAI response for ${domain}: ${response.output}`); // Log the raw response for debugging
         parsed = JSON.parse(response.output || "{}");
       } catch (err) {
         console.error(`Failed to parse OpenAI response for ${domain}: ${err.message}`);
@@ -287,6 +288,12 @@ export default async function handler(req, res) {
   try {
     console.error("🧠 batch-enrich.js v4.2.0 – Domain Processing Start");
 
+    // Check for required environment variables
+    if (!process.env.OPENAI_API_KEY) {
+      console.error("❌ Missing OPENAI_API_KEY env var");
+      return res.status(500).json({ error: "Missing OpenAI API key" });
+    }
+
     // Parse the request body
     const raw = await streamToString(req);
     if (!raw) {
@@ -333,7 +340,7 @@ export default async function handler(req, res) {
           manualReviewQueue.push(manualReview);
         }
         successful.push(result);
-        totalTokens += tokensUsed;
+        totalTokens += tokensUsed || 0; // Ensure tokensUsed is a number
       });
     }
 
@@ -345,7 +352,7 @@ export default async function handler(req, res) {
       successful,
       manualReviewQueue,
       fallbackTriggers,
-      totalTokens,
+      totalTokens: totalTokens || 0, // Ensure totalTokens is a number
       partial: false,
     });
   } catch (err) {
