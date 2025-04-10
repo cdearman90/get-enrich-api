@@ -9,7 +9,51 @@ const PROCESSING_TIMEOUT_MS = 18000;
 
 // Known sets (for local expansion, aligned with humanize.js)
 const KNOWN_CITY_SHORT_NAMES = {
+  "las vegas": "Vegas", "los angeles": "LA", "new york": "NY", "new orleans": "N.O.", "miami lakes": "ML",
+  "south charlotte": "SC", "huntington beach": "HB", "west springfield": "WS", "san leandro": "SL",
+  "san francisco": "SF", "san diego": "SD", "fort lauderdale": "FTL", "west palm beach": "WPB",
+  "palm beach gardens": "PBG", "st. louis": "STL", "st. petersburg": "St. Pete", "st. paul": "St. Paul",
+  "south bend": "SB", "north las vegas": "NLV", "north charleston": "NC", "southfield": "SF",
+  "college station": "CS", "lake havasu city": "LHC", "mount vernon": "MV", "port st. lucie": "PSL",
+  "panama city": "PC", "fort myers": "FM", "palm coast": "PCoast", "newport news": "NN",
+  "jacksonville beach": "Jax Beach", "west new york": "WNY", "elk grove": "EG", "palm springs": "PS",
+  "grand prairie": "GP", "palm bay": "PB", "st. augustine": "St. Aug", "boca raton": "Boca",
+  "bonita springs": "Bonita", "north miami": "N. Miami", "south miami": "S. Miami", "pompano beach": "Pompano",
+  "boynton beach": "Boynton", "delray beach": "Delray", "hallandale beach": "Hallandale", "winter haven": "WH",
+  "cape coral": "CC", "weston": "Weston", "north port": "NP", "port charlotte": "PC", "port orange": "PO",
+  "palm harbor": "PH", "north lauderdale": "NL", "north fort myers": "NFM",
+  // Fallback initials
+  "west chester": "WC", "white plains": "WP", "west covina": "WC", "west hollywood": "WH",
+  "east haven": "EH", "east orange": "EO", "north bergen": "NB", "north ridgeville": "NR",
+  "north olmsted": "NO", "north royalton": "NR", "north huntingdon": "NH", "north augusta": "NA",
+  "south gate": "SG", "south jordan": "SJ", "south ogden": "SO", "south el monte": "SEM",
+  "south san francisco": "SSF", "south boston": "SB", "mount prospect": "MP", "mount pleasant": "MP",
+  "mount laurel": "ML", "fort worth": "FW", "fort collins": "FC", "fort wayne": "FW", "fort smith": "FS",
+  "fort pierce": "FP", "fort dodge": "FD", "fort payne": "FP", "new rochelle": "NR", "new bedford": "NB",
+  "new britain": "NB", "new haven": "NH", "newark": "Newark", "newport": "Newport", "bay st. louis": "BSL",
+  "union park": "Union Park"
   "las vegas": "Vegas", "los angeles": "LA", "new york": "NY", "new orleans": "N.O.", "miami lakes": "Miami Lakes",
+  "south charlotte": "South Charlotte", "huntington beach": "HB", "west springfield": "West Springfield", "san leandro": "San Leandro",
+  "san francisco": "SF", "san diego": "SD", "fort lauderdale": "FTL", "west palm beach": "WPB",
+  "palm beach gardens": "PBG", "st. louis": "STL", "st. petersburg": "St. Pete", "st. paul": "St. Paul",
+  "south bend": "South Bend", "north las vegas": "North Las Vegas", "north charleston": "North Charleston", "southfield": "Southfield",
+  "college station": "College Station", "lake havasu city": "Lake Havasu City", "mount vernon": "Mount Vernon", "port st. lucie": "Port St. Lucie",
+  "panama city": "Panama City", "fort myers": "Fort Myers", "palm coast": "Palm Coast", "newport news": "Newport News",
+  "jacksonville beach": "Jax Beach", "west new york": "West New York", "elk grove": "Elk Grove", "palm springs": "Palm Springs",
+  "grand prairie": "Grand Prairie", "palm bay": "Palm Bay", "st. augustine": "St. Augustine", "boca raton": "Boca",
+  "bonita springs": "Bonita", "north miami": "N. Miami", "south miami": "S. Miami", "pompano beach": "Pompano",
+  "boynton beach": "Boynton", "delray beach": "Delray", "hallandale beach": "Hallandale", "winter haven": "Winter Haven",
+  "cape coral": "Cape Coral", "weston": "Weston", "north port": "North Port", "port charlotte": "Port Charlotte", "port orange": "Port Orange",
+  "palm harbor": "Palm Harbor", "north lauderdale": "North Lauderdale", "north fort myers": "North Fort Myers",
+  "west chester": "West Chester", "white plains": "White Plains", "west covina": "West Covina", "west hollywood": "West Hollywood",
+  "east haven": "East Haven", "east orange": "East Orange", "north bergen": "North Bergen", "north ridgeville": "North Ridgeville",
+  "north olmsted": "North Olmsted", "north royalton": "North Royalton", "north huntingdon": "North Huntingdon", "north augusta": "North Augusta",
+  "south gate": "South Gate", "south jordan": "South Jordan", "south ogden": "South Ogden", "south el monte": "South El Monte",
+  "south san francisco": "South San Francisco", "south boston": "South Boston", "mount prospect": "Mount Prospect", "mount pleasant": "Mount Pleasant",
+  "mount laurel": "Mount Laurel", "fort worth": "Fort Worth", "fort collins": "Fort Collins", "fort wayne": "Fort Wayne", "fort smith": "Fort Smith",
+  "fort pierce": "Fort Pierce", "fort dodge": "Fort Dodge", "fort payne": "Fort Payne", "new rochelle": "New Rochelle", "new bedford": "New Bedford",
+  "new britain": "New Britain", "new haven": "New Haven", "newark": "Newark", "newport": "Newport", "bay st. louis": "Bay St. Louis",
+  "union park": "Union Park",
   "orlando": "Orlando", "new york city": "NYC", "austin": "Austin",
   "brookhaven": "Brookhaven", "redlands": "Redlands", "lakeway": "Lakeway",
   "killeen": "Killeen", "tuscaloosa": "Tuscaloosa", "milwaukeenorth": "Milwaukee North",
@@ -21,7 +65,21 @@ const KNOWN_CITY_SHORT_NAMES = {
 };
 
 const BRAND_MAPPING = {
-  "mercedes-benz": "M.B.", "volkswagen": "VW", "chevrolet": "Chevy", "toyota": "Toyota", "ford": "Ford"
+  "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
+  "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
+  "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevy",
+  "chevvy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
+  "dodge": "Dodge", "eagle": "Eagle", "ferrari": "Ferrari", "fiat": "Fiat", "ford": "Ford", "genesis": "Genesis",
+  "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
+  "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
+  "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
+  "lincoln": "Lincoln", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
+  "mb": "M.B.", "merc": "M.B.", "mercedes": "M.B.", "mercedes-benz": "M.B.", "mercedesbenz": "M.B.", "merk": "M.B.",
+  "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile", "plymouth": "Plymouth",
+  "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram", "rivian": "Rivian",
+  "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion", "smart": "Smart",
+  "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
+  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW"
 };
 
 // Utility to limit concurrency for parallel operations
