@@ -586,7 +586,7 @@ export function extractBrandOfCityFromDomain(domain) {
   };
 }
 
-export async function humanizeName(inputName, domain, addPossessiveFlag = false, excludeCarBrandIfPossessiveFriendly = true) {
+async function humanizeName(inputName, domain, addPossessiveFlag = false, excludeCarBrandIfPossessiveFriendly = true) {
   try {
     const domainLower = domain.toLowerCase();
     console.log(`🔍 Processing domain: ${domain}`);
