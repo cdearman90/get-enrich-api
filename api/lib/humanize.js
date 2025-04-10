@@ -435,7 +435,6 @@ const TEST_CASE_OVERRIDES = {
   "toyotaofgreenwich.com": "Greenwich Toyota"
 };
 
-
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "cars", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
 
 function containsCarBrand(name) {
@@ -595,13 +594,13 @@ function extractBrandOfCityFromDomain(domain) {
 async function humanizeName(inputName, domain, addPossessiveFlag = false, excludeCarBrandIfPossessiveFriendly = true) {
   try {
     const domainLower = domain.toLowerCase();
-    console.log(`🔍 Processing domain: ${domain}`);
+    console.error(`🔍 Processing domain: ${domain}`);
 
     if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
       return { name: "", confidenceScore: 0, flags: ["NonDealership"], tokens: 0 };
     }
 
-    let { name, flags, confidence, brand, city } = extractBrandOfCityFromDomain(domainLower);
+    let { name, flags, brand } = extractBrandOfCityFromDomain(domainLower);
     let tokens = 0;
 
     name = capitalizeName(name);
@@ -633,7 +632,7 @@ async function humanizeName(inputName, domain, addPossessiveFlag = false, exclud
           if (!isHumanLike && isPossessiveFriendly) {
             name = prefix;
             flags.push("CarBrandExcluded");
-            confidence = confidence - 5;
+            confidenceScore = confidenceScore - 5;
           }
         }
       }
@@ -708,7 +707,7 @@ async function humanizeName(inputName, domain, addPossessiveFlag = false, exclud
     if (confidenceScore < 75) {
       console.warn(`⚠️ Low confidence for ${domain}: ${name} (${confidenceScore}) - flagged`);
     } else {
-      console.log(`✅ Acceptable result: ${name} (${confidenceScore})`);
+      console.error(`✅ Acceptable result: ${name} (${confidenceScore})`);
     }
 
     return {
@@ -733,7 +732,7 @@ async function checkPossessiveWithOpenAI(name) {
       isConfident: !!parsed.isConfident,
       tokens: response.tokens || 0
     };
-  } catch (err) {
+  } catch (_err) {
     console.warn(`🟡 Failed to parse OpenAI JSON: ${response.output}`);
     return { isReadable: false, isConfident: false, tokens: response.tokens || 0 };
   }
