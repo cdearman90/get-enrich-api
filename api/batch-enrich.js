@@ -4,6 +4,18 @@
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
+// Constants for API configuration
+const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
+const FALLBACK_API_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
+const FALLBACK_API_TIMEOUT_MS = parseInt(process.env.FALLBACK_API_TIMEOUT_MS, 10) || 6000;
+const BATCH_SIZE = 5;
+const CONCURRENCY_LIMIT = 5;
+const PROCESSING_TIMEOUT_MS = 18000;
+
+// Cache for storing processed domains
+const domainCache = new Map();
+
+// Utility to limit concurrency for parallel operations
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
@@ -22,12 +34,24 @@ const pLimit = (concurrency) => {
   });
 };
 
-const domainCache = new Map();
+// Utility to convert a stream to a string
+const streamToString = (req) =>
+  new Promise((resolve, reject) => {
+    const chunks = [];
+    const timeout = setTimeout(() => reject(new Error("Stream timeout")), 5000);
 
-const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
-const FALLBACK_API_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
-const FALLBACK_API_TIMEOUT_MS = parseInt(process.env.FALLBACK_API_TIMEOUT_MS, 10) || 6000;
+    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("end", () => {
+      clearTimeout(timeout);
+      resolve(Buffer.concat(chunks).toString("utf-8"));
+    });
+    req.on("error", (err) => {
+      clearTimeout(timeout);
+      reject(err);
+    });
+  });
 
+// Fallback API call to enrich a domain
 const callFallbackAPI = async (domain, rowNum) => {
   try {
     const controller = new AbortController();
@@ -37,7 +61,7 @@ const callFallbackAPI = async (domain, rowNum) => {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ leads: [{ domain, rowNum }] }),
-      signal: controller.signal
+      signal: controller.signal,
     });
 
     clearTimeout(timeout);
@@ -55,10 +79,10 @@ const callFallbackAPI = async (domain, rowNum) => {
       confidenceScore: result.confidenceScore || 0,
       flags: Array.isArray(result.flags) ? result.flags : ["InvalidFallbackResponse"],
       tokens: result.tokens || 0,
-      rowNum
+      rowNum,
     };
   } catch (err) {
-    console.error(`Fallback API failed: ${err.message}`);
+    console.error(`Fallback API failed for domain ${domain}: ${err.message}`);
     const local = await humanizeName(domain, domain, false, true);
     return {
       domain,
@@ -67,228 +91,233 @@ const callFallbackAPI = async (domain, rowNum) => {
       flags: [...(local.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"],
       tokens: local.tokens || 0,
       rowNum,
-      error: err.message
+      error: err.message,
     };
   }
 };
 
-const streamToString = async (req) => {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    const timeout = setTimeout(() => reject(new Error("Stream timeout")), 5000);
+// Validate incoming leads and return a list of valid leads
+const validateLeads = (leads) => {
+  const validatedLeads = [];
+  const validationErrors = [];
 
-    req.on("data", (chunk) => chunks.push(chunk));
-    req.on("end", () => {
-      clearTimeout(timeout);
-      resolve(Buffer.concat(chunks).toString("utf-8"));
-    });
-    req.on("error", (err) => {
-      clearTimeout(timeout);
-      reject(err);
-    });
+  if (!Array.isArray(leads)) {
+    throw new Error("Leads must be an array");
+  }
+
+  leads.forEach((lead, index) => {
+    if (!lead || typeof lead !== "object") {
+      validationErrors.push(`Index ${index} not object`);
+      return;
+    }
+
+    const domain = (lead.domain || "").trim().toLowerCase();
+    if (!domain) {
+      validationErrors.push(`Index ${index} missing domain`);
+      return;
+    }
+
+    validatedLeads.push({ domain, rowNum: lead.rowNum || index + 1 });
   });
+
+  return { validatedLeads, validationErrors };
 };
 
+// Process a single lead (domain enrichment logic)
+const processLead = async (lead, domainCache, fallbackTriggers) => {
+  const { domain, rowNum } = lead;
+  const domainKey = domain.toLowerCase();
+
+  // Check if the domain is already cached
+  if (domainCache.has(domainKey)) {
+    const cached = domainCache.get(domainKey);
+    return { ...cached, rowNum, domain };
+  }
+
+  let finalResult;
+  let tokensUsed = 0;
+
+  const match = extractBrandOfCityFromDomain(domainKey);
+  const brandDetected = match.brand || null;
+  const cityDetected = match.city || null;
+
+  // Attempt to humanize the domain name
+  try {
+    finalResult = await humanizeName(domain, domain, false, true);
+    tokensUsed = finalResult.tokens || 0;
+  } catch (_err) {
+    console.error(`humanizeName error for domain ${domain}: ${_err.message}`);
+    finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
+  }
+
+  // Check quality of the result
+  const criticalFlags = ["TooGeneric", "CityNameOnly", "FallbackFailed", "Skipped"];
+  const isAcceptable = finalResult.confidenceScore >= 75 && !finalResult.flags.some((f) => criticalFlags.includes(f));
+
+  if (isAcceptable) {
+    domainCache.set(domainKey, {
+      companyName: finalResult.name,
+      confidenceScore: finalResult.confidenceScore,
+      flags: finalResult.flags,
+    });
+  } else {
+    const primary = { ...finalResult };
+    const fallback = await callFallbackAPI(domain, rowNum);
+
+    if (fallback.companyName && fallback.confidenceScore >= 75 && !fallback.flags.some((f) => criticalFlags.includes(f))) {
+      finalResult = {
+        ...fallback,
+        flags: [...(fallback.flags || []), "FallbackAPIUsed"],
+        rowNum,
+      };
+      tokensUsed += fallback.tokens || 0;
+    } else {
+      finalResult.flags.push("FallbackAPIFailed");
+      fallbackTriggers.push({
+        domain,
+        rowNum,
+        reason: "FallbackAPIFailed",
+        details: {
+          primary: {
+            name: primary.name,
+            confidenceScore: primary.confidenceScore,
+            flags: primary.flags,
+          },
+          fallbackScore: fallback.confidenceScore,
+          fallbackFlags: fallback.flags,
+          brand: brandDetected,
+          city: cityDetected,
+        },
+        tokens: tokensUsed,
+      });
+    }
+  }
+
+  // Add to manual review if the result is weak
+  const reviewFlags = ["TooGeneric", "CityNameOnly", "PossibleAbbreviation", "NotPossessiveFriendly"];
+  if (finalResult.confidenceScore < 75 || finalResult.flags.some((f) => reviewFlags.includes(f))) {
+    return {
+      manualReview: {
+        domain,
+        name: finalResult.name,
+        confidenceScore: finalResult.confidenceScore,
+        flags: finalResult.flags,
+        rowNum,
+      },
+      result: {
+        domain,
+        companyName: finalResult.name || "",
+        confidenceScore: Math.max(finalResult.confidenceScore, 50),
+        flags: [...finalResult.flags, "LowConfidence"],
+        rowNum,
+      },
+      tokensUsed,
+    };
+  }
+
+  // OpenAI readability validation (only if every word is initials)
+  if (process.env.OPENAI_API_KEY && finalResult.companyName.split(" ").every((w) => /^[A-Z]{1,3}$/.test(w))) {
+    const prompt = `Is "${finalResult.companyName}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+    const response = await callOpenAI({ prompt, maxTokens: 40 });
+    tokensUsed += response.tokens || 0;
+
+    try {
+      const parsed = JSON.parse(response.output || "{}");
+
+      if (!parsed.isReadable && parsed.isConfident) {
+        const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
+
+        if (!safeName) {
+          finalResult.companyName = "Generic Auto";
+          finalResult.confidenceScore = 50;
+          finalResult.flags.push("EmptyCompanyNameFallback");
+        } else {
+          const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
+          const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
+          finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
+          finalResult.flags.push("InitialsExpanded");
+          finalResult.confidenceScore -= 5;
+        }
+      }
+    } catch (err) {
+      finalResult.flags.push("OpenAIParseError");
+    }
+  }
+
+  // Cache the final result
+  domainCache.set(domainKey, {
+    companyName: finalResult.companyName,
+    confidenceScore: finalResult.confidenceScore,
+    flags: finalResult.flags,
+  });
+
+  return {
+    manualReview: null,
+    result: {
+      domain,
+      companyName: finalResult.companyName,
+      confidenceScore: finalResult.confidenceScore,
+      flags: finalResult.flags,
+      rowNum,
+      tokens: tokensUsed,
+    },
+    tokensUsed,
+  };
+};
+
+// Main handler function for the API
 export default async function handler(req, res) {
   try {
     console.error("🧠 batch-enrich.js v4.2.0 – Domain Processing Start");
 
+    // Parse the request body
     const raw = await streamToString(req);
-    if (!raw) return res.status(400).json({ error: "Empty body" });
+    if (!raw) {
+      return res.status(400).json({ error: "Empty body" });
+    }
     const body = JSON.parse(raw);
 
-    const leads = body.leads || body.leadList || body.domains;
-    if (!Array.isArray(leads)) {
-      return res.status(400).json({ error: "Leads must be an array" });
-    }
-
-    const validatedLeads = [];
-    const validationErrors = [];
-
-    leads.forEach((lead, i) => {
-      if (!lead || typeof lead !== "object") {
-        validationErrors.push(`Index ${i} not object`);
-        return;
-      }
-
-      const domain = (lead.domain || "").trim().toLowerCase();
-      if (!domain) {
-        validationErrors.push(`Index ${i} missing domain`);
-        return;
-      }
-
-      validatedLeads.push({ domain, rowNum: lead.rowNum || i + 1 });
-    });
-
+    // Validate leads
+    const { validatedLeads, validationErrors } = validateLeads(body.leads || body.leadList || body.domains);
     if (validatedLeads.length === 0) {
       return res.status(400).json({ error: "No valid leads", details: validationErrors });
     }
 
-    const limit = pLimit(5);
+    const limit = pLimit(CONCURRENCY_LIMIT);
     const startTime = Date.now();
     const successful = [];
     const manualReviewQueue = [];
     const fallbackTriggers = [];
     let totalTokens = 0;
 
-    const BATCH_SIZE = 5;
+    // Process leads in chunks
     const chunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
       validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of chunks) {
-      if (Date.now() - startTime > 18000) {
-        return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
+      if (Date.now() - startTime > PROCESSING_TIMEOUT_MS) {
+        console.error("Processing timeout reached, returning partial results");
+        return res.status(200).json({
+          successful,
+          manualReviewQueue,
+          fallbackTriggers,
+          totalTokens,
+          partial: true,
+        });
       }
 
-      const chunkResults = await Promise.all(
-        chunk.map(lead => limit(async () => {
-          const { domain, rowNum } = lead;
-          const domainKey = domain.toLowerCase();
+      const results = await Promise.all(
+        chunk.map((lead) => limit(() => processLead(lead, domainCache, fallbackTriggers)))
+      );
 
-          if (domainCache.has(domainKey)) {
-            const cached = domainCache.get(domainKey);
-            return { ...cached, rowNum, domain };
-          }
-
-          let finalResult;
-          let tokensUsed = 0;
-
-          const match = extractBrandOfCityFromDomain(domainKey);
-          const brandDetected = match.brand || null;
-          const cityDetected = match.city || null;
-
-          try {
-            finalResult = await humanizeName(domain, domain, false, true);
-            tokensUsed = finalResult.tokens || 0;
-          } catch (_err) {
-            console.error(`humanizeName error: ${_err.message}`);
-            finalResult = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
-          }
-
-          // Check quality
-          const criticalFlags = ["TooGeneric", "CityNameOnly", "FallbackFailed", "Skipped"];
-          const isAcceptable = finalResult.confidenceScore >= 75 &&
-            !finalResult.flags.some(f => criticalFlags.includes(f));
-
-          if (isAcceptable) {
-            domainCache.set(domainKey, {
-              companyName: finalResult.name,
-              confidenceScore: finalResult.confidenceScore,
-              flags: finalResult.flags
-            });
-          } else {
-            const primary = { ...finalResult };
-            const fallback = await callFallbackAPI(domain, rowNum);
-
-            if (
-              fallback.companyName &&
-              fallback.confidenceScore >= 75 &&
-              !fallback.flags.some(f => criticalFlags.includes(f))
-            ) {
-              finalResult = {
-                ...fallback,
-                flags: [...(fallback.flags || []), "FallbackAPIUsed"],
-                rowNum
-              };
-              tokensUsed += fallback.tokens || 0;
-            } else {
-              finalResult.flags.push("FallbackAPIFailed");
-              fallbackTriggers.push({
-                domain,
-                rowNum,
-                reason: "FallbackAPIFailed",
-                details: {
-                  primary: {
-                    name: primary.name,
-                    confidenceScore: primary.confidenceScore,
-                    flags: primary.flags
-                  },
-                  fallbackScore: fallback.confidenceScore,
-                  fallbackFlags: fallback.flags,
-                  brand: brandDetected,
-                  city: cityDetected
-                },
-                tokens: tokensUsed
-              });
-            }
-          }
-
-          // Add to manual review if weak
-          const reviewFlags = ["TooGeneric", "CityNameOnly", "PossibleAbbreviation", "NotPossessiveFriendly"];
-          if (
-            finalResult.confidenceScore < 75 ||
-            finalResult.flags.some(f => reviewFlags.includes(f))
-          ) {
-            manualReviewQueue.push({
-              domain,
-              name: finalResult.name,
-              confidenceScore: finalResult.confidenceScore,
-              flags: finalResult.flags,
-              rowNum
-            });
-
-            finalResult = {
-              domain,
-              companyName: finalResult.name || "",
-              confidenceScore: Math.max(finalResult.confidenceScore, 50),
-              flags: [...finalResult.flags, "LowConfidence"],
-              rowNum
-            };
-          }
-
-          // OpenAI readability validation (only if every word is initials)
-          if (
-            process.env.OPENAI_API_KEY &&
-            finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))
-          ) {
-            const prompt = `Is "${finalResult.companyName}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
-            const response = await callOpenAI({ prompt, maxTokens: 40 });
-            tokensUsed += response.tokens || 0;
-
-            try {
-              const parsed = JSON.parse(response.output || "{}");
-
-              if (!parsed.isReadable && parsed.isConfident) {
-                const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
-
-                // Fallback safety net if name is missing entirely
-                if (!safeName) {
-                  finalResult.companyName = "Generic Auto";
-                  finalResult.confidenceScore = 50;
-                  finalResult.flags.push("EmptyCompanyNameFallback");
-                } else {
-                  const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
-                  const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
-                  finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
-                  finalResult.flags.push("InitialsExpanded");
-                  finalResult.confidenceScore -= 5;
-                }
-              }
-            } catch (err) {
-              finalResult.flags.push("OpenAIParseError");
-            }
-          }
-
-          domainCache.set(domainKey, {
-            companyName: finalResult.companyName,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags
-          });
-
-          totalTokens += tokensUsed;
-          return {
-            domain,
-            companyName: finalResult.companyName,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags,
-            rowNum,
-            tokens: tokensUsed
-          };
-        }))
-      ));
-
-      successful.push(...chunkResults);
+      results.forEach(({ manualReview, result, tokensUsed }) => {
+        if (manualReview) {
+          manualReviewQueue.push(manualReview);
+        }
+        successful.push(result);
+        totalTokens += tokensUsed;
+      });
     }
 
     console.error(
@@ -300,7 +329,7 @@ export default async function handler(req, res) {
       manualReviewQueue,
       fallbackTriggers,
       totalTokens,
-      partial: false
+      partial: false,
     });
   } catch (err) {
     console.error(`❌ Handler error: ${err.message}\n${err.stack}`);
@@ -311,6 +340,6 @@ export default async function handler(req, res) {
 // Disable body parser to handle stream manually
 export const config = {
   api: {
-    bodyParser: false
-  }
+    bodyParser: false,
+  },
 };
