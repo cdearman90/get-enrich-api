@@ -1,5 +1,5 @@
-// api/company-name-fallback.js — Version 1.0.21
-// April 15, 2025 - Fallback API for domain enrichment
+// api/company-name-fallback.js — Version 1.0.22
+// April 2025 - Fallback API for domain enrichment, aligned with humanize.js
 
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
@@ -8,8 +8,6 @@ import { callOpenAI } from "./lib/openai.js";
 const BATCH_SIZE = 5;
 const CONCURRENCY_LIMIT = 5;
 const PROCESSING_TIMEOUT_MS = 18000;
-const HUMANIZE_ATTEMPTS = 2;
-const HUMANIZE_RETRY_DELAY_MS = 500;
 
 // Utility to limit concurrency for parallel operations
 const pLimit = (concurrency) => {
@@ -79,33 +77,18 @@ const processLead = async (lead, fallbackTriggers) => {
   let tokensUsed = 0;
   let gptUsed = false;
 
-  const { brand: brandDetected, city: cityDetected } = extractBrandOfCityFromDomain(domainLower);
+  const match = extractBrandOfCityFromDomain(domainLower);
+  const brandDetected = match.brand || null;
+  const cityDetected = match.city || null;
 
   // Attempt to humanize the domain name with retries
-  for (let attempt = 1; attempt <= HUMANIZE_ATTEMPTS; attempt++) {
-    try {
-      result = await humanizeName(domainLower, domainLower, false, true);
-      tokensUsed = result.tokens || 0;
-      break;
-    } catch (err) {
-      console.error(`⚠️ Attempt ${attempt} failed for ${domain}: ${err.message}`);
-      if (attempt === HUMANIZE_ATTEMPTS) {
-        result = {
-          name: "",
-          confidenceScore: 0,
-          flags: ["ProcessingError"],
-          tokens: 0,
-        };
-        fallbackTriggers.push({
-          domain,
-          rowNum,
-          reason: "ProcessingError",
-          details: { error: err.message },
-          tokens: 0,
-        });
-      }
-      await new Promise((res) => setTimeout(res, HUMANIZE_RETRY_DELAY_MS));
-    }
+  try {
+    result = await humanizeName(domain, domain, false, true);
+    tokensUsed = result.tokens || 0;
+    console.error(`humanizeName result for ${domain}: ${JSON.stringify(result)}`);
+  } catch (_err) {
+    console.error(`humanizeName error for ${domain}: ${_err.message}`);
+    result = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
   }
 
   result.flags = Array.isArray(result.flags) ? result.flags : [];
@@ -113,20 +96,16 @@ const processLead = async (lead, fallbackTriggers) => {
 
   const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
   const forceReviewFlags = [
-    "TooGeneric",
-    "CityNameOnly",
-    "PossibleAbbreviation",
-    "BadPrefixOf",
-    "CarBrandSuffixRemaining",
-    "NotPossessiveFriendly",
-    "UnverifiedCity",
+    "TooGeneric", "CityNameOnly", "PossibleAbbreviation", "BadPrefixOf", "CarBrandSuffixRemaining",
+    "UnverifiedCity"
   ];
 
-  const isAcceptable = result.confidenceScore >= 75 && !result.flags.some((f) => criticalFlags.includes(f));
+  const isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
 
-  // OpenAI readability validation (only if every word is initials)
-  if (process.env.OPENAI_API_KEY && result.name.split(" ").every((w) => /^[A-Z]{1,3}$/.test(w))) {
-    const prompt = `Is "${result.name}" readable and natural as a company name in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+  // OpenAI readability validation (only if every word is 1–3 uppercase letters)
+  if (process.env.OPENAI_API_KEY && result.name.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
+    console.error(`Triggering OpenAI readability validation for ${result.name}`);
+    const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${result.name}" is readable and natural as a company name in the sentence "{Company}'s CRM isn't broken—it's bleeding". Do not include any additional text outside the JSON object.`;
     try {
       const response = await callOpenAI({ prompt, maxTokens: 40 });
       gptUsed = true;
@@ -134,7 +113,8 @@ const processLead = async (lead, fallbackTriggers) => {
 
       let parsed;
       try {
-        parsed = JSON.parse(response.output);
+        console.error(`Raw OpenAI response for ${domain}: ${response.output}`);
+        parsed = JSON.parse(response.output || "{}");
       } catch (err) {
         console.error(`Failed to parse OpenAI response for ${domain}: ${err.message}`);
         parsed = { isReadable: true, isConfident: false };
@@ -150,10 +130,11 @@ const processLead = async (lead, fallbackTriggers) => {
       console.error(`OpenAI readability check failed for ${domain}: ${err.message}`);
       result.flags.push("OpenAIError");
     }
+  } else {
+    console.error(`Skipping OpenAI readability validation for ${result.name}`);
   }
 
-  // Check if the result needs manual review
-  if (!isAcceptable || result.flags.some((f) => forceReviewFlags.includes(f))) {
+  if (!isAcceptable || result.flags.some(f => forceReviewFlags.includes(f))) {
     return {
       manualReview: {
         domain,
@@ -194,7 +175,7 @@ const processLead = async (lead, fallbackTriggers) => {
 // Main handler function for the API
 export default async function handler(req, res) {
   try {
-    console.error("🛟 batch-enrich-company-name-fallback.js v1.0.21");
+    console.error("🛟 company-name-fallback.js v1.0.22 – Fallback Processing Start");
 
     // Check for required environment variables
     if (!process.env.OPENAI_API_KEY) {
@@ -250,7 +231,7 @@ export default async function handler(req, res) {
           manualReviewQueue.push(manualReview);
         }
         successful.push(result);
-        totalTokens += tokensUsed;
+        totalTokens += tokensUsed || 0;
       });
     }
 
@@ -267,7 +248,7 @@ export default async function handler(req, res) {
     });
   } catch (err) {
     console.error(`❌ Fallback handler failed: ${err.message}\n${err.stack}`);
-    return res.status(500).json({ error: "Server error", details: err.message });
+    return res.status(500).json({ error: "Internal server error", details: err.message });
   }
 }
 
