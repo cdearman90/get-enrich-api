@@ -286,7 +286,7 @@ export default async function handler(req, res) {
             tokens: tokensUsed
           };
         }))
-      );
+      ));
 
       successful.push(...chunkResults);
     }
