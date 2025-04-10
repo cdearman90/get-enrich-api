@@ -440,7 +440,7 @@ const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "cars", "motors", "dealer
 
 // -- Utilities --
 
-export function normalizeText(name) {
+function normalizeText(name) {
   return name
     .replace(/\.(com|org|net|co\.uk)$/, "")
     .replace(/['".,-]+/g, "")
@@ -450,7 +450,7 @@ export function normalizeText(name) {
     .filter(Boolean);
 }
 
-export function capitalizeName(words) {
+function capitalizeName(words) {
   if (typeof words === "string") words = words.split(/\s+/);
   return words
     .map((word, i) => {
@@ -462,11 +462,11 @@ export function capitalizeName(words) {
     .join(" ");
 }
 
-export function applyCityShortName(city) {
+function applyCityShortName(city) {
   return KNOWN_CITY_SHORT_NAMES[city.toLowerCase()] || capitalizeName(city);
 }
 
-export function expandAbbreviations(name) {
+function expandAbbreviations(name) {
   const words = name.split(" ");
   if (words.length === 2 && /^[A-Z]{1,3}$/.test(words[0]) && /^[A-Z]{2,}$/.test(words[1])) {
     const prefix = ABBREVIATION_EXPANSIONS[words[0].toLowerCase()] || `${words[0]} Auto`;
@@ -476,7 +476,7 @@ export function expandAbbreviations(name) {
   return name;
 }
 
-export function earlyCompoundSplit(input) {
+function earlyCompoundSplit(input) {
   let result = input
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
@@ -517,7 +517,7 @@ export function earlyCompoundSplit(input) {
     .join(" ");
 }
 
-export function calculateConfidenceScore(name, flags) {
+function calculateConfidenceScore(name, flags) {
   let score = 100;
   if (flags.includes("PatternMatched")) score += 10;
   if (flags.includes("ProperNounMatched")) score += 5;
@@ -533,7 +533,7 @@ export function calculateConfidenceScore(name, flags) {
   return Math.max(50, score);
 }
 
-export function extractBrandOfCityFromDomain(domain) {
+function extractBrandOfCityFromDomain(domain) {
   const domainLower = domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "");
   const flags = [];
 
@@ -586,7 +586,7 @@ export function extractBrandOfCityFromDomain(domain) {
   };
 }
 
-async function humanizeName(inputName, domain, addPossessiveFlag = false, excludeCarBrandIfPossessiveFriendly = true) {
+function humanizeName(inputName, domain, addPossessiveFlag = false, excludeCarBrandIfPossessiveFriendly = true) {
   try {
     const domainLower = domain.toLowerCase();
     console.log(`🔍 Processing domain: ${domain}`);
