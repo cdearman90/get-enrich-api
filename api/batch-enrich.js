@@ -299,6 +299,7 @@ return {
   rowNum,
   tokens: tokensUsed
 };
+}))  
 
     successful.push(...chunkResults);
   }
