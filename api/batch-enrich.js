@@ -127,16 +127,10 @@ const validateLeads = (leads) => {
 const processLead = async (lead, domainCache, fallbackTriggers) => {
   const { domain, rowNum } = lead;
   const domainKey = domain.toLowerCase();
-
-  // Check if the domain is already cached
-  if (domainCache.has(domainKey)) {
-    const cached = domainCache.get(domainKey);
-    return { ...cached, rowNum, domain };
-  }
+  console.error(`🌀 Processing row ${rowNum}: ${domain}`);
 
   let finalResult;
   let tokensUsed = 0;
-
   const match = extractBrandOfCityFromDomain(domainKey);
   const brandDetected = match.brand || null;
   const cityDetected = match.city || null;
@@ -216,37 +210,47 @@ const processLead = async (lead, domainCache, fallbackTriggers) => {
   }
 
   // OpenAI readability validation (only if every word is initials)
-  if (process.env.OPENAI_API_KEY && finalResult.companyName.split(" ").every((w) => /^[A-Z]{1,3}$/.test(w))) {
-    const prompt = `Is "${finalResult.companyName}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
-    const response = await callOpenAI({ prompt, maxTokens: 40 });
-    tokensUsed += response.tokens || 0;
-
+  if (
+    process.env.OPENAI_API_KEY &&
+    typeof finalResult.name === "string" &&
+    finalResult.name.split(" ").every((w) => /^[A-Z]{1,3}$/.test(w))
+  ) {
+    const prompt = `Is "${finalResult.name}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
     try {
-      const parsed = JSON.parse(response.output || "{}");
+      const response = await callOpenAI({ prompt, maxTokens: 40 });
+      tokensUsed += response.tokens || 0;
+
+      let parsed;
+      try {
+        parsed = JSON.parse(response.output || "{}");
+      } catch (err) {
+        console.error(`Failed to parse OpenAI response for ${domain}: ${err.message}`);
+        parsed = { isReadable: true, isConfident: false };
+      }
 
       if (!parsed.isReadable && parsed.isConfident) {
-        const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
-
+        const safeName = typeof finalResult.name === "string" ? finalResult.name : "";
         if (!safeName) {
-          finalResult.companyName = "Generic Auto";
+          finalResult.name = "Generic Auto";
           finalResult.confidenceScore = 50;
           finalResult.flags.push("EmptyCompanyNameFallback");
         } else {
           const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
           const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
-          finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
+          finalResult.name = `${fallbackCity} ${fallbackBrand}`;
           finalResult.flags.push("InitialsExpanded");
           finalResult.confidenceScore -= 5;
         }
       }
     } catch (err) {
-      finalResult.flags.push("OpenAIParseError");
+      console.error(`OpenAI readability check failed for ${domain}: ${err.message}`);
+      finalResult.flags.push("OpenAIError");
     }
   }
 
   // Cache the final result
   domainCache.set(domainKey, {
-    companyName: finalResult.companyName,
+    companyName: finalResult.name,
     confidenceScore: finalResult.confidenceScore,
     flags: finalResult.flags,
   });
@@ -255,7 +259,7 @@ const processLead = async (lead, domainCache, fallbackTriggers) => {
     manualReview: null,
     result: {
       domain,
-      companyName: finalResult.companyName,
+      companyName: finalResult.name,
       confidenceScore: finalResult.confidenceScore,
       flags: finalResult.flags,
       rowNum,
