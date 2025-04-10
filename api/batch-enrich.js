@@ -260,21 +260,28 @@ export default async function handler(req, res) {
           const response = await callOpenAI({ prompt, maxTokens: 40 });
           tokensUsed += response.tokens || 0;
 
-          try {
-            const parsed = JSON.parse(response.output || "{}");
-            if (!parsed.isReadable && parsed.isConfident) {
-            const nameToSplit = finalResult.companyName || "";
-            const safeName = finalResult.companyName || "";
-            const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
-            const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
-              finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
-              finalResult.flags.push("InitialsExpanded");
-              finalResult.confidenceScore -= 5;
-            }
-          } catch (err) {
-            finalResult.flags.push("OpenAIParseError");
-          }
-        }
+    try {
+      const parsed = JSON.parse(response.output || "{}");
+      if (!parsed.isReadable && parsed.isConfident) {
+        const safeName = typeof finalResult.companyName === "string" ? finalResult.companyName : "";
+    
+    // Fallback safety net if name is missing entirely
+    if (!safeName) {
+      finalResult.companyName = "Generic Auto";
+      finalResult.confidenceScore = 50;
+      finalResult.flags.push("EmptyCompanyNameFallback");
+    } else {
+      const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : safeName.split(" ")[0];
+      const fallbackBrand = brandDetected || safeName.split(" ")[1] || "Auto";
+      finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
+      finalResult.flags.push("InitialsExpanded");
+      finalResult.confidenceScore -= 5;
+    }
+  }
+} catch (err) {
+  finalResult.flags.push("OpenAIParseError");
+}
+
 
         domainCache.set(domainKey, {
           companyName: finalResult.companyName,
