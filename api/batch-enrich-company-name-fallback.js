@@ -1,4 +1,4 @@
-// api/company-name-fallback.js — Version 1.0.24
+// api/company-name-fallback.js — Version 1.0.25
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
@@ -7,80 +7,7 @@ const BATCH_SIZE = 10;
 const CONCURRENCY_LIMIT = 5;
 const PROCESSING_TIMEOUT_MS = 18000;
 
-// Known sets (for local expansion, aligned with humanize.js)
-const KNOWN_CITY_SHORT_NAMES = {
-  "las vegas": "Vegas", "los angeles": "LA", "new york": "NY", "new orleans": "N.O.", "miami lakes": "ML",
-  "south charlotte": "SC", "huntington beach": "HB", "west springfield": "WS", "san leandro": "SL",
-  "san francisco": "SF", "san diego": "SD", "fort lauderdale": "FTL", "west palm beach": "WPB",
-  "palm beach gardens": "PBG", "st. louis": "STL", "st. petersburg": "St. Pete", "st. paul": "St. Paul",
-  "south bend": "SB", "north las vegas": "NLV", "north charleston": "NC", "southfield": "SF",
-  "college station": "CS", "lake havasu city": "LHC", "mount vernon": "MV", "port st. lucie": "PSL",
-  "panama city": "PC", "fort myers": "FM", "palm coast": "PCoast", "newport news": "NN",
-  "jacksonville beach": "Jax Beach", "west new york": "WNY", "elk grove": "EG", "palm springs": "PS",
-  "grand prairie": "GP", "palm bay": "PB", "st. augustine": "St. Aug", "boca raton": "Boca",
-  "bonita springs": "Bonita", "north miami": "N. Miami", "south miami": "S. Miami", "pompano beach": "Pompano",
-  "boynton beach": "Boynton", "delray beach": "Delray", "hallandale beach": "Hallandale", "winter haven": "WH",
-  "cape coral": "CC", "weston": "Weston", "north port": "NP", "port charlotte": "PC", "port orange": "PO",
-  "palm harbor": "PH", "north lauderdale": "NL", "north fort myers": "NFM",
-  // Fallback initials
-  "west chester": "WC", "white plains": "WP", "west covina": "WC", "west hollywood": "WH",
-  "east haven": "EH", "east orange": "EO", "north bergen": "NB", "north ridgeville": "NR",
-  "north olmsted": "NO", "north royalton": "NR", "north huntingdon": "NH", "north augusta": "NA",
-  "south gate": "SG", "south jordan": "SJ", "south ogden": "SO", "south el monte": "SEM",
-  "south san francisco": "SSF", "south boston": "SB", "mount prospect": "MP", "mount pleasant": "MP",
-  "mount laurel": "ML", "fort worth": "FW", "fort collins": "FC", "fort wayne": "FW", "fort smith": "FS",
-  "fort pierce": "FP", "fort dodge": "FD", "fort payne": "FP", "new rochelle": "NR", "new bedford": "NB",
-  "new britain": "NB", "new haven": "NH", "newark": "Newark", "newport": "Newport", "bay st. louis": "BSL",
-  "union park": "Union Park"
-  "las vegas": "Vegas", "los angeles": "LA", "new york": "NY", "new orleans": "N.O.", "miami lakes": "Miami Lakes",
-  "south charlotte": "South Charlotte", "huntington beach": "HB", "west springfield": "West Springfield", "san leandro": "San Leandro",
-  "san francisco": "SF", "san diego": "SD", "fort lauderdale": "FTL", "west palm beach": "WPB",
-  "palm beach gardens": "PBG", "st. louis": "STL", "st. petersburg": "St. Pete", "st. paul": "St. Paul",
-  "south bend": "South Bend", "north las vegas": "North Las Vegas", "north charleston": "North Charleston", "southfield": "Southfield",
-  "college station": "College Station", "lake havasu city": "Lake Havasu City", "mount vernon": "Mount Vernon", "port st. lucie": "Port St. Lucie",
-  "panama city": "Panama City", "fort myers": "Fort Myers", "palm coast": "Palm Coast", "newport news": "Newport News",
-  "jacksonville beach": "Jax Beach", "west new york": "West New York", "elk grove": "Elk Grove", "palm springs": "Palm Springs",
-  "grand prairie": "Grand Prairie", "palm bay": "Palm Bay", "st. augustine": "St. Augustine", "boca raton": "Boca",
-  "bonita springs": "Bonita", "north miami": "N. Miami", "south miami": "S. Miami", "pompano beach": "Pompano",
-  "boynton beach": "Boynton", "delray beach": "Delray", "hallandale beach": "Hallandale", "winter haven": "Winter Haven",
-  "cape coral": "Cape Coral", "weston": "Weston", "north port": "North Port", "port charlotte": "Port Charlotte", "port orange": "Port Orange",
-  "palm harbor": "Palm Harbor", "north lauderdale": "North Lauderdale", "north fort myers": "North Fort Myers",
-  "west chester": "West Chester", "white plains": "White Plains", "west covina": "West Covina", "west hollywood": "West Hollywood",
-  "east haven": "East Haven", "east orange": "East Orange", "north bergen": "North Bergen", "north ridgeville": "North Ridgeville",
-  "north olmsted": "North Olmsted", "north royalton": "North Royalton", "north huntingdon": "North Huntingdon", "north augusta": "North Augusta",
-  "south gate": "South Gate", "south jordan": "South Jordan", "south ogden": "South Ogden", "south el monte": "South El Monte",
-  "south san francisco": "South San Francisco", "south boston": "South Boston", "mount prospect": "Mount Prospect", "mount pleasant": "Mount Pleasant",
-  "mount laurel": "Mount Laurel", "fort worth": "Fort Worth", "fort collins": "Fort Collins", "fort wayne": "Fort Wayne", "fort smith": "Fort Smith",
-  "fort pierce": "Fort Pierce", "fort dodge": "Fort Dodge", "fort payne": "Fort Payne", "new rochelle": "New Rochelle", "new bedford": "New Bedford",
-  "new britain": "New Britain", "new haven": "New Haven", "newark": "Newark", "newport": "Newport", "bay st. louis": "Bay St. Louis",
-  "union park": "Union Park",
-  "orlando": "Orlando", "new york city": "NYC", "austin": "Austin",
-  "brookhaven": "Brookhaven", "redlands": "Redlands", "lakeway": "Lakeway",
-  "killeen": "Killeen", "tuscaloosa": "Tuscaloosa", "milwaukeenorth": "Milwaukee North",
-  "manhattan": "Manhattan", "fairoaks": "Fair Oaks", "northborough": "Northborough",
-  "columbia": "Columbia", "freeport": "Freeport", "wakefield": "Wakefield",
-  "gwinnett": "Gwinnett", "elyria": "Elyria", "kingsport": "Kingsport",
-  "bloomington": "Bloomington", "alhambra": "Alhambra", "slidell": "Slidell",
-  "shelbyville": "Shelbyville"
-};
-
-const BRAND_MAPPING = {
-  "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
-  "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
-  "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevy",
-  "chevvy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
-  "dodge": "Dodge", "eagle": "Eagle", "ferrari": "Ferrari", "fiat": "Fiat", "ford": "Ford", "genesis": "Genesis",
-  "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
-  "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
-  "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
-  "lincoln": "Lincoln", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
-  "mb": "M.B.", "merc": "M.B.", "mercedes": "M.B.", "mercedes-benz": "M.B.", "mercedesbenz": "M.B.", "merk": "M.B.",
-  "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile", "plymouth": "Plymouth",
-  "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram", "rivian": "Rivian",
-  "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion", "smart": "Smart",
-  "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
-  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW"
-};
+const domainCache = new Map(); // Added for deduplication
 
 // Utility to limit concurrency for parallel operations
 const pLimit = (concurrency) => {
@@ -149,21 +76,14 @@ const expandInitials = (name, domain, brandDetected, cityDetected) => {
 
   words.forEach(word => {
     if (/^[A-Z]{1,3}$/.test(word)) {
-      const cityMatch = Object.entries(KNOWN_CITY_SHORT_NAMES).find(([full, short]) => short.toUpperCase() === word);
-      const nounMatch = Object.entries(BRAND_MAPPING).find(([full, short]) => short.toUpperCase() === word);
-
-      if (cityMatch) {
-        expanded.push(cityMatch[1]);
-      } else if (nounMatch) {
-        expanded.push(nounMatch[1]);
-      } else if (cityDetected && word === cityDetected.toUpperCase().slice(0, word.length)) {
+      if (cityDetected && word === cityDetected.toUpperCase().slice(0, word.length)) {
         expanded.push(applyCityShortName(cityDetected));
       } else if (brandDetected && word === brandDetected.toUpperCase().slice(0, word.length)) {
-        expanded.push(brandDetected);
+        expanded.push(capitalizeName(brandDetected));
       } else {
         const domainParts = domain.split(".")[0].split(/[^a-zA-Z]/);
         const matchingPart = domainParts.find(part => part.toUpperCase().startsWith(word));
-        expanded.push(matchingPart ? matchingPart.charAt(0).toUpperCase() + matchingPart.slice(1) : word);
+        expanded.push(matchingPart ? capitalizeName(matchingPart) : word);
       }
     } else {
       expanded.push(word);
@@ -173,14 +93,39 @@ const expandInitials = (name, domain, brandDetected, cityDetected) => {
   return expanded.join(" ");
 };
 
+const capitalizeName = (words) => {
+  if (typeof words === "string") words = words.split(/\s+/);
+  return words
+    .map((word, i) => {
+      if (word.toLowerCase() === "chevrolet") return "Chevy";
+      if (["of", "and", "to"].includes(word.toLowerCase()) && i > 0) return word.toLowerCase();
+      if (/^[A-Z]{1,3}$/.test(word)) return word;
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(" ");
+};
+
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
   const domainLower = domain.toLowerCase();
   console.error(`🌀 Fallback processing row ${rowNum}: ${domain}`);
 
+  // Check cache
+  const cacheKey = domainLower;
+  if (domainCache.has(cacheKey)) {
+    const cached = domainCache.get(cacheKey);
+    return {
+      domain,
+      companyName: cached.companyName,
+      confidenceScore: cached.confidenceScore,
+      flags: [...cached.flags, "CacheHit"],
+      tokens: 0,
+      rowNum
+    };
+  }
+
   let result;
   let tokensUsed = 0;
-  let gptUsed = false;
 
   const match = extractBrandOfCityFromDomain(domainLower);
   const brandDetected = match.brand || null;
@@ -204,7 +149,49 @@ const processLead = async (lead, fallbackTriggers) => {
     "UnverifiedCity"
   ];
 
-  const isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
+  let isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
+
+  // OpenAI validator for low confidence or raw outputs
+  if (result.confidenceScore < 75 || result.name.toLowerCase() === domainLower.replace(/\.(com|net|org|co\.uk)$/, "")) {
+    try {
+      const response = await callOpenAI({
+        model: "gpt-4-turbo",
+        messages: [
+          {
+            role: "system",
+            content: "Split compound words into a human-readable company name, max 3 words, suitable for '[Company]'s CRM isn't broken-it's bleeding.' Exclude possessive forms."
+          },
+          {
+            role: "user",
+            content: `Domain: ${domain}`
+          }
+        ]
+      });
+      const suggestedName = response.choices[0].message.content.trim();
+      if (suggestedName.split(" ").length <= 3 && !suggestedName.includes("'s")) {
+        result = {
+          name: suggestedName,
+          confidenceScore: 80,
+          flags: [...result.flags, "OpenAIValidated"],
+          tokens: response.usage.total_tokens
+        };
+        tokensUsed += response.usage.total_tokens;
+      }
+    } catch (err) {
+      console.error(`OpenAI fallback failed: ${err.message}`);
+      result.flags.push("OpenAIParseError");
+      result.confidenceScore = 50;
+    }
+  }
+
+  // Append brand if possible
+  const brandMatch = domainLower.match(/(chevy|ford|toyota|lincoln|bmw)/i);
+  if (brandMatch && result.name.split(" ").length < 3) {
+    const prefix = result.name.split(" ")[0] || result.name;
+    result.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
+    result.confidenceScore += 5;
+    result.flags.push("BrandAppended");
+  }
 
   if (isInitialsOnly(result.name)) {
     const expandedName = expandInitials(result.name, domain, brandDetected, cityDetected);
@@ -216,13 +203,10 @@ const processLead = async (lead, fallbackTriggers) => {
   }
 
   if (process.env.OPENAI_API_KEY && isInitialsOnly(result.name)) {
-    console.error(`Triggering OpenAI readability validation for ${result.name}`);
-    const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${result.name}" is readable and natural as a company name in the sentence "{Company}'s CRM isn't broken—it's bleeding". Do not include any additional text outside the JSON object.`;
+    const prompt = `Is "${result.name}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
     try {
       const response = await callOpenAI({ prompt, maxTokens: 40 });
-      gptUsed = true;
       tokensUsed += response.tokens || 0;
-
       const parsed = JSON.parse(response.output || "{}");
       if (!parsed.isReadable && parsed.isConfident) {
         const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : result.name.split(" ")[0];
@@ -232,22 +216,14 @@ const processLead = async (lead, fallbackTriggers) => {
         result.confidenceScore -= 5;
       }
     } catch (err) {
-      console.error(`OpenAI parse error for ${domain}: ${err.message}`);
+      console.error(`OpenAI parse error: ${err.message}`);
       result.flags.push("OpenAIParseError");
       result.confidenceScore = 50;
     }
   }
 
-  // Ensure possessive-friendliness
-  const possessiveResult = makePossessiveFriendly(result.name);
-  result.name = possessiveResult.name;
-  if (possessiveResult.possessiveApplied) {
-    result.flags.push("PossessiveApplied");
-    result.confidenceScore += 5;
-  }
-
-  // Recompute confidence score after updates
-  result.confidenceScore = calculateConfidenceScore(result.name, result.flags, domainLower);
+  // Update acceptability after modifications
+  isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
 
   if (!isAcceptable || result.confidenceScore < 75 || result.flags.some(f => forceReviewFlags.includes(f))) {
     fallbackTriggers.push({
@@ -265,7 +241,7 @@ const processLead = async (lead, fallbackTriggers) => {
     });
   }
 
-  return {
+  const finalResult = {
     domain,
     companyName: result.name || "",
     confidenceScore: result.confidenceScore,
@@ -273,11 +249,19 @@ const processLead = async (lead, fallbackTriggers) => {
     tokens: tokensUsed,
     rowNum
   };
+
+  domainCache.set(cacheKey, {
+    companyName: finalResult.companyName,
+    confidenceScore: finalResult.confidenceScore,
+    flags: finalResult.flags
+  });
+
+  return finalResult;
 };
 
 export default async function handler(req, res) {
   try {
-    console.log("🧠 company-name-fallback.js v1.0.26 – Fallback Processing Start");
+    console.log("🧠 company-name-fallback.js v1.0.25 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
