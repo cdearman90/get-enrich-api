@@ -384,20 +384,7 @@ let KNOWN_CITIES_SET = new Set([
   "thermopolis", "glenrock", "lovell", "mountain view", "lyman", "afton", "pinedale", "kemmerer", "greybull", "wright",
   "sundance", "lusk", "star valley ranch", "pine bluffs", "guernsey", "saratoga", "basin", "mills", "bar nunn", "upton",
   "moorcroft", "dubois", "alpine", "hanna", "diamondville", "shoshoni", "encampment", "baggs", "cokeville", "la barge"
-  "las vegas", "los angeles", "new york", "new orleans", "miami lakes",
-  "orlando", "new york city", "austin", "brookhaven", "redlands", "lakeway",
-  "killeen", "tuscaloosa", "milwaukeenorth", "manhattan", "fairoaks", "northborough",
-  "columbia", "freeport", "wakefield", "gwinnett", "elyria", "kingsport",
-  "bloomington", "alhambra", "slidell", "shelbyville"
-  "los angeles", "new york", "new orleans", "miami lakes",
-  "orlando", "new york city", "austin", "brookhaven", "redlands", "lakeway",
-  "killeen", "tuscaloosa", "milwaukeenorth", "manhattan", "fairoaks", "northborough",
-  "columbia", "freeport", "wakefield", "gwinnett", "elyria", "kingsport",
-  "bloomington", "alhambra", "slidell", "shelbyville",
-  "caldwell", "henderson", "lakewood", "waconia", "deland", "chattanooga",
-  "southtowne", "madison", "charlotte", "dalton", "cedarpark", "irvine",
-  "ventura", "westgate", "milwaukee", "Camino Real", "Tooele"
-  ]);
+]);
 
 
 // api/lib/humanize.js — Version 4.2.7 (Snippet)
