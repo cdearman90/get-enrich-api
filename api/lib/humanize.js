@@ -58,20 +58,18 @@ const KNOWN_PROPER_NOUNS = new Set([
   "ExpRealty", "JayWolfe", "PremierCollection", "ArtMoehn", "TomHesser", "ExecutiveAG", "SmartDrive", "AllAmerican", "WickMail", "RobertThorne", "TommyNix",
   "Duval", "Pat Milliken", "Gus Machado", "Gerald Auto", "Karl Stuart", "Lagrange Kia", "Greenwich Toyota", "Team Ford",
   "Don Hinds", "Union Park", "Jack Powell", "Kennedy", "LouSobh", "HMotors", "LuxuryAutoScottsdale", "BearMountain", "Charlie",
-  "Orlando", "NYC", "Austin",
-  "Carl Black", "Fletcher", "McCarthy", "Dyer", "Anderson", "Raceway", "Jimmy Britt", "Starling", "York", "Dayton Andrews",
+  "Orlando", "NYC", "Austin", "Carl Black", "Fletcher", "McCarthy", "Dyer", "Anderson", "Raceway", "Jimmy Britt", "Starling", "York", "Dayton Andrews",
   "Landers", "Vanderhyde", "Potamkin", "Parker", "Chapman", "Williams", "Ingersoll", "Suntrup", "Nplincoln", "Redmac",
   "Century", "Five Star", "Beck Masten", "Sansone", "Ocean", "Hawk", "Stadium", "Cavender", "Carter", "Crevier", "Bristol",
   "Gengras", "Ciocca", "Currie", "Sarant", "M Terry", "Larry H. Miller", "Calavan",
-  "Tasca", "Bentley", "Avis", "Rod Baker", "Davis", "Gy", "Machens", "Taylor", "Dan Cummins", "Kennedy", "Garber",
-  "Sunnyside", "Art Moehn", "Hillside", "Valley Nissan", "Bulluck", "Cz Agnet", "Edwards", "Keating", "Signature Auto NY",
+  "Tasca", "Avis", "Rod Baker", "Davis", "Gy", "Machens", "Taylor", "Dan Cummins", "Kennedy", "Garber",
+  "Sunnyside", "Hillside", "Valley Nissan", "Bulluck", "Cz Agnet", "Edwards", "Keating", "Signature Auto NY",
   "Smithtown", "Regal", "Big Horn", "Bulldog", "Premier Collection", "Ac Dealer Group", "New Holland", "Jake Sweeney",
   "Shottenkirk", "Wilsonville", "Elway", "Street Toyota", "Metro Ford", "Chapman Choice", "Williams Subaru", "Tom Hesser",
   "Dick Lovett", "Colonial West", "Gravity Autos", "Rt 128", "Phil Smith", "Chmb", "Power Autogroup", "Westgate Cars",
   "Star Toyota", "Go Montrose", "Rosen", "O Brien", "Campbell Cars", "Londoff", "Jim Taylor", "Deacons", "Rossi",
   "Alderman", "Banks Autos", "Caldwell Cares", "Hawk Auto", "Stadium Toyota",
   "Montrose", "Dube", "Lovett", "Britt", "Titus", "Lynn", "Bob Smith",
-  "Rich", "Robins", "Doug Reh", "Larry H. Miller",
   "Rich", "MH", "Robins", "Marhofer", "Planet Ford", "Hansel", "Matt Bowers", "Landmark", "Randy Marion", "Ogara Coach",
   "Helfman", "Tom Wood", "Auto Fair", "McGovern", "Mullinax", "Baker Motor Company", "Jim Shorkey", "VH Cars", "Mike Kelly",
   "Gossett Motors", "Valenti Auto", "Torq Dist", "Gary Crossley", "Dahl Auto", "Mills Auto Group", "Apple Ford", "Hardy Automotive",
@@ -89,7 +87,6 @@ const KNOWN_PROPER_NOUNS = new Set([
   "Bristol Toyota", "Paul Miller", "Tooele Motor Company", "Luther Auto", "Zeigler", "MV Auto", "Pape Subaru", "Rusty Wallis",
   "JK Chevrolet", "Twin City Dealerships", "Crown Acura", "RHB Motors", "Val Cars", "CAC Auto Group", "66 Auto Mall",
   "Auto Gallery Inc", "North Main Motors", "Auto Now KC", "S Motor", "Monster Motors", "Car Mart", "Susan Schein", "Strong Auto Group",
-  // New proper nouns from the second CSV
   "Sunnyside", "Bulluck", "MB BHM", "EH Chevy", "Classic BMW", "Masano", "Drive Superior", "New Holland", "Mercedes-Benz USA", "Galpin",
   "SLV Dodge", "Barlow Auto Group", "Shults Auto", "Titus Will", "Sundance Chevy", "Np Lincoln", "Century Trucks", "Planet Powersports",
   "Findlay Auto", "Barnett Auto", "Safford Brown", "Safford Auto", "Crews Chevrolet", "KC Metro", "Williams Auto World", "Lexus of Northborough",
@@ -106,9 +103,9 @@ const KNOWN_PROPER_NOUNS = new Set([
   "Daystar Chrysler", "Vinart", "Sunny King", "Nissan of Athens", "Concord Toyota", "Click Liberty", "Caruso Ford Lincoln", "Lexus of New Orleans",
   "Bill Smith Buick GMC", "Victory Chevy Charlotte", "Midway Ford Miami", "Toyota of Gastonia", "Butler CDJ", "Drive Victory", "Toyota World Newton",
   "Hillsboro Ford", "Infiniti of Beachwood", "Toyota of Murfreesboro", "Palm Coast Ford", "Roseville Kia", "Livermore Honda", "Cadillac Norwood",
-  "Classic Kia Carrollton", "Honda Morristown", "Sands Chevrolet", "Northwest Hyundai", "Malouf", "Demontrond", "Tasca", "Avisford", "Rodbaker"
+  "Classic Kia Carrollton", "Honda Morristown", "Sands Chevrolet", "Northwest Hyundai", "Malouf", "Demontrond", "Tasca", "Avis", "Rod Baker",
   "Pat Milliken", "Gus Machado", "San Leandro", "Martin Chevy", "GY Chevy"
-  ]);
+]);
 
 const NON_DEALERSHIP_KEYWORDS = [
   "realty", "insurance", "leasing", "rental", "offroad", "powersports", "rent", "lease",
