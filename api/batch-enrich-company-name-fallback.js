@@ -1,8 +1,8 @@
-// api/company-name-fallback.js — Version 1.0.28
-import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, KNOWN_PROPER_NOUNS, capitalizeName, KNOWN_CITIES_SET } from "./lib/humanize.js";
+// api/company-name-fallback.js — Version 1.0.29
+import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, KNOWN_PROPER_NOUNS, capitalizeName, KNOWN_CITIES_SET, BRAND_MAPPING } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
-// Constants for API configuration
+// Constants unchanged
 const BATCH_SIZE = 10;
 const CONCURRENCY_LIMIT = 5;
 const PROCESSING_TIMEOUT_MS = 18000;
@@ -170,16 +170,22 @@ const processLead = async (lead, fallbackTriggers) => {
 
   if (!isOverride && brandMatch && (words.length < 3 || isCityOnly || endsWithS)) {
     let prefix = result.name;
-    if (isCityOnly) {
-      result.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
+    const brandName = capitalizeName(brandMatch[0]);
+    // Prevent repetition
+    if (prefix.toLowerCase() === brandName.toLowerCase()) {
+      result.name = `${prefix} Auto`;
+      result.confidenceScore += 5;
+      result.flags.push("RepetitionFixed");
+    } else if (isCityOnly) {
+      result.name = `${prefix} ${brandName}`;
       result.confidenceScore += 5;
       result.flags.push("BrandAppendedForCity");
     } else if (endsWithS) {
-      result.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
+      result.name = `${prefix} ${brandName}`;
       result.confidenceScore += 5;
       result.flags.push("BrandAppendedForS");
     } else if (!hasContext && words.length < 3) {
-      result.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
+      result.name = `${prefix} ${brandName}`;
       result.confidenceScore += 5;
       result.flags.push("BrandAppended");
     }
@@ -232,7 +238,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.28 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.29 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
