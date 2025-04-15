@@ -381,7 +381,7 @@ const KNOWN_CITY_SHORT_NAMES = {
   "new orleans": "N.O.",
   "miami lakes": "Miami",
   "south charlotte": "South Charlotte",
-  "huntington beach": "HB",
+  "huntington beach": "Huntington Beach", // Updated to prevent "HB"
   "west springfield": "West Springfield",
   "san leandro": "San Leandro",
   "san francisco": "SF",
@@ -512,7 +512,8 @@ const ABBREVIATION_EXPANSIONS = {
   "dv": "DV Auto",
   "jm": "JM Auto",
   "jt": "JT Auto",
-  "gy": "GY"
+  "gy": "GY Auto", // Updated to expand "Gy" consistently
+  "cz": "CZ Auto"  // Added for czag.net
 };
 
 const TEST_CASE_OVERRIDES = {
@@ -547,6 +548,12 @@ const TEST_CASE_OVERRIDES = {
 };
 
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "cars", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
+
+// New: Expanded compound nouns for better splitting
+const KNOWN_COMPOUND_NOUNS = [
+  "Auto", "AutoGroup", "Cars", "Motors", "Dealers", "Dealership", "Group", "Motor",
+  "Superior", "Trucks", "Powersports", "Realty", "Team", "Collection"
+];
 
 const KNOWN_BAD_COMPOUNDS_SET = new Set([
   "teamford", "sanleandroford", "jackpowell", "unionpark", "donhindsford",
@@ -619,11 +626,12 @@ function applyCityShortName(city) {
   const cityLower = city.toLowerCase();
   if (KNOWN_CITY_SHORT_NAMES[cityLower]) {
     const shortName = KNOWN_CITY_SHORT_NAMES[cityLower];
+    // Updated: Avoid abbreviations for multi-word cities unless initials-only
     const words = shortName.split(/\s+/);
-    if (words.every(word => /^[A-Z]{1,3}$/.test(word))) {
-      return capitalizeName(city);
+    if (words.length > 1 && !words.every(word => /^[A-Z]{1,3}$/.test(word))) {
+      return shortName; // e.g., "Huntington Beach"
     }
-    return shortName;
+    return capitalizeName(city); // Fallback to full name
   }
   return capitalizeName(city);
 }
@@ -632,15 +640,19 @@ function expandInitials(name, domain, brand, city) {
   if (!name || typeof name !== "string") return "";
   let expanded = [];
   const words = name.split(" ");
+  const domainLower = domain.toLowerCase();
 
   words.forEach(word => {
     if (/^[A-Z]{1,3}$/.test(word)) {
-      if (city && word === city.toUpperCase().slice(0, word.length)) {
+      const wordLower = word.toLowerCase();
+      if (city && wordLower === city.toLowerCase().slice(0, word.length)) {
         expanded.push(applyCityShortName(city));
-      } else if (brand && word === brand.toUpperCase().slice(0, word.length)) {
+      } else if (brand && wordLower === brand.toLowerCase().slice(0, word.length)) {
         expanded.push(BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand));
-      } else if (ABBREVIATION_EXPANSIONS[word.toLowerCase()]) {
-        expanded.push(ABBREVIATION_EXPANSIONS[word.toLowerCase()]);
+      } else if (ABBREVIATION_EXPANSIONS[wordLower]) {
+        expanded.push(ABBREVIATION_EXPANSIONS[wordLower]);
+      } else if (domainLower.includes("cars") || domainLower.includes("auto")) {
+        expanded.push(`${word} Auto`); // e.g., "Jt" → "Jt Auto"
       } else {
         expanded.push(word);
       }
@@ -652,28 +664,22 @@ function expandInitials(name, domain, brand, city) {
   return expanded.join(" ");
 }
 
-// Helper to split camelCase words more reliably
 function splitCamelCaseWords(input) {
   if (!input || typeof input !== "string") return "";
-  // Split on lowercase-to-uppercase transitions (e.g., "kennedyAuto" → "kennedy Auto")
-  // Split on uppercase-to-uppercase-lowercase (e.g., "BMWWest" → "BMW West")
-  // Handle consecutive uppercase letters for acronyms (e.g., "BMW" stays as "BMW")
   let result = input
-    .replace(/([a-z])([A-Z])/g, "$1 $2") // e.g., "kennedyAuto" → "kennedy Auto"
-    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2") // e.g., "BMWWest" → "BMW West"
-    .replace(/([a-z])([0-9])/g, "$1 $2") // e.g., "route66" → "route 66"
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
+    .replace(/([a-z])([0-9])/g, "$1 $2")
     .replace(/-/g, " ")
     .trim();
-
-  // Handle cases like "McCarthyAutoGroup"
-  result = result.replace(/([A-Z][a-z]+)([A-Z][a-z]+)/g, "$1 $2"); // e.g., "McCarthyAuto" → "McCarthy Auto"
-
+  result = result.replace(/([A-Z][a-z]+)([A-Z][a-z]+)/g, "$1 $2");
   return result;
 }
 
 function earlyCompoundSplit(input) {
   if (!input || typeof input !== "string") return "";
   const domainLower = input.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
+  let flags = []; // Temp flags for internal use
 
   // Check for multi-word proper nouns first
   for (const noun of KNOWN_PROPER_NOUNS) {
@@ -683,10 +689,24 @@ function earlyCompoundSplit(input) {
     }
   }
 
-  // Initial split using camelCase and other patterns
   let result = splitCamelCaseWords(input);
+  const capitalCount = (result.match(/[A-Z]/g) || []).length;
 
-  // Split on known suffixes like "auto"
+  // Updated: Trigger split for >12 chars or 2+ capitals
+  if (result.length > 12 || capitalCount >= 2 || KNOWN_BAD_COMPOUNDS_SET.has(domainLower)) {
+    for (const noun of KNOWN_COMPOUND_NOUNS) {
+      const regex = new RegExp(`(${noun})`, 'i');
+      if (regex.test(result)) {
+        result = result.replace(regex, ' $1').trim();
+        flags.push("EarlyCompoundSplitApplied");
+      }
+    }
+    result = result.replace(/\s+/g, ' ').split(' ').map(word =>
+      word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+    ).join(' ');
+  }
+
+  // Existing suffix splitting
   if (result.toLowerCase().endsWith("auto")) {
     const prefix = result.substring(0, result.length - 4).trim();
     if (prefix && /^[A-Za-z]+$/.test(prefix)) {
@@ -694,7 +714,7 @@ function earlyCompoundSplit(input) {
     }
   }
 
-  // Split on known car brands, avoiding proper noun conflicts
+  // Updated: Split on car brands more robustly
   for (const brand of CAR_BRANDS) {
     const brandLower = brand.toLowerCase();
     if (domainLower.includes(brandLower)) {
@@ -710,166 +730,7 @@ function earlyCompoundSplit(input) {
     }
   }
 
-  // Split on other known compound nouns
-  const knownCompoundNouns = ["autogroup", "motor", "dealers", "dealership"];
-  for (const suffix of knownCompoundNouns) {
-    if (result.toLowerCase().endsWith(suffix)) {
-      const prefix = result.substring(0, result.length - suffix.length).trim();
-      if (prefix && /^[A-Za-z]+$/.test(prefix)) {
-        result = `${capitalizeName(prefix)} ${capitalizeName(suffix)}`;
-        break;
-      }
-    }
-  }
-
-  // Apply special map for known compounds
-  const specialMap = {
-    sanleandro: "San Leandro",
-    donhinds: "Don Hinds",
-    unionpark: "Union Park",
-    jackpowell: "Jack Powell",
-    teamford: "Team Ford",
-    townandcountry: "Town Country",
-    miamilakes: "Miami Lakes",
-    prestonmotor: "Preston Motor",
-    billdube: "Bill Dube",
-    demontrond: "Demontrond",
-    tedbritt: "Ted Britt",
-    mclartydaniel: "Mclarty Daniel",
-    autobyfox: "Fox Auto",
-    shoplynch: "Lynch",
-    ricart: "Ricart",
-    wickmail: "Wick Mail",
-    executiveag: "Executive AG",
-    smartdrive: "Drive Smart",
-    garlynshelton: "Garlyn Shelton",
-    carlblack: "Carl Black",
-    fletcherauto: "Fletcher Auto",
-    donhattan: "Don Hattan",
-    galeanasc: "Galeana SC",
-    chastangford: "Chastang Ford",
-    martinchevrolet: "Martin Chevy",
-    miamilakesautomall: "Miami Lakes Auto",
-    potamkinhyundai: "Potamkin Hyundai",
-    mccarthyautogroup: "McCarthy Auto",
-    dyerauto: "Dyer Auto",
-    andersonautogroup: "Anderson Auto Group",
-    racewayford: "Raceway Ford",
-    austininfiniti: "Infiniti Austin",
-    jimmybrittchevrolet: "Jimmy Britt",
-    starlingchevy: "Starling Chevy",
-    yorkautomotive: "York Auto",
-    daytonandrews: "Dayton Andrews",
-    vanderhydeford: "Vanderhyde Ford",
-    potamkinatlanta: "Potamkin Atlanta",
-    scottclarkstoyota: "Scott Clarks",
-    eckenrodford: "Eckenrod Ford",
-    southcharlottechevy: "S. Charlotte",
-    steponeauto: "Step One",
-    cioccaauto: "Ciocca Auto",
-    barlowautogroup: "Barlow Auto",
-    shultsauto: "Shults Auto",
-    allamericanford: "All American",
-    goldcoastcadillac: "Gold Coast",
-    fordhamtoyota: "Fordham Toyota",
-    sundancechevy: "Sundance Chevy",
-    cavendercadillac: "Cavender Cadillac",
-    blakefauto: "Blake F",
-    caminorealchevrolet: "Camino Real Chevy",
-    chuckfairbankschevy: "Chuck Fairbanks",
-    crevierbmw: "Crevier BMW",
-    zumbrotaford: "Zumbrota Ford",
-    tommynixautogroup: "Tommy Nix Auto Group",
-    gravityautos: "Gravity Autos",
-    gengras: "Gengras",
-    curriemotors: "Currie Motors",
-    fivestaronline: "Five Star",
-    classicbmw: "Classic BMW",
-    sarantcadillac: "Sarant Cadillac",
-    beckmasten: "Beck Masten",
-    golfmillford: "Golf Mill Ford",
-    helloautogroup: "Hello Auto",
-    landerscorp: "Landers Corp",
-    mterryautogroup: "M Terry",
-    larryhmillertoyota: "Larry H. Miller",
-    calavancars: "Calavan Cars",
-    davischevrolet: "Davis Chevy",
-    gychevy: "GY Chevy",
-    machens: "Machens Auto",
-    taylorauto: "Taylor Auto",
-    dancummins: "Dan Cummins",
-    kennedyauto: "Kennedy Auto",
-    garberchevrolet: "Garber Chevy",
-    sunnysideauto: "Sunnyside Auto",
-    artmoehn: "Art Moehn",
-    hillsidehonda: "Hillside Honda",
-    valleynissan: "Valley Nissan",
-    bulluckchevrolet: "Bulluck Chevy",
-    edwardsautogroup: "Edwards Auto",
-    keatinghonda: "Keating Honda",
-    signatureautony: "Signature Auto",
-    smithtowntoyota: "Smithtown Toyota",
-    regalauto: "Regal Auto",
-    bighorntoyota: "Big Horn",
-    bulldogkia: "Bulldog Kia",
-    acdealergroup: "Ac Dealer",
-    newhollandauto: "New Holland",
-    crossroadscars: "Crossroads Cars",
-    lynnlayton: "Lynn Layton",
-    jakesweeney: "Jake Sweeney",
-    bmwwestspringfield: "BMW West Springfield",
-    venturatoyota: "Ventura Toyota",
-    shottenkirk: "Shottenkirk Auto",
-    wilsonvilletoyota: "Wilsonville Toyota",
-    elwaydealers: "Elway Dealers",
-    streettoyota: "Street Toyota",
-    laurelautogroup: "Laurel Auto",
-    parkerauto: "Parker Auto",
-    metrofordofmadison: "Metro Ford",
-    chapmanchoice: "Chapman Choice",
-    williamssubarucharlotte: "Williams Subaru",
-    tomhesser: "Tom Hesser",
-    dicklovett: "Dick Lovett",
-    colonialwest: "Colonial West",
-    rt128honda: "Rt 128",
-    drivesunrise: "Drive Sunrise",
-    philsmithkia: "Phil Smith",
-    chmb: "Chmb Auto",
-    westgatecars: "Westgate Cars",
-    startoyota: "Star Toyota",
-    gomontrose: "Go Montrose",
-    rosenautomotive: "Rosen Auto",
-    obrienauto: "O Brien",
-    campbellcars: "Campbell Cars",
-    londoff: "Londoff Auto",
-    jimtaylorautogroup: "Jim Taylor",
-    deaconscdjr: "Deacons CDJR",
-    rossihonda: "Rossi Honda",
-    aldermansvt: "Alderman SVT",
-    banksautos: "Banks Autos",
-    caldwellcares: "Caldwell Cares",
-    hawkauto: "Hawk Auto",
-    stadiumtoyota: "Stadium Toyota",
-    dougrehchevrolet: "Doug Reh",
-    rodbakerford: "Rod Baker"
-  };
-
-  result = result
-    .split(" ")
-    .map(word => {
-      if (/auto(group|mall)?$/i.test(word)) {
-        return capitalizeName(word.replace(/auto(group|mall)?/i, " Auto"));
-      }
-      return word;
-    })
-    .join(" ");
-
-  return result
-    .split(" ")
-    .map(word =>
-      word.toLowerCase() in BRAND_MAPPING ? BRAND_MAPPING[word.toLowerCase()] : capitalizeName(word)
-    )
-    .join(" ");
+  return result;
 }
 
 function enforceThreeWordLimit(name, brand, city) {
@@ -963,12 +824,12 @@ function extractBrandOfCityFromDomain(domain) {
   const domainLower = domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "");
   const flags = [];
 
-  // Check multi-word cities first
+  // Updated: Check multi-word cities first
   for (const cityLower in KNOWN_CITY_SHORT_NAMES) {
     const cityKey = cityLower.replace(/\s+/g, "");
     if (domainLower.includes(cityKey)) {
       for (const brand of CAR_BRANDS) {
-        if (domainLower.includes(brand) && domainLower.indexOf(brand) > domainLower.indexOf(cityKey)) {
+        if (domainLower.includes(brand)) {
           const city = KNOWN_CITY_SHORT_NAMES[cityLower];
           const brandName = BRAND_MAPPING[brand] || capitalizeName(brand);
           const name = `${city} ${brandName}`;
@@ -1068,7 +929,6 @@ async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = tru
     const domainSlug = domainLower.replace(/\.(com|net|org|co\.uk)$/, "");
     console.error(`🔍 Processing domain: ${domain}`);
 
-    // Check overrides first
     if (TEST_CASE_OVERRIDES[domainLower]) {
       const name = TEST_CASE_OVERRIDES[domainLower];
       console.error(`🧪 TEST_CASE_OVERRIDES applied for ${domainLower}: "${name}"`);
@@ -1101,18 +961,12 @@ async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = tru
     let { name, flags, brand, city } = extractBrandOfCityFromDomain(domain);
     let tokens = 0;
 
-    // Check proper noun precedence for brand ordering
     if (brand && name.includes(BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand))) {
       const properNoun = Array.from(KNOWN_PROPER_NOUNS).find(noun => name.toLowerCase().includes(noun.toLowerCase().replace(/\s+/g, "")) && !noun.toLowerCase().includes(brand.toLowerCase()));
       if (properNoun && !city) {
         name = properNoun;
         flags.push("BrandOrderReversed", "ProperNounMatched");
       }
-    }
-
-    if (name.length > 15 || KNOWN_BAD_COMPOUNDS_SET.has(domainSlug) || name.split(" ").filter(word => /^[A-Z]/.test(word)).length >= 3) {
-      name = earlyCompoundSplit(name || domainSlug);
-      flags.push("EarlyCompoundSplitApplied");
     }
 
     name = capitalizeName(name);
