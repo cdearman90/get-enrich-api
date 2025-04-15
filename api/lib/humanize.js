@@ -610,7 +610,6 @@ function capitalizeName(words) {
       if (!word) return word;
       if (word.toLowerCase() === "chevrolet") return "Chevy";
       if (["of", "and", "to"].includes(word.toLowerCase()) && i > 0) return word.toLowerCase();
-      // Preserve all-caps initials (1-3 letters)
       if (/^[A-Z]{1,3}$/.test(word) && ABBREVIATION_EXPANSIONS[word.toLowerCase()] === word) return word;
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
@@ -659,7 +658,7 @@ function expandInitials(name, domain, brand, city) {
 function earlyCompoundSplit(input) {
   if (!input || typeof input !== "string") return "";
   const domainLower = input.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
-  
+
   // Check for multi-word proper nouns first
   for (const noun of KNOWN_PROPER_NOUNS) {
     const nounLower = noun.toLowerCase().replace(/\s+/g, "");
@@ -675,7 +674,15 @@ function earlyCompoundSplit(input) {
     .replace(/-/g, " ")
     .trim();
 
-  // Aggressively split on known car brands, but only if not part of a proper noun
+  // Split on known suffixes like "auto"
+  if (result.toLowerCase().endsWith("auto")) {
+    const prefix = result.substring(0, result.length - 4).trim();
+    if (prefix && /^[A-Za-z]+$/.test(prefix)) {
+      result = `${capitalizeName(prefix)} Auto`;
+    }
+  }
+
+  // Split on known car brands, avoiding proper noun conflicts
   for (const brand of CAR_BRANDS) {
     if (result.toLowerCase().includes(brand)) {
       const parts = result.toLowerCase().split(brand);
@@ -690,8 +697,8 @@ function earlyCompoundSplit(input) {
     }
   }
 
-  // Split on known compound nouns
-  const knownCompoundNouns = ["autogroup", "auto", "motor", "dealers", "dealership"];
+  // Split on other known compound nouns
+  const knownCompoundNouns = ["autogroup", "motor", "dealers", "dealership"];
   for (const suffix of knownCompoundNouns) {
     if (result.toLowerCase().endsWith(suffix)) {
       const prefix = result.substring(0, result.length - suffix.length).trim();
@@ -702,9 +709,8 @@ function earlyCompoundSplit(input) {
     }
   }
 
-  // Apply special map for known compounds (unchanged)
+  // Apply special map for known compounds
   const specialMap = {
-    // Existing mappings unchanged, abridged
     sanleandro: "San Leandro",
     donhinds: "Don Hinds",
     unionpark: "Union Park",
@@ -712,12 +718,128 @@ function earlyCompoundSplit(input) {
     teamford: "Team Ford",
     townandcountry: "Town Country",
     miamilakes: "Miami Lakes",
-    // Add others as needed
+    prestonmotor: "Preston Motor",
+    billdube: "Bill Dube",
+    demontrond: "Demontrond",
+    tedbritt: "Ted Britt",
+    mclartydaniel: "Mclarty Daniel",
+    autobyfox: "Fox Auto",
+    shoplynch: "Lynch",
+    ricart: "Ricart",
+    wickmail: "Wick Mail",
+    executiveag: "Executive AG",
+    smartdrive: "Drive Smart",
+    garlynshelton: "Garlyn Shelton",
+    carlblack: "Carl Black",
+    fletcherauto: "Fletcher Auto",
+    donhattan: "Don Hattan",
+    galeanasc: "Galeana SC",
+    chastangford: "Chastang Ford",
+    martinchevrolet: "Martin Chevy",
+    miamilakesautomall: "Miami Lakes Auto",
+    potamkinhyundai: "Potamkin Hyundai",
+    mccarthyautogroup: "McCarthy Auto",
+    dyerauto: "Dyer Auto",
+    andersonautogroup: "Anderson Auto Group",
+    racewayford: "Raceway Ford",
+    austininfiniti: "Infiniti Austin",
+    jimmybrittchevrolet: "Jimmy Britt",
+    starlingchevy: "Starling Chevy",
+    yorkautomotive: "York Auto",
+    daytonandrews: "Dayton Andrews",
+    vanderhydeford: "Vanderhyde Ford",
+    potamkinatlanta: "Potamkin Atlanta",
+    scottclarkstoyota: "Scott Clarks",
+    eckenrodford: "Eckenrod Ford",
+    southcharlottechevy: "S. Charlotte",
+    steponeauto: "Step One",
+    cioccaauto: "Ciocca Auto",
+    barlowautogroup: "Barlow Auto",
+    shultsauto: "Shults Auto",
+    allamericanford: "All American",
+    goldcoastcadillac: "Gold Coast",
+    fordhamtoyota: "Fordham Toyota",
+    sundancechevy: "Sundance Chevy",
+    cavendercadillac: "Cavender Cadillac",
+    blakefauto: "Blake F",
+    caminorealchevrolet: "Camino Real Chevy",
+    chuckfairbankschevy: "Chuck Fairbanks",
+    crevierbmw: "Crevier BMW",
+    zumbrotaford: "Zumbrota Ford",
+    tommynixautogroup: "Tommy Nix Auto Group",
+    gravityautos: "Gravity Autos",
+    gengras: "Gengras",
+    curriemotors: "Currie Motors",
+    fivestaronline: "Five Star",
+    classicbmw: "Classic BMW",
+    sarantcadillac: "Sarant Cadillac",
+    beckmasten: "Beck Masten",
+    golfmillford: "Golf Mill Ford",
+    helloautogroup: "Hello Auto",
+    landerscorp: "Landers Corp",
+    mterryautogroup: "M Terry",
+    larryhmillertoyota: "Larry H. Miller",
+    calavancars: "Calavan Cars",
+    davischevrolet: "Davis Chevy",
+    gychevy: "GY Chevy",
+    machens: "Machens Auto",
+    taylorauto: "Taylor Auto",
+    dancummins: "Dan Cummins",
+    kennedyauto: "Kennedy Auto",
+    garberchevrolet: "Garber Chevy",
+    sunnysideauto: "Sunnyside Auto",
+    artmoehn: "Art Moehn",
+    hillsidehonda: "Hillside Honda",
+    valleynissan: "Valley Nissan",
+    bulluckchevrolet: "Bulluck Chevy",
+    edwardsautogroup: "Edwards Auto",
+    keatinghonda: "Keating Honda",
+    signatureautony: "Signature Auto",
+    smithtowntoyota: "Smithtown Toyota",
+    regalauto: "Regal Auto",
+    bighorntoyota: "Big Horn",
+    bulldogkia: "Bulldog Kia",
+    acdealergroup: "Ac Dealer",
+    newhollandauto: "New Holland",
+    crossroadscars: "Crossroads Cars",
+    lynnlayton: "Lynn Layton",
+    jakesweeney: "Jake Sweeney",
+    bmwwestspringfield: "BMW West Springfield",
+    venturatoyota: "Ventura Toyota",
+    shottenkirk: "Shottenkirk Auto",
+    wilsonvilletoyota: "Wilsonville Toyota",
+    elwaydealers: "Elway Dealers",
+    streettoyota: "Street Toyota",
+    laurelautogroup: "Laurel Auto",
+    parkerauto: "Parker Auto",
+    metrofordofmadison: "Metro Ford",
+    chapmanchoice: "Chapman Choice",
+    williamssubarucharlotte: "Williams Subaru",
+    tomhesser: "Tom Hesser",
+    dicklovett: "Dick Lovett",
+    colonialwest: "Colonial West",
+    rt128honda: "Rt 128",
+    drivesunrise: "Drive Sunrise",
+    philsmithkia: "Phil Smith",
+    chmb: "Chmb Auto",
+    westgatecars: "Westgate Cars",
+    startoyota: "Star Toyota",
+    gomontrose: "Go Montrose",
+    rosenautomotive: "Rosen Auto",
+    obrienauto: "O Brien",
+    campbellcars: "Campbell Cars",
+    londoff: "Londoff Auto",
+    jimtaylorautogroup: "Jim Taylor",
+    deaconscdjr: "Deacons CDJR",
+    rossihonda: "Rossi Honda",
+    aldermansvt: "Alderman SVT",
+    banksautos: "Banks Autos",
+    caldwellcares: "Caldwell Cares",
+    hawkauto: "Hawk Auto",
+    stadiumtoyota: "Stadium Toyota",
+    dougrehchevrolet: "Doug Reh",
+    rodbakerford: "Rod Baker"
   };
-
-  for (const key in specialMap) {
-    if (result.toLowerCase().includes(key)) return specialMap[key];
-  }
 
   result = result
     .split(" ")
@@ -773,7 +895,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (flags.includes("FallbackToDomain")) {
     const wordCount = name.split(" ").length;
     score -= wordCount > 1 ? 5 : 10;
-    if (wordCount === 1 && !KNOWN_PROPER_NOUNS.has(name)) score = 75; // Avoid penalty for valid single-word names like Tasca
+    if (wordCount === 1 && !KNOWN_PROPER_NOUNS.has(name)) score = 75;
   }
   if (flags.includes("CityNameOnly")) score -= 5;
   if (flags.includes("TooGeneric")) score -= 10;
@@ -782,7 +904,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (flags.includes("RawDomain")) score -= 10;
   if (flags.includes("UnsplitCompound")) score -= 5;
   if (flags.includes("OpenAIParseError")) score -= 10;
-  if (flags.includes("PartialProperNoun")) score -= 15; // New penalty for partial matches
+  if (flags.includes("PartialProperNoun")) score -= 15;
   if (["penske", "landers", "ciocca", "helloauto", "classicbmw"].some(k => domainLower.includes(k))) {
     score += 5;
     flags.push("KnownAutoGroup");
@@ -790,7 +912,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   const wordCount = name.split(" ").length;
   if (wordCount === 1) {
     if (KNOWN_PROPER_NOUNS.has(name)) {
-      score += 15; // Boost for valid single-word names like Tasca
+      score += 15;
       flags.push("SingleWordProperNoun");
     } else {
       score += 10;
@@ -923,7 +1045,7 @@ function extractBrandOfCityFromDomain(domain) {
   };
 }
 
-async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = true, context = {}) {
+async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = true) {
   try {
     if (!domain || typeof domain !== "string") {
       console.error(`Invalid domain: ${domain}`);
@@ -1029,7 +1151,6 @@ async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = tru
         if (prefix && (KNOWN_PROPER_NOUNS.has(prefix) || /^[A-Z][a-z]+(\s[A-Z][a-z]+)?$/i.test(prefix))) {
           name = prefix;
           flags.push("CarBrandExcluded", "ProperNounMatched");
-          // Check for partial proper noun match
           if (!KNOWN_PROPER_NOUNS.has(prefix)) {
             flags.push("PartialProperNoun");
           }
@@ -1082,7 +1203,7 @@ async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = tru
         confidenceScore = cached.confidenceScore;
         flags.push("OpenAICacheHit");
         tokens = 0;
-      } else if (!isProperNoun) { // Skip OpenAI for known proper nouns
+      } else if (!isProperNoun) {
         try {
           const response = await callOpenAI({
             model: "gpt-4-turbo",
@@ -1133,7 +1254,7 @@ async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = tru
                 flags.push("OpenAINoImprovementPenalty");
               }
               openAICache.set(cacheKey, { name: suggestedName, confidenceScore: 80, tokens });
-              console.log(`OpenAI tokens used for ${domain}: ${tokens}`);
+              console.error(`OpenAI tokens used for ${domain}: ${tokens}`);
             }
           }
         } catch (error) {
