@@ -1,4 +1,4 @@
-// api/batch-enrich.js — Version 4.2.4
+// api/batch-enrich.js — Version 4.2.5
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
@@ -21,7 +21,7 @@ const pLimit = (concurrency) => {
 };
 
 const domainCache = new Map();
-const processedDomains = new Set();
+const processedDomains = new Set(); // Persistent across batches
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const FALLBACK_API_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
@@ -111,7 +111,12 @@ const callFallbackAPI = async (domain, rowNum) => {
 
     clearTimeout(timeout);
     const text = await response.text();
-    const data = JSON.parse(text);
+    let data;
+    try {
+      data = JSON.parse(text);
+    } catch (err) {
+      throw new Error(`Invalid JSON response: ${text}`);
+    }
 
     if (!response.ok || !data.successful?.[0]) {
       throw new Error(`Fallback error ${response.status}: ${data.error || text}`);
@@ -131,7 +136,6 @@ const callFallbackAPI = async (domain, rowNum) => {
     let local = await humanizeName(domain, domain, true);
     let tokensUsed = local.tokens || 0;
 
-    // OpenAI validator for low confidence or raw outputs
     if (local.confidenceScore < 75 || local.name.toLowerCase() === domain.replace(/\.(com|net|org|co\.uk)$/, "")) {
       try {
         const response = await callOpenAI({
@@ -164,7 +168,6 @@ const callFallbackAPI = async (domain, rowNum) => {
       }
     }
 
-    // Append brand if possible
     const brandMatch = domain.match(/(chevy|ford|toyota|lincoln|bmw)/i);
     if (brandMatch && local.name.split(" ").length < 3) {
       const prefix = local.name.split(" ")[0] || local.name;
@@ -243,244 +246,4 @@ const capitalizeName = (words) => {
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
     .join(" ");
-};
-
-export default async function handler(req, res) {
-  try {
-    console.log("🧠 batch-enrich.js v4.2.4 – Domain Processing Start");
-
-    const raw = await streamToString(req);
-    if (!raw) return res.status(400).json({ error: "Empty body" });
-    const body = JSON.parse(raw);
-
-    const leads = body.leads || body.leadList || body.domains;
-    if (!Array.isArray(leads)) {
-      return res.status(400).json({ error: "Leads must be an array" });
-    }
-
-    const validatedLeads = [];
-    const validationErrors = [];
-
-    leads.forEach((lead, i) => {
-      if (!lead || typeof lead !== "object") {
-        validationErrors.push(`Index ${i} not object`);
-        return;
-      }
-
-      const domain = (lead.domain || "").trim().toLowerCase();
-      if (!domain) {
-        validationErrors.push(`Index ${i} missing domain`);
-        return;
-      }
-
-      validatedLeads.push({ domain, rowNum: lead.rowNum || i + 1 });
-    });
-
-    if (validatedLeads.length === 0) {
-      return res.status(400).json({ error: "No valid leads", details: validationErrors });
-    }
-
-    const limit = pLimit(5);
-    const startTime = Date.now();
-    const successful = [];
-    const manualReviewQueue = [];
-    const fallbackTriggers = [];
-    let totalTokens = 0;
-
-    const BATCH_SIZE = 10;
-    const chunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
-      validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
-    );
-
-    for (const chunk of chunks) {
-      if (Date.now() - startTime > 18000) {
-        return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
-      }
-
-      const chunkResults = await Promise.all(
-        chunk.map(lead => limit(async () => {
-          const { domain, rowNum } = lead;
-          const domainKey = domain.toLowerCase();
-
-          // Deduplication
-          if (processedDomains.has(domainKey)) {
-            const cached = domainCache.get(domainKey);
-            if (cached) {
-              console.log(`Skipping duplicate: ${domain}`);
-              return {
-                domain,
-                companyName: cached.companyName,
-                confidenceScore: cached.confidenceScore,
-                flags: [...cached.flags, "DuplicateSkipped"],
-                rowNum,
-                tokens: 0
-              };
-            }
-          }
-
-          if (domainCache.has(domainKey)) {
-            const cached = domainCache.get(domainKey);
-            processedDomains.add(domainKey);
-            return { ...cached, rowNum, domain };
-          }
-
-          let finalResult;
-          let tokensUsed = 0;
-
-          const match = extractBrandOfCityFromDomain(domainKey);
-          const brandDetected = match.brand || null;
-          const cityDetected = match.city || null;
-
-          // Try main API with retries
-          try {
-            const mainResult = await callMainAPI(domain, rowNum);
-            finalResult = mainResult.result;
-            tokensUsed = finalResult.tokens || 0;
-          } catch (err) {
-            console.error(`Main API failed: ${err.message}`);
-            finalResult = await callFallbackAPI(domain, rowNum);
-            tokensUsed += finalResult.tokens || 0;
-          }
-
-          const criticalFlags = ["TooGeneric", "CityNameOnly", "FallbackFailed", "Skipped"];
-          const isAcceptable = finalResult.confidenceScore >= 75 &&
-            !finalResult.flags.some(f => criticalFlags.includes(f));
-
-          if (isAcceptable) {
-            domainCache.set(domainKey, {
-              companyName: finalResult.companyName,
-              confidenceScore: finalResult.confidenceScore,
-              flags: finalResult.flags
-            });
-            processedDomains.add(domainKey);
-          } else {
-            const primary = { ...finalResult };
-            const fallback = await callFallbackAPI(domain, rowNum);
-            tokensUsed += fallback.tokens || 0;
-
-            if (
-              fallback.companyName &&
-              fallback.confidenceScore >= 75 &&
-              !fallback.flags.some(f => criticalFlags.includes(f))
-            ) {
-              finalResult = {
-                ...fallback,
-                flags: [...(fallback.flags || []), "FallbackAPIUsed"],
-                rowNum
-              };
-            } else {
-              finalResult.flags.push("FallbackAPIFailed");
-              fallbackTriggers.push({
-                domain,
-                rowNum,
-                reason: "FallbackAPIFailed",
-                details: {
-                  primary: {
-                    name: primary.companyName,
-                    confidenceScore: primary.confidenceScore,
-                    flags: primary.flags
-                  },
-                  fallbackScore: fallback.confidenceScore,
-                  fallbackFlags: fallback.flags,
-                  brand: brandDetected,
-                  city: cityDetected
-                },
-                tokens: tokensUsed
-              });
-            }
-          }
-
-          const reviewFlags = ["TooGeneric", "CityNameOnly", "PossibleAbbreviation"];
-          if (
-            finalResult.confidenceScore < 75 ||
-            finalResult.flags.some(f => reviewFlags.includes(f))
-          ) {
-            manualReviewQueue.push({
-              domain,
-              name: finalResult.companyName,
-              confidenceScore: finalResult.confidenceScore,
-              flags: finalResult.flags,
-              rowNum
-            });
-
-            finalResult = {
-              domain,
-              companyName: finalResult.companyName || "",
-              confidenceScore: Math.max(finalResult.confidenceScore, 50),
-              flags: [...finalResult.flags, "LowConfidence"],
-              rowNum
-            };
-          }
-
-          if (isInitialsOnly(finalResult.companyName)) {
-            const expandedName = expandInitials(finalResult.companyName, domain, brandDetected, cityDetected);
-            if (expandedName !== finalResult.companyName) {
-              finalResult.companyName = expandedName;
-              finalResult.flags.push("InitialsExpandedLocally");
-              finalResult.confidenceScore -= 5;
-            }
-          }
-
-          if (process.env.OPENAI_API_KEY && isInitialsOnly(finalResult.companyName)) {
-            const prompt = `Is "${finalResult.companyName}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
-            const response = await callOpenAI({ prompt, maxTokens: 40 });
-            tokensUsed += response.tokens || 0;
-
-            try {
-              const parsed = JSON.parse(response.output || "{}");
-              if (!parsed.isReadable && parsed.isConfident) {
-                const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : finalResult.companyName.split(" ")[0];
-                const fallbackBrand = brandDetected || finalResult.companyName.split(" ")[1] || "Auto";
-                finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
-                finalResult.flags.push("InitialsExpandedByOpenAI");
-                finalResult.confidenceScore -= 5;
-              }
-            } catch (err) {
-              finalResult.flags.push("OpenAIParseError");
-            }
-          }
-
-          domainCache.set(domainKey, {
-            companyName: finalResult.companyName,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags
-          });
-          processedDomains.add(domainKey);
-
-          totalTokens += tokensUsed;
-          return {
-            domain,
-            companyName: finalResult.companyName,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags,
-            rowNum,
-            tokens: tokensUsed
-          };
-        }))
-      );
-
-      successful.push(...chunkResults);
-    }
-
-    console.log(
-      `Batch complete: ${successful.length} enriched, ${manualReviewQueue.length} to review, ${fallbackTriggers.length} fallbacks, ${totalTokens} tokens used`
-    );
-
-    return res.status(200).json({
-      successful,
-      manualReviewQueue,
-      fallbackTriggers,
-      totalTokens,
-      partial: false
-    });
-  } catch (err) {
-    console.error(`❌ Handler error: ${err.message}\n${err.stack}`);
-    return res.status(500).json({ error: "Internal server error", details: err.message });
-  }
-}
-
-export const config = {
-  api: {
-    bodyParser: false
-  }
 };
