@@ -400,6 +400,7 @@ let KNOWN_CITIES_SET = new Set([
   ]);
 
 
+// api/lib/humanize.js — Version 4.2.7 (Snippet)
 const KNOWN_CITY_SHORT_NAMES = {
   "las vegas": "Vegas",
   "los angeles": "LA",
