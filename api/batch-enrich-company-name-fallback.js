@@ -1,5 +1,5 @@
-// api/company-name-fallback.js — Version 1.0.27
-import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, KNOWN_PROPER_NOUNS, capitalizeName } from "./lib/humanize.js";
+// api/company-name-fallback.js — Version 1.0.28
+import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, KNOWN_PROPER_NOUNS, capitalizeName, KNOWN_CITIES_SET } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
 // Constants for API configuration
@@ -86,14 +86,12 @@ const expandInitials = (name, domain, brandDetected, cityDetected) => {
       } else if (brandDetected && word === brandDetected.toUpperCase().slice(0, word.length)) {
         expanded.push(BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected));
       } else {
-        // Check if initials match a known proper noun
         const matchingNoun = Array.from(KNOWN_PROPER_NOUNS).find(noun =>
           noun.toUpperCase().startsWith(word)
         );
         if (matchingNoun) {
           expanded.push(matchingNoun);
         } else {
-          // Preserve initials case (e.g., "Slv" → "SLV")
           expanded.push(word);
         }
       }
@@ -150,7 +148,6 @@ const processLead = async (lead, fallbackTriggers) => {
 
   let isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
 
-  // Rely on humanize.js logic instead of OpenAI fallback generation
   if (result.confidenceScore < 75 || result.name.toLowerCase() === domainLower.replace(/\.(com|net|org|co\.uk)$/, "")) {
     if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainLower.replace(/\.(com|net|org|co\.uk)$/, "")))) {
       result.name = capitalizeName(domainLower.replace(/\.(com|net|org|co\.uk)$/, ""));
@@ -162,15 +159,30 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   }
 
-  // Brand appending only if no context
+  // Brand appending logic
   const brandMatch = domainLower.match(/(chevy|ford|toyota|lincoln|bmw)/i);
   const words = result.name.split(" ");
-  const hasContext = result.name.toLowerCase().includes("auto") || words.length > 1 || KNOWN_PROPER_NOUNS.has(result.name);
-  if (brandMatch && words.length < 3 && !hasContext) {
-    const prefix = result.name.split(" ")[0] || result.name;
-    result.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
-    result.confidenceScore += 5;
-    result.flags.push("BrandAppended");
+  const isOverride = result.flags.includes("OverrideApplied");
+  const isProperNoun = KNOWN_PROPER_NOUNS.has(result.name);
+  const isCityOnly = words.length === 1 && (cityDetected === words[0].toLowerCase() || KNOWN_CITIES_SET.has(words[0].toLowerCase()));
+  const endsWithS = isProperNoun && result.name.toLowerCase().endsWith("s");
+  const hasContext = result.name.toLowerCase().includes("auto") || (words.length > 1 && !endsWithS) || (isProperNoun && !endsWithS && !isCityOnly);
+
+  if (!isOverride && brandMatch && (words.length < 3 || isCityOnly || endsWithS)) {
+    let prefix = result.name;
+    if (isCityOnly) {
+      result.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
+      result.confidenceScore += 5;
+      result.flags.push("BrandAppendedForCity");
+    } else if (endsWithS) {
+      result.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
+      result.confidenceScore += 5;
+      result.flags.push("BrandAppendedForS");
+    } else if (!hasContext && words.length < 3) {
+      result.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
+      result.confidenceScore += 5;
+      result.flags.push("BrandAppended");
+    }
   }
 
   if (isInitialsOnly(result.name)) {
@@ -220,7 +232,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.27 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.28 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
