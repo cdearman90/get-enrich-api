@@ -1,5 +1,5 @@
-// api/company-name-fallback.js — Version 1.0.26
-import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
+// api/company-name-fallback.js — Version 1.0.27
+import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, KNOWN_PROPER_NOUNS, capitalizeName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
 // Constants for API configuration
@@ -9,10 +9,10 @@ const PROCESSING_TIMEOUT_MS = 18000;
 
 const domainCache = new Map();
 
-const pLimit = async (concurrency) => { // Added async
+const pLimit = async (concurrency) => {
   let active = 0;
   const queue = [];
-  const next = async () => { // Added async
+  const next = async () => {
     if (active >= concurrency || queue.length === 0) return;
     active++;
     const { fn, resolve, reject } = queue.shift();
@@ -77,17 +77,25 @@ const isInitialsOnly = (name) => {
 const expandInitials = (name, domain, brandDetected, cityDetected) => {
   let expanded = [];
   const words = name.split(" ");
+  const domainLower = domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "");
 
   words.forEach(word => {
     if (/^[A-Z]{1,3}$/.test(word)) {
       if (cityDetected && word === cityDetected.toUpperCase().slice(0, word.length)) {
         expanded.push(applyCityShortName(cityDetected));
       } else if (brandDetected && word === brandDetected.toUpperCase().slice(0, word.length)) {
-        expanded.push(capitalizeName(brandDetected));
+        expanded.push(BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected));
       } else {
-        const domainParts = domain.split(".")[0].split(/[^a-zA-Z]/);
-        const matchingPart = domainParts.find(part => part.toUpperCase().startsWith(word));
-        expanded.push(matchingPart ? capitalizeName(matchingPart) : word);
+        // Check if initials match a known proper noun
+        const matchingNoun = Array.from(KNOWN_PROPER_NOUNS).find(noun =>
+          noun.toUpperCase().startsWith(word)
+        );
+        if (matchingNoun) {
+          expanded.push(matchingNoun);
+        } else {
+          // Preserve initials case (e.g., "Slv" → "SLV")
+          expanded.push(word);
+        }
       }
     } else {
       expanded.push(word);
@@ -142,40 +150,23 @@ const processLead = async (lead, fallbackTriggers) => {
 
   let isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
 
+  // Rely on humanize.js logic instead of OpenAI fallback generation
   if (result.confidenceScore < 75 || result.name.toLowerCase() === domainLower.replace(/\.(com|net|org|co\.uk)$/, "")) {
-    try {
-      const response = await callOpenAI({
-        model: "gpt-4-turbo",
-        messages: [
-          {
-            role: "system",
-            content: "Split compound words into a human-readable company name, max 3 words, suitable for '[Company]'s CRM isn't broken-it's bleeding.' Exclude possessive forms."
-          },
-          {
-            role: "user",
-            content: `Domain: ${domain}`
-          }
-        ]
-      });
-      const suggestedName = response.choices[0].message.content.trim();
-      if (suggestedName.split(" ").length <= 3 && !suggestedName.includes("'s")) {
-        result = {
-          name: suggestedName,
-          confidenceScore: 80,
-          flags: [...result.flags, "OpenAIValidated"],
-          tokens: response.usage.total_tokens
-        };
-        tokensUsed += response.usage.total_tokens;
-      }
-    } catch (error) {
-      console.error(`OpenAI fallback failed: ${error.message}`);
-      result.flags.push("OpenAIParseError");
+    if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainLower.replace(/\.(com|net|org|co\.uk)$/, "")))) {
+      result.name = capitalizeName(domainLower.replace(/\.(com|net|org|co\.uk)$/, ""));
+      result.confidenceScore = 80;
+      result.flags.push("ProperNounFallbackFromHumanize");
+    } else {
+      result.flags.push("LowConfidenceFallback");
       result.confidenceScore = 50;
     }
   }
 
+  // Brand appending only if no context
   const brandMatch = domainLower.match(/(chevy|ford|toyota|lincoln|bmw)/i);
-  if (brandMatch && result.name.split(" ").length < 3) {
+  const words = result.name.split(" ");
+  const hasContext = result.name.toLowerCase().includes("auto") || words.length > 1 || KNOWN_PROPER_NOUNS.has(result.name);
+  if (brandMatch && words.length < 3 && !hasContext) {
     const prefix = result.name.split(" ")[0] || result.name;
     result.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
     result.confidenceScore += 5;
@@ -188,27 +179,6 @@ const processLead = async (lead, fallbackTriggers) => {
       result.name = expandedName;
       result.flags.push("InitialsExpandedLocally");
       result.confidenceScore -= 5;
-    }
-  }
-
-  if (process.env.OPENAI_API_KEY && isInitialsOnly(result.name)) {
-    console.error(`Triggering OpenAI readability validation for ${result.name}`);
-    const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${result.name}" is readable and natural as a company name in the sentence "{Company}'s CRM isn't broken—it's bleeding". Do not include any additional text outside the JSON object.`;
-    try {
-      const response = await callOpenAI({ prompt, maxTokens: 40 });
-      tokensUsed += response.tokens || 0;
-      const parsed = JSON.parse(response.output || "{}");
-      if (!parsed.isReadable && parsed.isConfident) {
-        const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : result.name.split(" ")[0];
-        const fallbackBrand = brandDetected || result.name.split(" ")[1] || "Auto";
-        result.name = `${fallbackCity} ${fallbackBrand}`;
-        result.flags.push("InitialsExpandedByOpenAI");
-        result.confidenceScore -= 5;
-      }
-    } catch (error) {
-      console.error(`OpenAI parse error for ${domain}: ${error.message}`);
-      result.flags.push("OpenAIParseError");
-      result.confidenceScore = 50;
     }
   }
 
@@ -250,7 +220,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.26 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.27 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
