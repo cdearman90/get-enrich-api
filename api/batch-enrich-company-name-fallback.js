@@ -1,4 +1,4 @@
-// api/company-name-fallback.js — Version 1.0.25
+// api/company-name-fallback.js — Version 1.0.26
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
@@ -7,20 +7,24 @@ const BATCH_SIZE = 10;
 const CONCURRENCY_LIMIT = 5;
 const PROCESSING_TIMEOUT_MS = 18000;
 
-const domainCache = new Map(); // Added for deduplication
+const domainCache = new Map();
 
-// Utility to limit concurrency for parallel operations
-const pLimit = (concurrency) => {
+const pLimit = async (concurrency) => { // Added async
   let active = 0;
   const queue = [];
-  const next = () => {
+  const next = async () => { // Added async
     if (active >= concurrency || queue.length === 0) return;
     active++;
     const { fn, resolve, reject } = queue.shift();
-    fn().then(resolve).catch(reject).finally(() => {
+    try {
+      const result = await fn();
+      resolve(result);
+    } catch (error) {
+      reject(error);
+    } finally {
       active--;
-      next();
-    });
+      await next();
+    }
   };
   return (fn) => new Promise((resolve, reject) => {
     queue.push({ fn, resolve, reject });
@@ -38,9 +42,9 @@ const streamToString = (stream) =>
       clearTimeout(timeout);
       resolve(Buffer.concat(chunks).toString("utf-8"));
     });
-    stream.on("error", (err) => {
+    stream.on("error", (error) => {
       clearTimeout(timeout);
-      reject(err);
+      reject(error);
     });
   });
 
@@ -93,24 +97,11 @@ const expandInitials = (name, domain, brandDetected, cityDetected) => {
   return expanded.join(" ");
 };
 
-const capitalizeName = (words) => {
-  if (typeof words === "string") words = words.split(/\s+/);
-  return words
-    .map((word, i) => {
-      if (word.toLowerCase() === "chevrolet") return "Chevy";
-      if (["of", "and", "to"].includes(word.toLowerCase()) && i > 0) return word.toLowerCase();
-      if (/^[A-Z]{1,3}$/.test(word)) return word;
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-    })
-    .join(" ");
-};
-
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
   const domainLower = domain.toLowerCase();
   console.error(`🌀 Fallback processing row ${rowNum}: ${domain}`);
 
-  // Check cache
   const cacheKey = domainLower;
   if (domainCache.has(cacheKey)) {
     const cached = domainCache.get(cacheKey);
@@ -135,8 +126,8 @@ const processLead = async (lead, fallbackTriggers) => {
     result = await humanizeName(domain, domain, true);
     tokensUsed = result.tokens || 0;
     console.error(`humanizeName result for ${domain}: ${JSON.stringify(result)}`);
-  } catch (_err) {
-    console.error(`humanizeName error for ${domain}: ${_err.message}`);
+  } catch (error) {
+    console.error(`humanizeName error for ${domain}: ${error.message}`);
     result = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
   }
 
@@ -151,7 +142,6 @@ const processLead = async (lead, fallbackTriggers) => {
 
   let isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
 
-  // OpenAI validator for low confidence or raw outputs
   if (result.confidenceScore < 75 || result.name.toLowerCase() === domainLower.replace(/\.(com|net|org|co\.uk)$/, "")) {
     try {
       const response = await callOpenAI({
@@ -177,14 +167,13 @@ const processLead = async (lead, fallbackTriggers) => {
         };
         tokensUsed += response.usage.total_tokens;
       }
-    } catch (err) {
-      console.error(`OpenAI fallback failed: ${err.message}`);
+    } catch (error) {
+      console.error(`OpenAI fallback failed: ${error.message}`);
       result.flags.push("OpenAIParseError");
       result.confidenceScore = 50;
     }
   }
 
-  // Append brand if possible
   const brandMatch = domainLower.match(/(chevy|ford|toyota|lincoln|bmw)/i);
   if (brandMatch && result.name.split(" ").length < 3) {
     const prefix = result.name.split(" ")[0] || result.name;
@@ -203,7 +192,8 @@ const processLead = async (lead, fallbackTriggers) => {
   }
 
   if (process.env.OPENAI_API_KEY && isInitialsOnly(result.name)) {
-    const prompt = `Is "${result.name}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+    console.error(`Triggering OpenAI readability validation for ${result.name}`);
+    const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${result.name}" is readable and natural as a company name in the sentence "{Company}'s CRM isn't broken—it's bleeding". Do not include any additional text outside the JSON object.`;
     try {
       const response = await callOpenAI({ prompt, maxTokens: 40 });
       tokensUsed += response.tokens || 0;
@@ -215,14 +205,13 @@ const processLead = async (lead, fallbackTriggers) => {
         result.flags.push("InitialsExpandedByOpenAI");
         result.confidenceScore -= 5;
       }
-    } catch (err) {
-      console.error(`OpenAI parse error: ${err.message}`);
+    } catch (error) {
+      console.error(`OpenAI parse error for ${domain}: ${error.message}`);
       result.flags.push("OpenAIParseError");
       result.confidenceScore = 50;
     }
   }
 
-  // Update acceptability after modifications
   isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
 
   if (!isAcceptable || result.confidenceScore < 75 || result.flags.some(f => forceReviewFlags.includes(f))) {
@@ -261,7 +250,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.log("🧠 company-name-fallback.js v1.0.25 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.26 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
@@ -326,7 +315,7 @@ export default async function handler(req, res) {
       });
     }
 
-    console.log(
+    console.error(
       `Fallback complete: ${successful.length} enriched, ${manualReviewQueue.length} to review, ` +
       `${fallbackTriggers.length} fallbacks, ${totalTokens} tokens used`
     );
@@ -338,9 +327,9 @@ export default async function handler(req, res) {
       totalTokens,
       partial: false
     });
-  } catch (err) {
-    console.error(`❌ Fallback handler error: ${err.message}\n${err.stack}`);
-    return res.status(500).json({ error: "Internal server error", details: err.message });
+  } catch (error) {
+    console.error(`❌ Fallback handler error: ${error.message}\n${error.stack}`);
+    return res.status(500).json({ error: "Internal server error", details: error.message });
   }
 }
 
