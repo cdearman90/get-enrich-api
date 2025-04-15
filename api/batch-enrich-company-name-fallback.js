@@ -1,9 +1,10 @@
-// api/company-name-fallback.js — Version 1.0.34
+// api/company-name-fallback.js — Version 1.0.35
 import {
   humanizeName,
   extractBrandOfCityFromDomain,
   applyCityShortName,
   KNOWN_PROPER_NOUNS,
+  KNOWN_COMPOUND_NOUNS,
   capitalizeName,
   KNOWN_CITIES_SET,
   BRAND_MAPPING,
@@ -112,6 +113,29 @@ const expandInitials = (name, brandDetected, cityDetected) => {
   return expanded.join(" ");
 };
 
+// New function for compound splitting in fallback
+const splitFallbackCompounds = (name) => {
+  let result = name
+    .replace(/([a-z])([A-Z])/g, "$1 $2") // Split camel case (e.g., Southcharlotte → South Charlotte)
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2") // Handle consecutive capitals
+    .trim();
+
+  // Split on known compound nouns (e.g., Chevy, Auto)
+  for (const noun of KNOWN_COMPOUND_NOUNS) {
+    const regex = new RegExp(`(${noun.toLowerCase()})`, 'i');
+    if (regex.test(result)) {
+      result = result.replace(regex, ' $1').trim();
+    }
+  }
+
+  // Ensure proper capitalization
+  result = result.split(' ').map(word =>
+    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
+  ).join(' ');
+
+  return result;
+};
+
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
   console.error(`🌀 Fallback processing row ${rowNum}: ${domain}`);
@@ -207,34 +231,47 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   }
 
-  // Brand appending logic
+  // Compound splitting if unsplit
+  if (!result.name.includes(" ") && result.name.length > 10) {
+    const splitName = splitFallbackCompounds(result.name);
+    if (splitName !== result.name) {
+      result.name = splitName;
+      result.confidenceScore += 20; // Significant boost for splitting
+      result.flags.push("CompoundSplitByFallback");
+    }
+  }
+
+  // Brand appending logic (relaxed to handle proper nouns with low confidence)
   const brandMatch = domain.toLowerCase().match(/(chevy|ford|toyota|lincoln|bmw)/i);
   const words = result.name.split(" ");
   const isOverride = result.flags.includes("OverrideApplied");
   const isProperNoun = KNOWN_PROPER_NOUNS.has(result.name);
   const isCityOnly = words.length === 1 && (cityDetected === words[0].toLowerCase() || KNOWN_CITIES_SET.has(words[0].toLowerCase()));
   const endsWithS = isProperNoun && result.name.toLowerCase().endsWith("s");
-  const hasContext = result.name.toLowerCase().includes("auto") || (words.length > 1 && !endsWithS) || (isProperNoun && !endsWithS && !isCityOnly);
 
-  if (!isOverride && brandMatch && (words.length < 3 || isCityOnly || endsWithS)) {
+  if (!isOverride && brandMatch && (words.length < 3 || isCityOnly || endsWithS || (isProperNoun && result.confidenceScore < 95))) {
     let prefix = result.name;
     const brandName = capitalizeName(brandMatch[0]);
     if (prefix.toLowerCase() === brandName.toLowerCase()) {
       result.name = `${prefix} Auto`;
-      result.confidenceScore += 5;
-      result.flags.push("RepetitionFixed");
+      result.confidenceScore += 20; // Increased boost for improvement
+      result.flags.push("RepetitionFixed", "BrandAppendedByFallback");
     } else if (isCityOnly) {
       result.name = `${prefix} ${brandName}`;
-      result.confidenceScore += 5;
-      result.flags.push("BrandAppendedForCity");
+      result.confidenceScore += 20;
+      result.flags.push("BrandAppendedForCity", "BrandAppendedByFallback");
     } else if (endsWithS) {
       result.name = `${prefix} ${brandName}`;
-      result.confidenceScore += 5;
-      result.flags.push("BrandAppendedForS");
-    } else if (!hasContext && words.length < 3) {
+      result.confidenceScore += 20;
+      result.flags.push("BrandAppendedForS", "BrandAppendedByFallback");
+    } else if (isProperNoun && result.confidenceScore < 95 && !prefix.toLowerCase().includes("auto")) {
       result.name = `${prefix} ${brandName}`;
-      result.confidenceScore += 5;
-      result.flags.push("BrandAppended");
+      result.confidenceScore += 20;
+      result.flags.push("BrandAppendedForProperNoun", "BrandAppendedByFallback");
+    } else if (words.length < 3) {
+      result.name = `${prefix} ${brandName}`;
+      result.confidenceScore += 20;
+      result.flags.push("BrandAppended", "BrandAppendedByFallback");
     }
   }
 
@@ -243,7 +280,13 @@ const processLead = async (lead, fallbackTriggers) => {
     if (expandedName !== result.name) {
       result.name = expandedName;
       result.flags.push("InitialsExpandedLocally");
-      result.confidenceScore -= 5;
+      // Removed confidence penalty unless still ambiguous
+      if (isInitialsOnly(expandedName)) {
+        result.confidenceScore -= 5;
+        result.flags.push("InitialsStillAmbiguous");
+      } else {
+        result.confidenceScore += 10; // Boost for successful expansion
+      }
     }
   }
 
@@ -285,7 +328,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.34 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.35 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
