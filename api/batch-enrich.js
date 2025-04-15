@@ -139,7 +139,24 @@ const KNOWN_CITY_SHORT_NAMES = {
   "bloomington": "Bloomington",
   "alhambra": "Alhambra",
   "slidell": "Slidell",
-  "shelbyville": "Shelbyville"
+  "shelbyville": "Shelbyville",
+  "caldwell": "Caldwell",
+  "henderson": "Henderson",
+  "lakewood": "Lakewood",
+  "waconia": "Waconia",
+  "deland": "Deland",
+  "chattanooga": "Chattanooga",
+  "southtowne": "Southtowne",
+  "madison": "Madison",
+  "charlotte": "Charlotte",
+  "dalton": "Dalton",
+  "cedarpark": "Cedar Park",
+  "irvine": "Irvine",
+  "ventura": "Ventura",
+  "westgate": "Westgate",
+  "milwaukee": "Milwaukee",
+  "tooele": "Tooele",
+  "camino real": "Camino Real"
 };
 
 const callFallbackAPI = async (domain, rowNum) => {
