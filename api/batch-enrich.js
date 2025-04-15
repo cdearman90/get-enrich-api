@@ -1,4 +1,4 @@
-// api/batch-enrich.js — Version 4.2.9
+// api/batch-enrich.js — Version 4.2.12
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
@@ -24,7 +24,7 @@ const domainCache = new Map();
 const processedDomains = new Set();
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
-const FALLBACK_API_URL = `${VERCEL_API_BASE_URL}/api/batch-enrich-company-name-fallback`;
+const FALLBACK_API_URL = `${VERCEL_API_BASE_URL}/api/company-name-fallback`;
 const FALLBACK_API_TIMEOUT_MS = parseInt(process.env.FALLBACK_API_TIMEOUT_MS, 10) || 6000;
 
 const KNOWN_CITY_SHORT_NAMES = {
@@ -178,7 +178,7 @@ const callFallbackAPI = async (domain, rowNum) => {
       rowNum
     };
   } catch (error) {
-    console.error(`Fallback API failed: ${error.message}`);
+    console.error(`Fallback API failed: ${error.message}`); // Use error
     let local = await humanizeName(domain, domain, true);
     let tokensUsed = local.tokens || 0;
 
@@ -263,10 +263,7 @@ const expandInitials = (name, domain, brandDetected, cityDetected) => {
 
   words.forEach(word => {
     if (/^[A-Z]{1,3}$/.test(word)) {
-      const cityMatch = Object.entries(KNOWN_CITY_SHORT_NAMES).find(([, short]) => short.toUpperCase() === word);
-      if (cityMatch) {
-        expanded.push(capitalizeName(cityMatch[0]));
-      } else if (cityDetected && word === cityDetected.toUpperCase().slice(0, word.length)) {
+      if (cityDetected && word === cityDetected.toUpperCase().slice(0, word.length)) {
         expanded.push(applyCityShortName(cityDetected));
       } else if (brandDetected && word === brandDetected.toUpperCase().slice(0, word.length)) {
         expanded.push(capitalizeName(brandDetected));
@@ -297,10 +294,11 @@ const capitalizeName = (words) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 batch-enrich.js v4.2.9 – Domain Processing Start");
+    console.error("🧠 batch-enrich.js v4.2.12 – Domain Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
+
     let body;
     try {
       body = JSON.parse(raw);
@@ -480,7 +478,7 @@ export default async function handler(req, res) {
           }
 
           if (process.env.OPENAI_API_KEY && isInitialsOnly(finalResult.companyName)) {
-            const prompt = `Is "${finalResult.companyName}" readable and natural in "{Company}'s CRM isn't broken—it’s bleeding"? Respond with {"isReadable": true/false, "isConfident": true/false}`;
+            const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${finalResult.companyName}" is readable and natural as a company name in the sentence "{Company}'s CRM isn't broken—it's bleeding". Do not include any additional text outside the JSON object.`;
             const response = await callOpenAI({ prompt, maxTokens: 40 });
             tokensUsed += response.tokens || 0;
 
@@ -533,7 +531,7 @@ export default async function handler(req, res) {
       partial: false
     });
   } catch (error) {
-    console.error(`❌ Handler error: ${error.message}\n${error.stack}`);
+    console.error(`❌ Handler error: ${error.message}\n${error.stack}`); // Use error
     return res.status(500).json({ error: "Internal server error", details: error.message });
   }
 }
