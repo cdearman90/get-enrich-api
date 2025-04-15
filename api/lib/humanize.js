@@ -389,7 +389,7 @@ let KNOWN_CITIES_SET = new Set([
   "killeen", "tuscaloosa", "milwaukeenorth", "manhattan", "fairoaks", "northborough",
   "columbia", "freeport", "wakefield", "gwinnett", "elyria", "kingsport",
   "bloomington", "alhambra", "slidell", "shelbyville"
-  "las vegas", "los angeles", "new york", "new orleans", "miami lakes",
+  "los angeles", "new york", "new orleans", "miami lakes",
   "orlando", "new york city", "austin", "brookhaven", "redlands", "lakeway",
   "killeen", "tuscaloosa", "milwaukeenorth", "manhattan", "fairoaks", "northborough",
   "columbia", "freeport", "wakefield", "gwinnett", "elyria", "kingsport",
