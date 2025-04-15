@@ -1,4 +1,4 @@
-// api/company-name-fallback.js — Version 1.0.30
+// api/company-name-fallback.js — Version 1.0.31
 import {
   humanizeName,
   extractBrandOfCityFromDomain,
@@ -257,7 +257,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.30 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.31 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
