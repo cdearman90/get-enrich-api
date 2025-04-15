@@ -398,99 +398,119 @@ export default async function handler(req, res) {
         return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
 
-      const chunkResults = await Promise.all(
-        chunk.map(lead => limit(async () => {
-          const { domain, rowNum } = lead;
-          const domainKey = domain.toLowerCase();
+const chunkResults = await Promise.all(
+  chunk.map(lead => limit(async () => {
+    const { domain, rowNum } = lead;
+    const domainKey = domain.toLowerCase();
 
-          console.log(`Processing lead: ${domain} (Row ${rowNum})`);
+    console.log(`Processing lead: ${domain} (Row ${rowNum})`);
 
-          if (processedDomains.has(domainKey)) {
-            const cached = domainCache.get(domainKey);
-            if (cached) {
-              console.log(`Skipping duplicate: ${domain}`);
-              return {
-                domain,
-                companyName: cached.companyName || "",
-                confidenceScore: cached.confidenceScore || 0,
-                flags: [...(cached.flags || []), "DuplicateSkipped"],
-                rowNum,
-                tokens: 0
-              };
-            }
-          }
+    if (processedDomains.has(domainKey)) {
+      const cached = domainCache.get(domainKey);
+      if (cached) {
+        console.log(`Skipping duplicate: ${domain}`);
+        return {
+          domain,
+          companyName: cached.companyName || "",
+          confidenceScore: cached.confidenceScore || 0,
+          flags: [...(cached.flags || []), "DuplicateSkipped"],
+          rowNum,
+          tokens: 0
+        };
+      }
+    }
 
-          let finalResult = { companyName: "", confidenceScore: 0, flags: [], tokens: 0 };
-          let tokensUsed = 0;
+    let finalResult = { companyName: "", confidenceScore: 0, flags: [], tokens: 0 };
+    let tokensUsed = 0;
 
-          const match = extractBrandOfCityFromDomain(domainKey);
-          const brandDetected = match.brand || null;
-          const cityDetected = match.city || null;
+    const match = extractBrandOfCityFromDomain(domainKey);
+    const brandDetected = match.brand || null;
+    const cityDetected = match.city || null;
 
-          // Check for override to short-circuit processing
-          if (domainKey in TEST_CASE_OVERRIDES) {
-            finalResult = await humanizeName(domain, domain, true);
-            tokensUsed = finalResult.tokens || 0;
-          } else {
-            try {
-              finalResult = await humanizeName(domain, domain, true);
-              tokensUsed = finalResult.tokens || 0;
-            } catch (error) {
-              console.error(`humanizeName failed for ${domain}: ${error.message}`);
-              finalResult = await callFallbackAPI(domain, rowNum);
-              tokensUsed += finalResult.tokens || 0;
-            }
+    // Check for override to short-circuit processing
+    if (domainKey in TEST_CASE_OVERRIDES) {
+      const result = await humanizeName(domain, domain, true);
+      finalResult = {
+        companyName: result.name || "",
+        confidenceScore: result.confidenceScore || 0,
+        flags: result.flags || [],
+        tokens: result.tokens || 0
+      };
+      tokensUsed = finalResult.tokens || 0;
+    } else {
+      try {
+        const result = await humanizeName(domain, domain, true);
+        finalResult = {
+          companyName: result.name || "",
+          confidenceScore: result.confidenceScore || 0,
+          flags: result.flags || [],
+          tokens: result.tokens || 0
+        };
+        tokensUsed = finalResult.tokens || 0;
+      } catch (error) {
+        console.error(`humanizeName failed for ${domain}: ${error.message}`);
+        const fallback = await callFallbackAPI(domain, rowNum);
+        finalResult = {
+          companyName: fallback.companyName || "",
+          confidenceScore: fallback.confidenceScore || 0,
+          flags: fallback.flags || [],
+          tokens: fallback.tokens || 0
+        };
+        tokensUsed += finalResult.tokens || 0;
+      }
 
-            if (!finalResult.companyName) {
-              console.error(`Empty companyName for ${domain}`);
-              finalResult = {
-                companyName: "",
-                confidenceScore: 0,
-                flags: [...(finalResult.flags || []), "EmptyCompanyName"],
-                tokens: tokensUsed
-              };
-            }
+      if (!finalResult.companyName) {
+        console.error(`Empty companyName for ${domain}`);
+        finalResult = {
+          companyName: "",
+          confidenceScore: 0,
+          flags: [...(finalResult.flags || []), "EmptyCompanyName"],
+          tokens: tokensUsed
+        };
+      }
 
-            const criticalFlags = ["TooGeneric", "CityNameOnly", "FallbackFailed", "Skipped"];
-            const isAcceptable = finalResult.confidenceScore >= 75 &&
-              !finalResult.flags.some(f => criticalFlags.includes(f));
+      const criticalFlags = ["TooGeneric", "CityNameOnly", "FallbackFailed", "Skipped"];
+      const isAcceptable = finalResult.confidenceScore >= 75 &&
+        !finalResult.flags.some(f => criticalFlags.includes(f));
 
-            if (!isAcceptable) {
-              const primary = { ...finalResult };
-              const fallback = await callFallbackAPI(domain, rowNum);
-              tokensUsed += fallback.tokens || 0;
+      if (!isAcceptable) {
+        const primary = { ...finalResult };
+        const fallback = await callFallbackAPI(domain, rowNum);
+        tokensUsed += fallback.tokens || 0;
 
-              if (
-                fallback.companyName &&
-                fallback.confidenceScore >= 75 &&
-                !fallback.flags.some(f => criticalFlags.includes(f))
-              ) {
-                finalResult = {
-                  ...fallback,
-                  flags: [...(fallback.flags || []), "FallbackAPIUsed"],
-                  rowNum
-                };
-              } else {
-                finalResult.flags = [...(finalResult.flags || []), "FallbackAPIFailed"];
-                fallbackTriggers.push({
-                  domain,
-                  rowNum,
-                  reason: "FallbackAPIFailed",
-                  details: {
-                    primary: {
-                      name: primary.companyName || "",
-                      confidenceScore: primary.confidenceScore || 0,
-                      flags: primary.flags || []
-                    },
-                    fallback: {
-                      name: fallback.companyName || "",
-                      confidenceScore: fallback.confidenceScore || 0,
-                      flags: fallback.flags || []
-                    },
-                    brand: brandDetected,
-                    city: cityDetected
-                  },
-                  tokens: tokensUsed
+        if (
+          fallback.companyName &&
+          fallback.confidenceScore >= 75 &&
+          !fallback.flags.some(f => criticalFlags.includes(f))
+        ) {
+          finalResult = {
+            companyName: fallback.companyName,
+            confidenceScore: fallback.confidenceScore,
+            flags: [...(fallback.flags || []), "FallbackAPIUsed"],
+            tokens: fallback.tokens || 0,
+            rowNum
+          };
+        } else {
+          finalResult.flags = [...(finalResult.flags || []), "FallbackAPIFailed"];
+          fallbackTriggers.push({
+            domain,
+            rowNum,
+            reason: "FallbackAPIFailed",
+            details: {
+              primary: {
+                name: primary.companyName || "",
+                confidenceScore: primary.confidenceScore || 0,
+                flags: primary.flags || []
+              },
+              fallback: {
+                name: fallback.companyName || "",
+                confidenceScore: fallback.confidenceScore || 0,
+                flags: fallback.flags || []
+              },
+              brand: brandDetected,
+              city: cityDetected
+            },
+            tokens: tokensUsed
                 });
               }
             }
