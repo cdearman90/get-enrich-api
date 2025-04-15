@@ -1,11 +1,20 @@
-// api/company-name-fallback.js — Version 1.0.29
-import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, KNOWN_PROPER_NOUNS, capitalizeName, KNOWN_CITIES_SET, BRAND_MAPPING } from "./lib/humanize.js";
-import { callOpenAI } from "./lib/openai.js";
+// api/company-name-fallback.js — Version 1.0.30
+import {
+  humanizeName,
+  extractBrandOfCityFromDomain,
+  applyCityShortName,
+  KNOWN_PROPER_NOUNS,
+  capitalizeName,
+  KNOWN_CITIES_SET,
+  BRAND_MAPPING
+} from "./lib/humanize.js";
 
-// Constants unchanged
+// Constants for API configuration
 const BATCH_SIZE = 10;
 const CONCURRENCY_LIMIT = 5;
 const PROCESSING_TIMEOUT_MS = 18000;
+const RETRY_ATTEMPTS = 3;
+const RETRY_DELAY_MS = 1000;
 
 const domainCache = new Map();
 
@@ -74,10 +83,9 @@ const isInitialsOnly = (name) => {
   return words.every(w => /^[A-Z]{1,3}$/.test(w));
 };
 
-const expandInitials = (name, domain, brandDetected, cityDetected) => {
+const expandInitials = (name, brandDetected, cityDetected) => {
   let expanded = [];
   const words = name.split(" ");
-  const domainLower = domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "");
 
   words.forEach(word => {
     if (/^[A-Z]{1,3}$/.test(word)) {
@@ -105,10 +113,9 @@ const expandInitials = (name, domain, brandDetected, cityDetected) => {
 
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
-  const domainLower = domain.toLowerCase();
   console.error(`🌀 Fallback processing row ${rowNum}: ${domain}`);
 
-  const cacheKey = domainLower;
+  const cacheKey = domain.toLowerCase();
   if (domainCache.has(cacheKey)) {
     const cached = domainCache.get(cacheKey);
     return {
@@ -124,17 +131,30 @@ const processLead = async (lead, fallbackTriggers) => {
   let result;
   let tokensUsed = 0;
 
-  const match = extractBrandOfCityFromDomain(domainLower);
+  const match = extractBrandOfCityFromDomain(domain);
   const brandDetected = match.brand || null;
   const cityDetected = match.city || null;
 
-  try {
-    result = await humanizeName(domain, domain, true);
-    tokensUsed = result.tokens || 0;
-    console.error(`humanizeName result for ${domain}: ${JSON.stringify(result)}`);
-  } catch (error) {
-    console.error(`humanizeName error for ${domain}: ${error.message}`);
-    result = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    try {
+      result = await humanizeName(domain, domain, true);
+      tokensUsed = result.tokens || 0;
+      console.error(`humanizeName result for ${domain}: ${JSON.stringify(result)}`);
+      break;
+    } catch (error) {
+      console.error(`humanizeName attempt ${attempt} failed for ${domain}: ${error.message}`);
+      if (attempt < RETRY_ATTEMPTS) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      } else {
+        result = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
+        fallbackTriggers.push({
+          domain,
+          rowNum,
+          reason: "MaxRetriesExceeded",
+          details: { error: error.message }
+        });
+      }
+    }
   }
 
   result.flags = Array.isArray(result.flags) ? result.flags : [];
@@ -148,9 +168,9 @@ const processLead = async (lead, fallbackTriggers) => {
 
   let isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
 
-  if (result.confidenceScore < 75 || result.name.toLowerCase() === domainLower.replace(/\.(com|net|org|co\.uk)$/, "")) {
-    if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainLower.replace(/\.(com|net|org|co\.uk)$/, "")))) {
-      result.name = capitalizeName(domainLower.replace(/\.(com|net|org|co\.uk)$/, ""));
+  if (result.confidenceScore < 75 || result.name.toLowerCase() === domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "")) {
+    if (KNOWN_PROPER_NOUNS.has(capitalizeName(domain.replace(/\.(com|net|org|co\.uk)$/, "")))) {
+      result.name = capitalizeName(domain.replace(/\.(com|net|org|co\.uk)$/, ""));
       result.confidenceScore = 80;
       result.flags.push("ProperNounFallbackFromHumanize");
     } else {
@@ -160,7 +180,7 @@ const processLead = async (lead, fallbackTriggers) => {
   }
 
   // Brand appending logic
-  const brandMatch = domainLower.match(/(chevy|ford|toyota|lincoln|bmw)/i);
+  const brandMatch = domain.toLowerCase().match(/(chevy|ford|toyota|lincoln|bmw)/i);
   const words = result.name.split(" ");
   const isOverride = result.flags.includes("OverrideApplied");
   const isProperNoun = KNOWN_PROPER_NOUNS.has(result.name);
@@ -171,7 +191,6 @@ const processLead = async (lead, fallbackTriggers) => {
   if (!isOverride && brandMatch && (words.length < 3 || isCityOnly || endsWithS)) {
     let prefix = result.name;
     const brandName = capitalizeName(brandMatch[0]);
-    // Prevent repetition
     if (prefix.toLowerCase() === brandName.toLowerCase()) {
       result.name = `${prefix} Auto`;
       result.confidenceScore += 5;
@@ -192,7 +211,7 @@ const processLead = async (lead, fallbackTriggers) => {
   }
 
   if (isInitialsOnly(result.name)) {
-    const expandedName = expandInitials(result.name, domain, brandDetected, cityDetected);
+    const expandedName = expandInitials(result.name, brandDetected, cityDetected);
     if (expandedName !== result.name) {
       result.name = expandedName;
       result.flags.push("InitialsExpandedLocally");
@@ -238,7 +257,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.29 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.30 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
