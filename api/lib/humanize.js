@@ -1,4 +1,4 @@
-// api/lib/humanize.js — Version 4.2.10
+// api/lib/humanize.js — Version 4.2.13
 import { callOpenAI } from "./openai.js";
 
 const CAR_BRANDS = [
@@ -22,7 +22,7 @@ const BRAND_MAPPING = {
   "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
   "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
   "lincoln": "Lincoln", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
-  "mb": "M.B.", "merc": "M.B.", "mercedes": "M.B.", "mercedes-benz": "M.B.", "mercedesbenz": "M.B.", "merk": "M.B.",
+  "mb": "Mercedes", "merc": "Mercedes", "mercedes": "Mercedes", "mercedes-benz": "Mercedes", "mercedesbenz": "Mercedes", "merk": "Mercedes",
   "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile", "plymouth": "Plymouth",
   "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram", "rivian": "Rivian",
   "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion", "smart": "Smart",
@@ -502,7 +502,9 @@ const KNOWN_CITY_SHORT_NAMES = {
   "westgate": "Westgate",
   "milwaukee": "Milwaukee",
   "tooele": "Tooele",
-  "camino real": "Camino Real"
+  "camino real": "Camino Real",
+  // New: Added for mbbhm.com
+  "birmingham": "Birmingham"
 };
 
 const ABBREVIATION_EXPANSIONS = {
@@ -513,7 +515,12 @@ const ABBREVIATION_EXPANSIONS = {
   "jm": "JM Auto",
   "jt": "JT Auto",
   "gy": "GY Auto",
-  "cz": "CZ Auto"
+  "cz": "CZ Auto",
+  // New: Added for ambiguous initials
+  "hmt": "HMT Auto",
+  "np": "Np Auto",
+  "npw": "NPW Auto",
+  "bhm": "Birmingham"
 };
 
 const TEST_CASE_OVERRIDES = {
@@ -522,7 +529,7 @@ const TEST_CASE_OVERRIDES = {
   "athensford.com": "Athens Ford",
   "gusmachadoford.com": "Gus Machado",
   "geraldauto.com": "Gerald Auto",
-  "mbofbrooklyn.com": "M.B. Brooklyn", // Preserved override
+  "mbofbrooklyn.com": "M.B. Brooklyn",
   "karlchevroletstuart.com": "Karl Stuart",
   "kiaoflagrange.com": "Lagrange Kia",
   "toyotaofgreenwich.com": "Greenwich Toyota",
@@ -551,7 +558,9 @@ const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "cars", "motors", "dealer
 
 const KNOWN_COMPOUND_NOUNS = [
   "Auto", "AutoGroup", "Cars", "Motors", "Dealers", "Dealership", "Group", "Motor",
-  "Superior", "Trucks", "Powersports", "Realty", "Team", "Collection"
+  "Superior", "Trucks", "Powersports", "Realty", "Team", "Collection",
+  // New: Added for nplincoln.com
+  "Lincoln"
 ];
 
 const KNOWN_BAD_COMPOUNDS_SET = new Set([
@@ -583,7 +592,8 @@ const KNOWN_SUFFIX_EXPANSIONS = {
   "kia": "Kia",
   "lexus": "Lexus",
   "cadillac": "Cadillac",
-  "vw": "VW"
+  "vw": "VW",
+  "lincoln": "Lincoln" // New: Added for consistency
 };
 
 const openAICache = new Map();
@@ -689,6 +699,7 @@ function earlyCompoundSplit(input) {
   let result = splitCamelCaseWords(input);
   const capitalCount = (result.match(/[A-Z]/g) || []).length;
 
+  // Updated: Handle short initial-like strings and compounds
   if (result.length > 12 || capitalCount >= 2 || KNOWN_BAD_COMPOUNDS_SET.has(domainLower)) {
     for (const noun of KNOWN_COMPOUND_NOUNS) {
       const regex = new RegExp(`(${noun})`, 'i');
@@ -700,6 +711,13 @@ function earlyCompoundSplit(input) {
     result = result.replace(/\s+/g, ' ').split(' ').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(' ');
+  }
+
+  // New: Handle short initial-like strings (e.g., hmtrs)
+  if (result.length <= 5 && !result.includes(" ") && /^[a-zA-Z]+$/.test(result) && !/[aeiou]{2}/.test(result.toLowerCase())) {
+    const initials = result.toUpperCase();
+    result = ABBREVIATION_EXPANSIONS[initials.toLowerCase()] || `${initials} Auto`;
+    flags.push("InitialsExpanded");
   }
 
   if (result.toLowerCase().endsWith("auto")) {
@@ -718,6 +736,7 @@ function earlyCompoundSplit(input) {
         const properNoun = Array.from(KNOWN_PROPER_NOUNS).find(noun => prefix.includes(noun.toLowerCase().replace(/\s+/g, "")));
         if (!properNoun && prefix && (KNOWN_PROPER_NOUNS.has(capitalizeName(prefix)) || /^[A-Z][a-z]+$/.test(capitalizeName(prefix)))) {
           result = `${capitalizeName(prefix)} ${BRAND_MAPPING[brandLower] || capitalizeName(brand)}`;
+          flags.push("InitialsExpandedWithBrand");
           break;
         }
       }
@@ -758,8 +777,10 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (flags.includes("CityMatched")) score += 6;
   if (flags.includes("AbbreviationExpanded")) score += 5;
   if (flags.includes("FallbackBlobSplit")) score += 10;
-  // New: Boost for BrandFirstOrdering
   if (flags.includes("BrandFirstOrdering")) score += 10;
+  // New: Handle ambiguous initials
+  if (flags.includes("AmbiguousInitials")) score -= 10;
+  if (flags.includes("InitialsExpandedWithBrand")) score += 10;
   if (flags.includes("FallbackToDomain")) {
     const wordCount = name.split(" ").length;
     score -= wordCount > 1 ? 5 : 10;
@@ -818,7 +839,6 @@ function extractBrandOfCityFromDomain(domain) {
   const domainLower = domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "");
   const flags = [];
 
-  // New: Check brand-first pattern (e.g., bmwwestspringfield)
   for (const brand of CAR_BRANDS) {
     if (domainLower.startsWith(brand)) {
       const suffix = domainLower.slice(brand.length).replace(/auto(group|mall)?/, "");
@@ -834,7 +854,6 @@ function extractBrandOfCityFromDomain(domain) {
           flags.push("PatternMatched", "BrandFirstOrdering", "CityMatched");
           return { name, brand, city: cityLower, flags, confidence: 100 };
         } else {
-          // Handle non-city suffixes (e.g., classicbmw)
           const properNoun = Array.from(KNOWN_PROPER_NOUNS).find(noun =>
             noun.toLowerCase().replace(/\s+/g, "") === suffix
           );
@@ -849,7 +868,6 @@ function extractBrandOfCityFromDomain(domain) {
     }
   }
 
-  // Existing: Check multi-word cities
   for (const cityLower in KNOWN_CITY_SHORT_NAMES) {
     const cityKey = cityLower.replace(/\s+/g, "");
     if (domainLower.includes(cityKey)) {
@@ -908,7 +926,7 @@ function extractBrandOfCityFromDomain(domain) {
         const properNoun = Array.from(KNOWN_PROPER_NOUNS).find(noun => prefix.includes(noun.toLowerCase().replace(/\s+/g, "")));
         if (properNoun) {
           const brandName = BRAND_MAPPING[brand] || capitalizeName(brand);
-          let name = `${properNoun} ${brandName}`;
+          const name = `${properNoun} ${brandName}`;
           name = enforceThreeWordLimit(name, brand, null);
           flags.push("PatternMatched", "ProperNounFirst");
           return { name, brand, city: null, flags, confidence: 95 };
@@ -1053,7 +1071,6 @@ async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = tru
 
     let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
-    // Updated: Avoid CityNameOnly for BrandFirstOrdering
     const isCityOnly = words.length === 1 && (city === words[0].toLowerCase() || KNOWN_CITIES_SET.has(words[0].toLowerCase()));
     const isProperNoun = KNOWN_PROPER_NOUNS.has(name);
     const hasContext = name.toLowerCase().includes("auto") || words.length > 1 || flags.includes("BrandFirstOrdering");
@@ -1088,79 +1105,13 @@ async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = tru
       }
     }
 
+    // New: Queue ambiguous initials for manual review
     if (confidenceScore < 75 || name.toLowerCase() === domainSlug || name === "") {
-      flags.push("RawDomain");
-      const cacheKey = domainLower;
-      if (openAICache.has(cacheKey)) {
-        const cached = openAICache.get(cacheKey);
-        name = cached.name;
-        confidenceScore = cached.confidenceScore;
-        flags.push("OpenAICacheHit");
-        tokens = 0;
-      } else if (!isProperNoun) {
-        try {
-          const response = await callOpenAI({
-            model: "gpt-4-turbo",
-            messages: [
-              {
-                role: "system",
-                content: "Split compound dealership names using known noun boundaries and spacing. Return max 3 readable words. Capitalize human names and brands. Discard fallback if the result is ambiguous, too short (<8 chars), or lacks a known car brand or noun. If the name returned matches the domain slug exactly, reject and reattempt."
-              },
-              {
-                role: "user",
-                content: `Domain: ${domain}`
-              }
-            ]
-          });
-          let suggestedName = response.choices[0]?.message?.content?.trim() || "";
-          if (suggestedName && suggestedName.split(" ").length <= 3 && !suggestedName.includes("'s")) {
-            if (
-              suggestedName.toLowerCase() === domainSlug ||
-              (suggestedName.length < 8 && !CAR_BRANDS.some(b => suggestedName.toLowerCase().includes(b)) && !KNOWN_PROPER_NOUNS.has(suggestedName))
-            ) {
-              flags.push("OpenAIFallbackUnusable");
-              let splitName = earlyCompoundSplit(domainSlug);
-              if (splitName.split(" ").length >= 2) {
-                suggestedName = capitalizeName(splitName);
-                flags.push("FallbackCompoundSplit");
-              } else if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainSlug))) {
-                suggestedName = capitalizeName(domainSlug);
-                flags.push("ProperNounFallback");
-              } else {
-                suggestedName = "";
-              }
-            }
-            if (!suggestedName && brand) {
-              suggestedName = `${capitalizeName(domainSlug.replace(brand, ""))} ${BRAND_MAPPING[brand.toLowerCase()]}`;
-              flags.push("BrandAppendedAfterOpenAIFail");
-            }
-            if (NON_DEALERSHIP_KEYWORDS.some(k => suggestedName.toLowerCase().includes(k))) {
-              suggestedName = enforceThreeWordLimit(`${suggestedName} Auto`, brand, city);
-              flags.push("NonDealershipAutoAppended");
-            }
-            if (suggestedName) {
-              name = suggestedName;
-              confidenceScore = 80;
-              flags.push("OpenAIValidated");
-              tokens = response.usage.total_tokens;
-              if (name === capitalizeName(domainSlug)) {
-                tokens += 5;
-                flags.push("OpenAINoImprovementPenalty");
-              }
-              openAICache.set(cacheKey, { name: suggestedName, confidenceScore: 80, tokens });
-              console.error(`OpenAI tokens used for ${domain}: ${tokens}`);
-            }
-          }
-        } catch (error) {
-          console.error(`OpenAI fallback failed for ${domain}: ${error.message}`);
-          flags.push("OpenAIParseError");
-          confidenceScore = 50;
-        }
-      }
-    }
-
-    if (confidenceScore < 75 || name === "") {
-      if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainSlug))) {
+      if (name.match(/^[A-Z]{2,5}$/i) && !brand && !city) {
+        flags.push("AmbiguousInitials");
+        name = ABBREVIATION_EXPANSIONS[name.toLowerCase()] || `${name.toUpperCase()} Auto`;
+        confidenceScore = 70; // Low to trigger review
+      } else if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainSlug))) {
         name = capitalizeName(domainSlug);
         flags.push("ProperNounFallbackBypassedThreshold");
         confidenceScore = 80;
