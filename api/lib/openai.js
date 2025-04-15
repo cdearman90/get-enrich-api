@@ -1,7 +1,6 @@
-// api/lib/openai.js — Version 1.0.2
+// api/lib/openai.js — Version 1.0.3
 export async function callOpenAI(prompt, options = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
-  if (!apiKey) throw new Error("❌ OPENAI_API_KEY is not set");
 
   const defaults = {
     model: "gpt-4-turbo",
@@ -12,6 +11,18 @@ export async function callOpenAI(prompt, options = {}) {
     timeoutMs: 9000,
   };
   const opts = { ...defaults, ...options };
+
+  // Fallback if API key is missing
+  if (!apiKey) {
+    console.warn("⚠️ OPENAI_API_KEY is not set — returning default response");
+    return {
+      output: JSON.stringify({ isReadable: true, isConfident: false }),
+      tokens: 0,
+      confidence: "low",
+      source: "GPT",
+      error: "Missing OPENAI_API_KEY"
+    };
+  }
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), opts.timeoutMs);
@@ -52,7 +63,7 @@ export async function callOpenAI(prompt, options = {}) {
       try {
         json = JSON.parse(raw);
       } catch (err) {
-        console.error(`JSON parse error: ${err.message}`); // Use err
+        console.error(`JSON parse error: ${err.message}`);
         logToGPTErrorTab(prompt, raw, "Invalid JSON");
         throw new Error("Malformed OpenAI JSON");
       }
@@ -75,7 +86,7 @@ export async function callOpenAI(prompt, options = {}) {
       try {
         JSON.parse(output);
       } catch (err) {
-        console.error(`Invalid JSON in response: ${err.message}`); // Use err
+        console.error(`Invalid JSON in response: ${err.message}`);
         logToGPTErrorTab(prompt, content, "Invalid JSON in response");
         return {
           output: JSON.stringify({ isReadable: true, isConfident: false }),
