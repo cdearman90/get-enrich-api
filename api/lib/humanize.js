@@ -652,6 +652,25 @@ function expandInitials(name, domain, brand, city) {
   return expanded.join(" ");
 }
 
+// Helper to split camelCase words more reliably
+function splitCamelCaseWords(input) {
+  if (!input || typeof input !== "string") return "";
+  // Split on lowercase-to-uppercase transitions (e.g., "kennedyAuto" → "kennedy Auto")
+  // Split on uppercase-to-uppercase-lowercase (e.g., "BMWWest" → "BMW West")
+  // Handle consecutive uppercase letters for acronyms (e.g., "BMW" stays as "BMW")
+  let result = input
+    .replace(/([a-z])([A-Z])/g, "$1 $2") // e.g., "kennedyAuto" → "kennedy Auto"
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2") // e.g., "BMWWest" → "BMW West"
+    .replace(/([a-z])([0-9])/g, "$1 $2") // e.g., "route66" → "route 66"
+    .replace(/-/g, " ")
+    .trim();
+
+  // Handle cases like "McCarthyAutoGroup"
+  result = result.replace(/([A-Z][a-z]+)([A-Z][a-z]+)/g, "$1 $2"); // e.g., "McCarthyAuto" → "McCarthy Auto"
+
+  return result;
+}
+
 function earlyCompoundSplit(input) {
   if (!input || typeof input !== "string") return "";
   const domainLower = input.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
@@ -664,12 +683,8 @@ function earlyCompoundSplit(input) {
     }
   }
 
-  let result = input
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
-    .replace(/([a-z])([0-9])/g, "$1 $2")
-    .replace(/-/g, " ")
-    .trim();
+  // Initial split using camelCase and other patterns
+  let result = splitCamelCaseWords(input);
 
   // Split on known suffixes like "auto"
   if (result.toLowerCase().endsWith("auto")) {
@@ -681,13 +696,14 @@ function earlyCompoundSplit(input) {
 
   // Split on known car brands, avoiding proper noun conflicts
   for (const brand of CAR_BRANDS) {
-    if (result.toLowerCase().includes(brand)) {
-      const parts = result.toLowerCase().split(brand);
+    const brandLower = brand.toLowerCase();
+    if (domainLower.includes(brandLower)) {
+      const parts = domainLower.split(brandLower);
       if (parts.length > 1) {
         const prefix = parts[0].trim();
         const properNoun = Array.from(KNOWN_PROPER_NOUNS).find(noun => prefix.includes(noun.toLowerCase().replace(/\s+/g, "")));
         if (!properNoun && prefix && (KNOWN_PROPER_NOUNS.has(capitalizeName(prefix)) || /^[A-Z][a-z]+$/.test(capitalizeName(prefix)))) {
-          result = `${capitalizeName(prefix)} ${BRAND_MAPPING[brand] || capitalizeName(brand)}`;
+          result = `${capitalizeName(prefix)} ${BRAND_MAPPING[brandLower] || capitalizeName(brand)}`;
           break;
         }
       }
