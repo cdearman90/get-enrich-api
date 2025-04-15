@@ -1,4 +1,4 @@
-// api/batch-enrich.js — Version 4.2.7
+// api/batch-enrich.js — Version 4.2.8
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
@@ -141,19 +141,6 @@ const KNOWN_CITY_SHORT_NAMES = {
   "shelbyville": "Shelbyville"
 };
 
-const callWithRetries = async (fn, retries = 7, delay = 1000) => {
-  for (let attempt = 1; attempt <= retries; attempt++) {
-    try {
-      return { result: await fn(), attempt };
-    } catch (error) {
-      if (attempt === retries) throw error;
-      console.error(`Retry ${attempt} failed: ${error.message}`);
-      await new Promise((res) => setTimeout(res, 2 ** attempt * delay));
-    }
-  }
-  return null;
-};
-
 const callFallbackAPI = async (domain, rowNum) => {
   try {
     const controller = new AbortController();
@@ -172,10 +159,12 @@ const callFallbackAPI = async (domain, rowNum) => {
     try {
       data = JSON.parse(text);
     } catch (error) {
+      console.error(`Invalid JSON response: ${error.message}`);
       throw new Error(`Invalid JSON response: ${text}`);
     }
 
     if (!response.ok || !data.successful?.[0]) {
+      console.error(`Fallback error ${response.status}: ${data.error || text}`);
       throw new Error(`Fallback error ${response.status}: ${data.error || text}`);
     }
 
@@ -218,8 +207,8 @@ const callFallbackAPI = async (domain, rowNum) => {
           };
           tokensUsed += response.usage.total_tokens;
         }
-      } catch (openaiErr) {
-        console.error(`OpenAI fallback failed: ${openaiErr.message}`);
+      } catch (openaiError) {
+        console.error(`OpenAI fallback failed: ${openaiError.message}`);
         local.flags.push("OpenAIParseError");
         local.confidenceScore = 50;
       }
@@ -256,6 +245,7 @@ const streamToString = async (req) => {
       resolve(Buffer.concat(chunks).toString("utf-8"));
     });
     req.on("error", (error) => {
+      console.error(`Stream error: ${error.message}`);
       clearTimeout(timeout);
       reject(error);
     });
@@ -307,7 +297,7 @@ const capitalizeName = (words) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 batch-enrich.js v4.2.7 – Domain Processing Start");
+    console.error("🧠 batch-enrich.js v4.2.8 – Domain Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
@@ -315,11 +305,13 @@ export default async function handler(req, res) {
     try {
       body = JSON.parse(raw);
     } catch (error) {
+      console.error(`Invalid JSON body: ${error.message}`);
       return res.status(400).json({ error: "Invalid JSON body", details: error.message });
     }
 
     const leads = body.leads || body.leadList || body.domains;
     if (!Array.isArray(leads)) {
+      console.error("Leads must be an array");
       return res.status(400).json({ error: "Leads must be an array" });
     }
 
@@ -342,6 +334,7 @@ export default async function handler(req, res) {
     });
 
     if (validatedLeads.length === 0) {
+      console.error("No valid leads");
       return res.status(400).json({ error: "No valid leads", details: validationErrors });
     }
 
@@ -359,6 +352,7 @@ export default async function handler(req, res) {
 
     for (const chunk of chunks) {
       if (Date.now() - startTime > 18000) {
+        console.error("Processing timeout reached");
         return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
       }
 
@@ -500,6 +494,7 @@ export default async function handler(req, res) {
                 finalResult.confidenceScore -= 5;
               }
             } catch (error) {
+              console.error(`OpenAI parse error: ${error.message}`);
               finalResult.flags.push("OpenAIParseError");
             }
           }
