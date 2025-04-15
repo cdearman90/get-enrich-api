@@ -1,4 +1,4 @@
-// api/batch-enrich.js — Version 4.2.8
+// api/batch-enrich.js — Version 4.2.9
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
@@ -297,7 +297,7 @@ const capitalizeName = (words) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 batch-enrich.js v4.2.8 – Domain Processing Start");
+    console.error("🧠 batch-enrich.js v4.2.9 – Domain Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
