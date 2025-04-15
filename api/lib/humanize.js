@@ -1055,6 +1055,7 @@ async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = tru
     // Check overrides first
     if (TEST_CASE_OVERRIDES[domainLower]) {
       const name = TEST_CASE_OVERRIDES[domainLower];
+      console.error(`🧪 TEST_CASE_OVERRIDES applied for ${domainLower}: "${name}"`);
       const flags = ["OverrideApplied"];
       const confidenceScore = calculateConfidenceScore(name, flags, domainLower);
       return { name, confidenceScore, flags, tokens: 0 };
