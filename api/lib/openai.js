@@ -1,6 +1,4 @@
-// api/lib/openai.js - Final Production Version
-// Updated April 2025 - Fully patched for ShowRevv Lead Enrichment System
-
+// api/lib/openai.js — Version 1.0.2
 export async function callOpenAI(prompt, options = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new Error("❌ OPENAI_API_KEY is not set");
@@ -54,6 +52,7 @@ export async function callOpenAI(prompt, options = {}) {
       try {
         json = JSON.parse(raw);
       } catch (err) {
+        console.error(`JSON parse error: ${err.message}`); // Use err
         logToGPTErrorTab(prompt, raw, "Invalid JSON");
         throw new Error("Malformed OpenAI JSON");
       }
@@ -61,7 +60,6 @@ export async function callOpenAI(prompt, options = {}) {
       const content = json.choices?.[0]?.message?.content?.trim();
       if (!content) throw new Error("Empty OpenAI response");
 
-      // Extract the JSON portion of the content
       const jsonMatch = content.match(/\{.*?\}/);
       const output = jsonMatch ? jsonMatch[0] : null;
       if (!output) {
@@ -74,10 +72,10 @@ export async function callOpenAI(prompt, options = {}) {
         };
       }
 
-      // Validate that the output is a valid JSON string
       try {
         JSON.parse(output);
       } catch (err) {
+        console.error(`Invalid JSON in response: ${err.message}`); // Use err
         logToGPTErrorTab(prompt, content, "Invalid JSON in response");
         return {
           output: JSON.stringify({ isReadable: true, isConfident: false }),
