@@ -1,4 +1,4 @@
-// api/batch-enrich.js — Version 4.2.12
+// api/batch-enrich.js — Version 4.2.14
 import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 
@@ -22,6 +22,7 @@ const pLimit = (concurrency) => {
 
 const domainCache = new Map();
 const processedDomains = new Set();
+const openAICache = new Map(); // Cache OpenAI results for similar domains
 
 const VERCEL_API_BASE_URL = "https://get-enrich-api-git-main-show-revv.vercel.app";
 const FALLBACK_API_URL = `${VERCEL_API_BASE_URL}/api/company-name-fallback`;
@@ -159,13 +160,13 @@ const callFallbackAPI = async (domain, rowNum) => {
     try {
       data = JSON.parse(text);
     } catch (error) {
-      console.error(`Invalid JSON response: ${error.message}`);
-      throw new Error(`Invalid JSON response: ${text}`);
+      console.error(`Invalid JSON response for ${domain}: ${error.message}`);
+      throw new Error(`Invalid JSON: ${text}`);
     }
 
     if (!response.ok || !data.successful?.[0]) {
-      console.error(`Fallback error ${response.status}: ${data.error || text}`);
-      throw new Error(`Fallback error ${response.status}: ${data.error || text}`);
+      console.error(`Fallback error for ${domain}: ${response.status}: ${data.error || text}`);
+      throw new Error(`Fallback error ${response.status}`);
     }
 
     const result = data.successful[0];
@@ -178,48 +179,72 @@ const callFallbackAPI = async (domain, rowNum) => {
       rowNum
     };
   } catch (error) {
-    console.error(`Fallback API failed: ${error.message}`); // Use error
+    console.error(`Fallback API failed for ${domain}: ${error.message}`);
     let local = await humanizeName(domain, domain, true);
     let tokensUsed = local.tokens || 0;
 
-    if (local.confidenceScore < 75 || local.name.toLowerCase() === domain.replace(/\.(com|net|org|co\.uk)$/, "")) {
+    if (!local.name || local.confidenceScore < 75 || local.name.toLowerCase() === domain.replace(/\.(com|net|org|co\.uk)$/, "")) {
       try {
-        const response = await callOpenAI({
-          model: "gpt-4-turbo",
-          messages: [
-            {
-              role: "system",
-              content: "Split compound words into a human-readable company name, max 3 words, suitable for '[Company]'s CRM isn't broken-it's bleeding.' Exclude possessive forms."
-            },
-            {
-              role: "user",
-              content: `Domain: ${domain}`
-            }
-          ]
-        });
-        const suggestedName = response.choices[0].message.content.trim();
-        if (suggestedName.split(" ").length <= 3 && !suggestedName.includes("'s")) {
+        const cacheKey = domain.toLowerCase();
+        if (openAICache.has(cacheKey)) {
+          const cached = openAICache.get(cacheKey);
           local = {
-            name: suggestedName,
-            confidenceScore: 80,
-            flags: [...(local.flags || []), "OpenAIValidated"],
-            tokens: response.usage.total_tokens
+            name: cached.name,
+            confidenceScore: cached.confidenceScore,
+            flags: [...(local.flags || []), "OpenAICacheHit"],
+            tokens: 0
           };
-          tokensUsed += response.usage.total_tokens;
+          tokensUsed += cached.tokens;
+        } else {
+          const response = await callOpenAI({
+            model: "gpt-4-turbo",
+            messages: [
+              {
+                role: "system",
+                content: "Split compound words into a human-readable company name, max 3 words, suitable for '[Company]'s CRM isn't broken-it's bleeding.' Exclude possessive forms."
+              },
+              {
+                role: "user",
+                content: `Domain: ${domain}`
+              }
+            ]
+          });
+          const suggestedName = response.choices[0]?.message?.content?.trim() || "";
+          if (suggestedName && suggestedName.split(" ").length <= 3 && !suggestedName.includes("'s")) {
+            local = {
+              name: suggestedName,
+              confidenceScore: 80,
+              flags: [...(local.flags || []), "OpenAIValidated"],
+              tokens: response.usage.total_tokens
+            };
+            tokensUsed += response.usage.total_tokens;
+            openAICache.set(cacheKey, { name: suggestedName, confidenceScore: 80, tokens: response.usage.total_tokens });
+            console.log(`OpenAI tokens used for ${domain}: ${response.usage.total_tokens}`);
+          } else {
+            local.flags = [...(local.flags || []), "InvalidOpenAIResponse"];
+          }
         }
       } catch (openaiError) {
-        console.error(`OpenAI fallback failed: ${openaiError.message}`);
-        local.flags.push("OpenAIParseError");
-        local.confidenceScore = 50;
+        console.error(`OpenAI failed for ${domain}: ${openaiError.message}`);
+        local.flags = [...(local.flags || []), "OpenAIParseError"];
+        local.confidenceScore = Math.min(local.confidenceScore, 50);
       }
     }
 
     const brandMatch = domain.match(/(chevy|ford|toyota|lincoln|bmw)/i);
-    if (brandMatch && local.name.split(" ").length < 3) {
-      const prefix = local.name.split(" ")[0] || local.name;
+    if (brandMatch && (local.name || "").split(" ").length < 3) {
+      const prefix = (local.name || "").split(" ")[0] || local.name || domain.split(".")[0];
       local.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
-      local.confidenceScore += 5;
-      local.flags.push("BrandAppended");
+      local.confidenceScore = (local.confidenceScore || 0) + 5;
+      local.flags = [...(local.flags || []), "BrandAppended"];
+    }
+
+    // Non-dealership fallback (e.g., exprealty.com → "Exp Realty")
+    if (!brandMatch && !local.name.includes("Auto") && domain.match(/realty|exp|group/i)) {
+      const baseName = domain.split(".")[0].replace(/realty|exp|group/i, "").trim();
+      local.name = `${capitalizeName(baseName)} Realty`;
+      local.confidenceScore = Math.max(local.confidenceScore, 70);
+      local.flags = [...(local.flags || []), "NonDealershipFallback"];
     }
 
     return {
@@ -253,11 +278,13 @@ const streamToString = async (req) => {
 };
 
 const isInitialsOnly = (name) => {
+  if (!name || typeof name !== "string") return false;
   const words = name.split(" ");
   return words.every(w => /^[A-Z]{1,3}$/.test(w));
 };
 
 const expandInitials = (name, domain, brandDetected, cityDetected) => {
+  if (!name || typeof name !== "string") return "";
   let expanded = [];
   const words = name.split(" ");
 
@@ -281,20 +308,23 @@ const expandInitials = (name, domain, brandDetected, cityDetected) => {
 };
 
 const capitalizeName = (words) => {
+  if (!words || typeof words !== "string") words = "";
   if (typeof words === "string") words = words.split(/\s+/);
   return words
     .map((word, i) => {
+      if (!word) return word;
       if (word.toLowerCase() === "chevrolet") return "Chevy";
       if (["of", "and", "to"].includes(word.toLowerCase()) && i > 0) return word.toLowerCase();
       if (/^[A-Z]{1,3}$/.test(word)) return word;
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
+    .filter(Boolean)
     .join(" ");
 };
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 batch-enrich.js v4.2.12 – Domain Processing Start");
+    console.log("🧠 batch-enrich.js v4.2.14 – Domain Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
@@ -321,13 +351,11 @@ export default async function handler(req, res) {
         validationErrors.push(`Index ${i} not object`);
         return;
       }
-
       const domain = (lead.domain || "").trim().toLowerCase();
       if (!domain) {
         validationErrors.push(`Index ${i} missing domain`);
         return;
       }
-
       validatedLeads.push({ domain, rowNum: lead.rowNum || i + 1 });
     });
 
@@ -359,30 +387,24 @@ export default async function handler(req, res) {
           const { domain, rowNum } = lead;
           const domainKey = domain.toLowerCase();
 
-          console.error(`Processing lead: ${domain} (Row ${rowNum})`);
+          console.log(`Processing lead: ${domain} (Row ${rowNum})`);
 
           if (processedDomains.has(domainKey)) {
             const cached = domainCache.get(domainKey);
             if (cached) {
-              console.error(`Skipping duplicate: ${domain}`);
+              console.log(`Skipping duplicate: ${domain}`);
               return {
                 domain,
-                companyName: cached.companyName,
-                confidenceScore: cached.confidenceScore,
-                flags: [...cached.flags, "DuplicateSkipped"],
+                companyName: cached.companyName || "",
+                confidenceScore: cached.confidenceScore || 0,
+                flags: [...(cached.flags || []), "DuplicateSkipped"],
                 rowNum,
                 tokens: 0
               };
             }
           }
 
-          if (domainCache.has(domainKey)) {
-            const cached = domainCache.get(domainKey);
-            processedDomains.add(domainKey);
-            return { ...cached, rowNum, domain };
-          }
-
-          let finalResult;
+          let finalResult = { companyName: "", confidenceScore: 0, flags: [], tokens: 0 };
           let tokensUsed = 0;
 
           const match = extractBrandOfCityFromDomain(domainKey);
@@ -398,18 +420,21 @@ export default async function handler(req, res) {
             tokensUsed += finalResult.tokens || 0;
           }
 
+          if (!finalResult.companyName) {
+            console.error(`Empty companyName for ${domain}`);
+            finalResult = {
+              companyName: "",
+              confidenceScore: 0,
+              flags: [...(finalResult.flags || []), "EmptyCompanyName"],
+              tokens: tokensUsed
+            };
+          }
+
           const criticalFlags = ["TooGeneric", "CityNameOnly", "FallbackFailed", "Skipped"];
           const isAcceptable = finalResult.confidenceScore >= 75 &&
             !finalResult.flags.some(f => criticalFlags.includes(f));
 
-          if (isAcceptable) {
-            domainCache.set(domainKey, {
-              companyName: finalResult.companyName,
-              confidenceScore: finalResult.confidenceScore,
-              flags: finalResult.flags
-            });
-            processedDomains.add(domainKey);
-          } else {
+          if (!isAcceptable) {
             const primary = { ...finalResult };
             const fallback = await callFallbackAPI(domain, rowNum);
             tokensUsed += fallback.tokens || 0;
@@ -425,19 +450,22 @@ export default async function handler(req, res) {
                 rowNum
               };
             } else {
-              finalResult.flags.push("FallbackAPIFailed");
+              finalResult.flags = [...(finalResult.flags || []), "FallbackAPIFailed"];
               fallbackTriggers.push({
                 domain,
                 rowNum,
                 reason: "FallbackAPIFailed",
                 details: {
                   primary: {
-                    name: primary.companyName,
-                    confidenceScore: primary.confidenceScore,
-                    flags: primary.flags
+                    name: primary.companyName || "",
+                    confidenceScore: primary.confidenceScore || 0,
+                    flags: primary.flags || []
                   },
-                  fallbackScore: fallback.confidenceScore,
-                  fallbackFlags: fallback.flags,
+                  fallback: {
+                    name: fallback.companyName || "",
+                    confidenceScore: fallback.confidenceScore || 0,
+                    flags: fallback.flags || []
+                  },
                   brand: brandDetected,
                   city: cityDetected
                 },
@@ -453,63 +481,57 @@ export default async function handler(req, res) {
           ) {
             manualReviewQueue.push({
               domain,
-              name: finalResult.companyName,
-              confidenceScore: finalResult.confidenceScore,
-              flags: finalResult.flags,
+              name: finalResult.companyName || "",
+              confidenceScore: finalResult.confidenceScore || 0,
+              flags: finalResult.flags || [],
               rowNum
             });
-
-            finalResult = {
-              domain,
-              companyName: finalResult.companyName || "",
-              confidenceScore: Math.max(finalResult.confidenceScore, 50),
-              flags: [...finalResult.flags, "LowConfidence"],
-              rowNum
-            };
+            finalResult.flags = [...(finalResult.flags || []), "LowConfidence"];
+            finalResult.confidenceScore = Math.max(finalResult.confidenceScore || 0, 50);
           }
 
           if (isInitialsOnly(finalResult.companyName)) {
             const expandedName = expandInitials(finalResult.companyName, domain, brandDetected, cityDetected);
-            if (expandedName !== finalResult.companyName) {
+            if (expandedName && expandedName !== finalResult.companyName) {
               finalResult.companyName = expandedName;
               finalResult.flags.push("InitialsExpandedLocally");
               finalResult.confidenceScore -= 5;
             }
           }
 
-          if (process.env.OPENAI_API_KEY && isInitialsOnly(finalResult.companyName)) {
-            const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${finalResult.companyName}" is readable and natural as a company name in the sentence "{Company}'s CRM isn't broken—it's bleeding". Do not include any additional text outside the JSON object.`;
-            const response = await callOpenAI({ prompt, maxTokens: 40 });
-            tokensUsed += response.tokens || 0;
-
+          if (process.env.OPENAI_API_KEY && isInitialsOnly(finalResult.companyName) && !brandDetected && !cityDetected) {
             try {
+              const prompt = `Return a JSON object in the format {"isReadable": true/false, "isConfident": true/false} indicating whether "${finalResult.companyName}" is readable and natural as a company name in the sentence "{Company}'s CRM isn't broken—it's bleeding". Do not include any additional text outside the JSON object.`;
+              const response = await callOpenAI({ prompt, maxTokens: 40 });
+              tokensUsed += response.tokens || 0;
+
               const parsed = JSON.parse(response.output || "{}");
               if (!parsed.isReadable && parsed.isConfident) {
-                const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : finalResult.companyName.split(" ")[0];
-                const fallbackBrand = brandDetected || finalResult.companyName.split(" ")[1] || "Auto";
-                finalResult.companyName = `${fallbackCity} ${fallbackBrand}`;
+                const fallbackCity = cityDetected ? applyCityShortName(cityDetected) : domain.split(".")[0];
+                const fallbackBrand = brandDetected || "Auto";
+                finalResult.companyName = `${fallbackCity} ${fallbackBrand}`.slice(0, 3);
                 finalResult.flags.push("InitialsExpandedByOpenAI");
                 finalResult.confidenceScore -= 5;
               }
             } catch (error) {
-              console.error(`OpenAI parse error: ${error.message}`);
+              console.error(`OpenAI parse error for ${domain}: ${error.message}`);
               finalResult.flags.push("OpenAIParseError");
             }
           }
 
           domainCache.set(domainKey, {
-            companyName: finalResult.companyName,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags
+            companyName: finalResult.companyName || "",
+            confidenceScore: finalResult.confidenceScore || 0,
+            flags: finalResult.flags || []
           });
           processedDomains.add(domainKey);
 
           totalTokens += tokensUsed;
           return {
             domain,
-            companyName: finalResult.companyName,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags,
+            companyName: finalResult.companyName || "",
+            confidenceScore: finalResult.confidenceScore || 0,
+            flags: finalResult.flags || [],
             rowNum,
             tokens: tokensUsed
           };
@@ -519,7 +541,7 @@ export default async function handler(req, res) {
       successful.push(...chunkResults);
     }
 
-    console.error(
+    console.log(
       `Batch complete: enriched=${successful.length}, review=${manualReviewQueue.length}, fallbacks=${fallbackTriggers.length}, tokens=${totalTokens}`
     );
 
@@ -531,7 +553,7 @@ export default async function handler(req, res) {
       partial: false
     });
   } catch (error) {
-    console.error(`❌ Handler error: ${error.message}\n${error.stack}`); // Use error
+    console.error(`❌ Handler error: ${error.message}\n${error.stack}`);
     return res.status(500).json({ error: "Internal server error", details: error.message });
   }
 }
