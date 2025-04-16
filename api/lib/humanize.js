@@ -637,7 +637,7 @@ const TEST_CASE_OVERRIDES = {
   "sundancechevy.com": "Sundance Chevy",
   "steponeauto.com": "Step One Auto",
   "capital-honda.com": "Capital Honda",
-  "tituswill.com": "Titus-Will"
+  "tituswill.com": "Titus-Will",
   "galeanasc.com": "Galeana", // Proper noun fix
 };
 
