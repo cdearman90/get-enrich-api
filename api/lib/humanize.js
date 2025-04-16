@@ -1,6 +1,7 @@
 // humanize.js — Version 4.2.26
 // Build ID: 20250421-HUMANIZE-FIX-V1
 // Purpose: Enrich dealership domains into clean company names for cold email campaigns
+// Integrates with company-name-fallback.js v1.0.49
 
 import { callOpenAI } from "./openai.js";
 
@@ -125,8 +126,6 @@ const NON_DEALERSHIP_KEYWORDS = [
   "financial", "finance", "body shop", "boat", "watersports", "ATV", "tractor", "lawn", "real estate", "realtor",
   "construction", "drive", "dealer"
 ];
-
-console.error('humanize.js v4.2.26 – Initialized (Build ID: 20250421-HUMANIZE-FIX-V1)');
 
 // eslint-disable-next-line no-unused-vars
 let KNOWN_CITIES_SET = new Set([
@@ -819,7 +818,7 @@ function extractBrandOfCityFromDomain(domain, flags = []) {
     }
   }
 
-  const splitName = splitCamelCaseWords(domainLower);
+  const splitName = splitCamelCaseWords(domainLower, flags).name;
   if (FIRST_LAST_NAME_PATTERN.test(splitName)) {
     name = splitName;
     flags.push("FirstLastNameMatched");
@@ -838,7 +837,7 @@ function extractBrandOfCityFromDomain(domain, flags = []) {
     flags.push("FallbackToDomain");
   }
 
-  return { name: capitalizeName(name, flags).name, brand, city, flags: flags };
+  return { name: capitalizeName(name, flags).name, brand, city, flags };
 }
 
 function splitCamelCaseWords(input, flags = []) {
@@ -1038,9 +1037,119 @@ function preprocessProperNouns(name, flags = []) {
   return { name: processedName, flags };
 }
 
+async function humanizeName(inputName, domain, skipCache = false) {
+  try {
+    if (!domain || typeof domain !== "string") {
+      console.error(`Invalid domain: ${domain}`);
+      return { name: "", confidenceScore: 0, flags: ["InvalidInput"], tokens: 0 };
+    }
+    const domainLower = domain.toLowerCase();
+    console.warn(`🔍 Processing domain: ${domain}`);
+    if (BRAND_ONLY_DOMAINS.has(domainLower)) {
+      console.warn(`Brand-only domain detected: ${domain}, skipping`);
+      return { name: "", confidenceScore: 0, flags: ["BrandOnlySkipped"], tokens: 0 };
+    }
+    if (!skipCache && domainCache.has(domainLower)) {
+      const cached = domainCache.get(domainLower);
+      console.warn(`🧪 Cache hit for ${domainLower}: "${cached.name}"`);
+      return { ...cached, flags: [...cached.flags, "CacheHit"] };
+    }
+    if (TEST_CASE_OVERRIDES[domainLower]) {
+      const name = TEST_CASE_OVERRIDES[domainLower];
+      console.warn(`🧪 TEST_CASE_OVERRIDES applied for ${domainLower}: "${name}"`);
+      const flags = ["OverrideApplied"];
+      const confidenceScore = calculateConfidenceScore(name, flags, domainLower);
+      const result = { name, confidenceScore, flags, tokens: 0 };
+      domainCache.set(domainLower, result);
+      return result;
+    }
+    if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
+      console.warn(`Non-dealership domain detected: ${domain}`);
+      let fallbackName = earlyCompoundSplit(domainLower, []).name;
+      if (domainLower.includes("realty")) {
+        const baseName = domainLower.replace(/realty/i, "").replace(/\.(com|net|org|co\.uk)/i, "").replace(/[^a-zA-Z0-9\s-]/g, "").trim();
+        fallbackName = `${capitalizeName(baseName, []).name} Realty`;
+      } else if (domainLower.includes("insurance")) {
+        const baseName = domainLower.replace(/insurance/i, "").replace(/\.(com|net|org|co\.uk)/i, "").replace(/[^a-zA-Z0-9\s-]/g, "").trim();
+        fallbackName = `${capitalizeName(baseName, []).name} Insurance`;
+      } else {
+        fallbackName = `${capitalizeName(fallbackName, []).name} Auto`;
+      }
+      fallbackName = enforceThreeWordLimit(fallbackName, null, null, []).name;
+      const flags = ["NonDealership", "FallbackCompoundSplitAfterNonDealership"];
+      const confidenceScore = calculateConfidenceScore(fallbackName, flags, domainLower);
+      const result = { name: fallbackName, confidenceScore: Math.max(confidenceScore, 80), flags, tokens: 0 };
+      domainCache.set(domainLower, result);
+      return result;
+    }
+    let { name, flags, brand, city } = extractBrandOfCityFromDomain(domain);
+    name = stripGenericWords(name, domain, flags).name;
+    name = preprocessProperNouns(name, flags).name;
+    let words = name.split(" ");
+    const deduped = [];
+    const seen = new Set();
+    let cityDetected = false;
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i].toLowerCase();
+      if (CAR_BRANDS.includes(w) || BRAND_MAPPING[w]) {
+        if (seen.has(w)) continue;
+        seen.add(w);
+        deduped.push(words[i]);
+      } else {
+        deduped.push(words[i]);
+      }
+    }
+    name = deduped.join(" ");
+    if (deduped.length < words.length) flags.push("BrandDuplicationFixedEarly");
+    if (!name.includes(" ") && containsCarBrand(domain)) {
+      name = splitCamelCaseWords(name, flags).name;
+            const { name: spacedName, flags: newFlags } = await validateSpacingWithOpenAI(name, flags);
+      name = spacedName;
+      flags = newFlags;
+    }
+    const { name: expandedName, flags: expandedFlags } = expandInitials(name, domain, brand, city, flags);
+    name = expandedName;
+    flags = expandedFlags;
+    const { name: reorderedName, flags: reorderedFlags } = reorderBrandCity(name, flags);
+    name = reorderedName;
+    flags = reorderedFlags;
+    const { name: limitedName, flags: limitedFlags } = enforceThreeWordLimit(name, brand, city, flags);
+    name = limitedName;
+    flags = limitedFlags;
+    const { name: handledName, flags: handledFlags } = handleNamesEndingInS(name, brand, city, flags);
+    name = handledName;
+    flags = handledFlags;
+    let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
+    if (confidenceScore < 90 || name.toLowerCase() === domainLower || !name) {
+      if (name.match(/^[A-Z]{2,5}$/i) && !brand && !city) {
+        flags.push("AmbiguousInitials");
+        name = ABBREVIATION_EXPANSIONS[name.toLowerCase()] || `${name.toUpperCase()} Auto`;
+        confidenceScore = 70;
+      } else if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainLower, []).name)) {
+        name = capitalizeName(domainLower, []).name;
+        confidenceScore = 125;
+      } else {
+        console.warn(`⚠️ Weak fallback for domain ${domain}: ${name}, score ${confidenceScore}, flags: ${flags.join(", ")}`);
+        flags.push("ManualReviewRecommended");
+      }
+    } else {
+      console.warn(`✅ Acceptable result: ${name} (${confidenceScore})`);
+    }
+    const result = { name, confidenceScore, flags, tokens: 0 };
+    domainCache.set(domainLower, result);
+    return result;
+  } catch (err) {
+    console.error(`❌ humanizeName failed for ${domain}: ${err.stack}`);
+    return { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
+  }
+}
+
 function splitFallbackCompounds(input, flags = []) {
   if (!input || typeof input !== "string") return { name: input, flags };
-  let result = input;
+  let result = input
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
+    .trim();
   const suffixes = new Set(["motor", "group", "auto", "dealers", "dealership", "cars", "co"]);
   if (result.length > 5) {
     for (let suffix of suffixes) {
@@ -1135,114 +1244,6 @@ function handleNamesEndingInS(name, brand, city, flags = []) {
   words[words.length - 1] = lastWord.slice(0, -1);
   return { name: `${words.join(" ")} Auto`, flags };
 }
-
-async function humanizeName(inputName, domain, skipCache = false) {
-  try {
-    if (!domain || typeof domain !== "string") {
-      console.error(`Invalid domain: ${domain}`);
-      return { name: "", confidenceScore: 0, flags: ["InvalidInput"], tokens: 0 };
-    }
-    const domainLower = domain.toLowerCase();
-    console.warn(`🔍 Processing domain: ${domain}`);
-    if (BRAND_ONLY_DOMAINS.has(domainLower)) {
-      console.warn(`Brand-only domain detected: ${domain}, skipping`);
-      return { name: "", confidenceScore: 0, flags: ["BrandOnlySkipped"], tokens: 0 };
-    }
-    if (!skipCache && domainCache.has(domainLower)) {
-      const cached = domainCache.get(domainLower);
-      console.warn(`🧪 Cache hit for ${domainLower}: "${cached.name}"`);
-      return { ...cached, flags: [...cached.flags, "CacheHit"] };
-    }
-    if (TEST_CASE_OVERRIDES[domainLower]) {
-      const name = TEST_CASE_OVERRIDES[domainLower];
-      console.warn(`🧪 TEST_CASE_OVERRIDES applied for ${domainLower}: "${name}"`);
-      const flags = ["OverrideApplied"];
-      const confidenceScore = calculateConfidenceScore(name, flags, domainLower);
-      const result = { name, confidenceScore, flags, tokens: 0 };
-      domainCache.set(domainLower, result);
-      return result;
-    }
-    if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
-      console.warn(`Non-dealership domain detected: ${domain}`);
-      let fallbackName = earlyCompoundSplit(domainLower, []).name;
-      if (domainLower.includes("realty")) {
-        const baseName = domainLower.replace(/realty/i, "").replace(/\.(com|net|org|co\.uk)/i, "").replace(/[^a-zA-Z0-9\s-]/g, "").trim();
-        fallbackName = `${capitalizeName(baseName, []).name} Realty`;
-      } else if (domainLower.includes("insurance")) {
-        const baseName = domainLower.replace(/insurance/i, "").replace(/\.(com|net|org|co\.uk)/i, "").replace(/[^a-zA-Z0-9\s-]/g, "").trim();
-        fallbackName = `${capitalizeName(baseName, []).name} Insurance`;
-      } else {
-        fallbackName = `${capitalizeName(fallbackName, []).name} Auto`;
-      }
-      fallbackName = enforceThreeWordLimit(fallbackName, null, null, []).name;
-      const flags = ["NonDealership", "FallbackCompoundSplitAfterNonDealership"];
-      const confidenceScore = calculateConfidenceScore(fallbackName, flags, domainLower);
-      const result = { name: fallbackName, confidenceScore: Math.max(confidenceScore, 80), flags, tokens: 0 };
-      domainCache.set(domainLower, result);
-      return result;
-    }
-    let { name, flags, brand, city } = extractBrandOfCityFromDomain(domain);
-    name = stripGenericWords(name, domain, flags).name;
-    name = preprocessProperNouns(name, flags).name;
-    let words = name.split(" ");
-    const deduped = [];
-    const seen = new Set();
-    let cityDetected = false;
-    for (let i = 0; i < words.length; i++) {
-      const w = words[i].toLowerCase();
-      if (CAR_BRANDS.includes(w) || BRAND_MAPPING[w]) {
-        if (seen.has(w)) continue;
-        seen.add(w);
-        deduped.push(words[i]);
-      } else {
-        deduped.push(words[i]);
-      }
-    }
-    name = deduped.join(" ");
-    if (deduped.length < words.length) flags.push("BrandDuplicationFixedEarly");
-    if (!name.includes(" ") && containsCarBrand(domain)) {
-      name = splitCamelCaseWords(name, flags).name;
-      const { name: spacedName, flags: newFlags } = await validateSpacingWithOpenAI(name, flags);
-      name = spacedName;
-      flags = newFlags;
-    }
-    const { name: expandedName, flags: expandedFlags } = expandInitials(name, domain, brand, city, flags);
-    name = expandedName;
-    flags = expandedFlags;
-    const { name: reorderedName, flags: reorderedFlags } = reorderBrandCity(name, flags);
-    name = reorderedName;
-    flags = reorderedFlags;
-    const { name: limitedName, flags: limitedFlags } = enforceThreeWordLimit(name, brand, city, flags);
-    name = limitedName;
-    flags = limitedFlags;
-    const { name: handledName, flags: handledFlags } = handleNamesEndingInS(name, brand, city, flags);
-    name = handledName;
-    flags = handledFlags;
-    let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
-    if (confidenceScore < 90 || name.toLowerCase() === domainLower || !name) {
-      if (name.match(/^[A-Z]{2,5}$/i) && !brand && !city) {
-        flags.push("AmbiguousInitials");
-        name = ABBREVIATION_EXPANSIONS[name.toLowerCase()] || `${name.toUpperCase()} Auto`;
-        confidenceScore = 70;
-      } else if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainLower, []).name)) {
-        name = capitalizeName(domainLower, []).name;
-        confidenceScore = 125;
-      } else {
-        console.warn(`⚠️ Weak fallback for domain ${domain}: ${name}, score ${confidenceScore}, flags: ${flags.join(", ")}`);
-        flags.push("ManualReviewRecommended");
-      }
-    } else {
-      console.warn(`✅ Acceptable result: ${name} (${confidenceScore})`);
-    }
-    const result = { name, confidenceScore, flags, tokens: 0 };
-    domainCache.set(domainLower, result);
-    return result;
-  } catch (err) {
-    console.error(`❌ humanizeName failed for ${domain}: ${err.stack}`);
-    return { name: "", confidenceScore: 0, flags: ["ProcessingError"], tokens: 0 };
-  }
-}
-
 process.on("unhandledRejection", (reason, p) => {
   console.error("Unhandled Rejection at:", p, "reason:", reason);
 });
@@ -1250,19 +1251,32 @@ process.on("unhandledRejection", (reason, p) => {
 export {
   CAR_BRANDS,
   BRAND_MAPPING,
-  KNOWN_PROPER_NOUNS,
-  GENERIC_SUFFIXES,
   NON_DEALERSHIP_KEYWORDS,
   KNOWN_CITY_SHORT_NAMES,
   ABBREVIATION_EXPANSIONS,
   TEST_CASE_OVERRIDES,
-  normalizeText,
-  capitalizeName,
+  GENERIC_SUFFIXES,
+  GENERIC_WORDS,
+  BRAND_ONLY_DOMAINS,
+  KNOWN_COMPOUND_NOUNS,
+  KNOWN_BAD_COMPOUNDS_SET,
+  PROPER_NOUN_PREFIXES,
+  FIRST_LAST_NAME_PATTERN,
+  PROPER_NOUN_PATTERN,
   containsCarBrand,
+  stripGenericWords,
+  capitalizeName,
   applyCityShortName,
-  earlyCompoundSplit,
   expandInitials,
-  calculateConfidenceScore,
   extractBrandOfCityFromDomain,
+  splitCamelCaseWords,
+  reorderBrandCity,
+  calculateConfidenceScore,
+  preprocessProperNouns,
+  splitFallbackCompounds,
+  validateSpacingWithOpenAI,
+  earlyCompoundSplit,
+  enforceThreeWordLimit,
+  handleNamesEndingInS,
   humanizeName
 };
