@@ -1,4 +1,4 @@
-// api/company-name-fallback.js — Version 1.0.35
+// api/company-name-fallback.js — Version 1.0.36
 import {
   humanizeName,
   extractBrandOfCityFromDomain,
@@ -199,7 +199,16 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   }
 
-  if (!result.name.includes(" ") && result.name.length > 10) {
+  // Fix 5: Split compound blobs for any single-word name containing "auto"
+  const words = result.name.split(" ");
+  if (words.length === 1 && result.name.toLowerCase().includes("auto")) {
+    const splitName = splitFallbackCompounds(result.name);
+    if (splitName !== result.name) {
+      result.name = splitName;
+      result.confidenceScore += 20;
+      result.flags.push("CompoundSplitByFallback");
+    }
+  } else if (!result.name.includes(" ") && result.name.length > 10) {
     const splitName = splitFallbackCompounds(result.name);
     if (splitName !== result.name) {
       result.name = splitName;
@@ -208,36 +217,65 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   }
 
-  const brandMatch = domain.toLowerCase().match(/(chevy|ford|toyota|lincoln|bmw)/i);
-  const words = result.name.split(" ");
+  // Fix 1 & 4: Handle incomplete/generic names and single-word city names
   const isOverride = result.flags.includes("OverrideApplied");
   const isProperNoun = KNOWN_PROPER_NOUNS.has(result.name);
   const isCityOnly = words.length === 1 && (cityDetected === words[0].toLowerCase() || KNOWN_CITIES_SET.has(words[0].toLowerCase()));
   const endsWithS = isProperNoun && result.name.toLowerCase().endsWith("s");
+  const isBrandOnly = words.length === 1 && (CAR_BRANDS.includes(result.name.toLowerCase()) || BRAND_MAPPING[result.name.toLowerCase()]);
 
-  if (!isOverride && brandMatch && (words.length < 3 || isCityOnly || endsWithS || (isProperNoun && result.confidenceScore < 95))) {
-    let prefix = result.name;
-    const brandName = capitalizeName(brandMatch[0]);
-    if (prefix.toLowerCase() === brandName.toLowerCase()) {
-      result.name = `${prefix} Auto`;
-      result.confidenceScore += 20;
-      result.flags.push("RepetitionFixed", "BrandAppendedByFallback");
-    } else if (isCityOnly) {
-      result.name = `${prefix} ${brandName}`;
+  if (!isOverride) {
+    if (isCityOnly && brandDetected) {
+      result.name = `${result.name} ${BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)}`;
       result.confidenceScore += 20;
       result.flags.push("BrandAppendedForCity", "BrandAppendedByFallback");
-    } else if (endsWithS) {
-      result.name = `${prefix} ${brandName}`;
+    } else if (endsWithS && brandDetected) {
+      result.name = `${result.name} ${BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)}`;
       result.confidenceScore += 20;
       result.flags.push("BrandAppendedForS", "BrandAppendedByFallback");
-    } else if (isProperNoun && result.confidenceScore < 95 && !prefix.toLowerCase().includes("auto")) {
-      result.name = `${prefix} ${brandName}`;
+    } else if (isProperNoun && result.confidenceScore < 95 && !result.name.toLowerCase().includes("auto") && brandDetected) {
+      result.name = `${result.name} ${BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)}`;
       result.confidenceScore += 20;
       result.flags.push("BrandAppendedForProperNoun", "BrandAppendedByFallback");
-    } else if (words.length < 3) {
-      result.name = `${prefix} ${brandName}`;
-      result.confidenceScore += 20;
-      result.flags.push("BrandAppended", "BrandAppendedByFallback");
+    } else if (isBrandOnly) {
+      result.name = `${result.name} Auto`;
+      result.confidenceScore += 10;
+      result.flags.push("BrandOnlyFixed", "AutoAppendedByFallback");
+    }
+  }
+
+  // Fix 2: Prevent brand duplication
+  const brandCount = words.filter(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]).length;
+  if (brandCount > 1) {
+    const uniqueWords = [];
+    const seenBrands = new Set();
+    for (const word of words) {
+      const wordLower = word.toLowerCase();
+      if (CAR_BRANDS.includes(wordLower) || BRAND_MAPPING[wordLower]) {
+        if (!seenBrands.has(wordLower)) {
+          uniqueWords.push(word);
+          seenBrands.add(wordLower);
+        }
+      } else {
+        uniqueWords.push(word);
+      }
+    }
+    result.name = uniqueWords.join(" ");
+    result.flags.push("BrandDuplicationRemoved");
+  }
+
+  // Fix 3: Handle short names lacking context
+  if (words.length === 1 && !isProperNoun && !isCityOnly && !isBrandOnly) {
+    const domainBase = domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "");
+    const splitName = splitFallbackCompounds(domainBase);
+    if (splitName.split(" ").length > 1) {
+      result.name = splitName;
+      result.confidenceScore += 10;
+      result.flags.push("ShortNameExpandedFromDomain");
+    } else {
+      result.name = `${result.name} Auto`;
+      result.confidenceScore += 5;
+      result.flags.push("ShortNameAutoAppended");
     }
   }
 
@@ -293,7 +331,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.35 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.36 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
