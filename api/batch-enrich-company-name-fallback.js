@@ -2,12 +2,10 @@
 import {
   humanizeName,
   extractBrandOfCityFromDomain,
-  applyCityShortName,
   KNOWN_PROPER_NOUNS,
   KNOWN_COMPOUND_NOUNS,
   capitalizeName,
   KNOWN_CITIES_SET,
-  BRAND_MAPPING,
   TEST_CASE_OVERRIDES,
   expandInitials,
   calculateConfidenceScore
