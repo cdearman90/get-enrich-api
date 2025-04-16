@@ -549,23 +549,23 @@ const KNOWN_DEALERSHIP_WORDS = new Set([
 ]);
 
 const ABBREVIATION_EXPANSIONS = {
-  "lv": "Vegas",
-  "ba": "BA Auto",
-  "mb": "Mercedes",
-  "dv": "DV Auto",
-  "jm": "JM Auto",
-  "jt": "JT Auto",
-  "gy": "GY",
-  "cz": "CZ Auto",
-  "hmt": "HMT Auto",
-  "np": "NP Auto",
-  "npw": "NPW Auto",
-  "bhm": "Birmingham",
-  "eh": "East Hills",
-  "rt": "RT128",
-  "hmtr": "HMTR Auto",
+  lv: "Vegas",
+  ba: "BA Auto",
+  mb: "Mercedes",
+  dv: "DV Auto",
+  jm: "JM Auto",
+  jt: "JT Auto",
+  gy: "GY",
+  cz: "CZ Auto",
+  hmt: "HMT Auto",
+  np: "NP Auto",
+  npw: "NPW Auto",
+  bhm: "Birmingham",
+  eh: "East Hills",
+  rt: "RT128",
+  hmtr: "HMTR Auto",
   "m&h": "M&H",
-  "jp": "Jack Powell", // Added for jackpowell.com
+  jp: "Jack Powell"
 };
 
 
@@ -638,7 +638,7 @@ const TEST_CASE_OVERRIDES = {
   "steponeauto.com": "Step One Auto",
   "capital-honda.com": "Capital Honda",
   "tituswill.com": "Titus-Will",
-  "galeanasc.com": "Galeana", // Proper noun fix
+  "galeanasc.com": "Galeana"
 };
 
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
@@ -677,7 +677,6 @@ const PROPER_NOUN_PREFIXES = new Set([
   "mc", "mac", "o"
 ]);
 
-// New: Pattern to detect first/last name combinations
 const FIRST_LAST_NAME_PATTERN = /^[A-Z][a-z]+ [A-Z][a-z]+$/;
 
 const PROPER_NOUN_PATTERN = /(o'|mc|mac)\s+[a-z]+/i;
@@ -890,7 +889,7 @@ function preprocessProperNouns(name) {
       }
       if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
         if (word.startsWith("o'")) return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
-        else if (word.startsWith("mc") || part.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + part.slice(3);
+        else if (word.startsWith("mc") || word.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
       }
       return word;
     }).join(" ");
@@ -1199,7 +1198,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
     score += 10;
     appliedBoosts.add("FallbackBlobSplit");
   }
-  if (uniqueFlags.has("BrandFirstOrdering")) {
+  if (uniqueFlags.has("BrandFirstordering")) {
     score += 10;
     appliedBoosts.add("BrandFirstOrdering");
   }
@@ -1314,7 +1313,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (!name) score = 50;
 
   flags.length = 0;
-    flags.push(...Array.from(uniqueFlags));
+  flags.push(...Array.from(uniqueFlags));
   return Math.max(50, Math.min(score, 125));
 }
 
@@ -1349,7 +1348,8 @@ async function humanizeName(inputName, domain, skipCache = false) {
       domainCache.set(domainLower, result);
       return result;
     }
-       if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
+
+    if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
       console.warn(`Non-dealership domain detected: ${domain}`);
       let fallbackName = earlyCompoundSplit(domainLower);
       if (fallbackName.split(" ").length === 1) {
@@ -1449,7 +1449,8 @@ async function humanizeName(inputName, domain, skipCache = false) {
       flags.push("MultipleBrandsReduced");
       name = enforceThreeWordLimit(name, brand, city);
     }
-        name = handleNamesEndingInS(name, brand, city);
+
+    name = handleNamesEndingInS(name, brand, city);
 
     // Re-apply splitCamelCaseWords to ensure proper noun mappings
     name = splitCamelCaseWords(name);
@@ -1464,8 +1465,7 @@ async function humanizeName(inputName, domain, skipCache = false) {
       name = expandedName;
       flags.push("InitialsExpanded", "AbbreviationExpanded");
     }
-
-    const allInitials = words.every(word => /^[A-Z]{1,3}$/.test(word));
+        const allInitials = words.every(word => /^[A-Z]{1,3}$/.test(word));
     if (allInitials && words.length > 1) {
       if (city) {
         const fullCity = applyCityShortName(city);
@@ -1524,7 +1524,8 @@ async function humanizeName(inputName, domain, skipCache = false) {
         flags.push("TooGeneric");
       }
     }
-        if (confidenceScore < 90 || name.toLowerCase() === domainSlug || name === "") {
+
+    if (confidenceScore < 90 || name.toLowerCase() === domainSlug || name === "") {
       if (name.match(/^[A-Z]{2,5}$/i) && !brand && !city) {
         flags.push("AmbiguousInitials");
         name = ABBREVIATION_EXPANSIONS[name.toLowerCase()] || `${name.toUpperCase()} Auto`;
