@@ -8,10 +8,11 @@ import {
   capitalizeName,
   KNOWN_CITIES_SET,
   BRAND_MAPPING,
-  TEST_CASE_OVERRIDES
+  TEST_CASE_OVERRIDES,
+  expandInitials,
+  calculateConfidenceScore
 } from "./lib/humanize.js";
 
-// Constants for API configuration
 const BATCH_SIZE = 10;
 const CONCURRENCY_LIMIT = 5;
 const PROCESSING_TIMEOUT_MS = 18000;
@@ -85,42 +86,12 @@ const isInitialsOnly = (name) => {
   return words.every(w => /^[A-Z]{1,3}$/.test(w));
 };
 
-const expandInitials = (name, brandDetected, cityDetected) => {
-  let expanded = [];
-  const words = name.split(" ");
-
-  words.forEach(word => {
-    if (/^[A-Z]{1,3}$/.test(word)) {
-      if (cityDetected && word === cityDetected.toUpperCase().slice(0, word.length)) {
-        expanded.push(applyCityShortName(cityDetected));
-      } else if (brandDetected && word === brandDetected.toUpperCase().slice(0, word.length)) {
-        expanded.push(BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected));
-      } else {
-        const matchingNoun = Array.from(KNOWN_PROPER_NOUNS).find(noun =>
-          noun.toUpperCase().startsWith(word)
-        );
-        if (matchingNoun) {
-          expanded.push(matchingNoun);
-        } else {
-          expanded.push(word);
-        }
-      }
-    } else {
-      expanded.push(word);
-    }
-  });
-
-  return expanded.join(" ");
-};
-
-// New function for compound splitting in fallback
 const splitFallbackCompounds = (name) => {
   let result = name
-    .replace(/([a-z])([A-Z])/g, "$1 $2") // Split camel case (e.g., Southcharlotte → South Charlotte)
-    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2") // Handle consecutive capitals
+    .replace(/([a-z])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
     .trim();
 
-  // Split on known compound nouns (e.g., Chevy, Auto)
   for (const noun of KNOWN_COMPOUND_NOUNS) {
     const regex = new RegExp(`(${noun.toLowerCase()})`, 'i');
     if (regex.test(result)) {
@@ -128,7 +99,6 @@ const splitFallbackCompounds = (name) => {
     }
   }
 
-  // Ensure proper capitalization
   result = result.split(' ').map(word =>
     word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
   ).join(' ');
@@ -231,17 +201,15 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   }
 
-  // Compound splitting if unsplit
   if (!result.name.includes(" ") && result.name.length > 10) {
     const splitName = splitFallbackCompounds(result.name);
     if (splitName !== result.name) {
       result.name = splitName;
-      result.confidenceScore += 20; // Significant boost for splitting
+      result.confidenceScore += 20;
       result.flags.push("CompoundSplitByFallback");
     }
   }
 
-  // Brand appending logic (relaxed to handle proper nouns with low confidence)
   const brandMatch = domain.toLowerCase().match(/(chevy|ford|toyota|lincoln|bmw)/i);
   const words = result.name.split(" ");
   const isOverride = result.flags.includes("OverrideApplied");
@@ -254,7 +222,7 @@ const processLead = async (lead, fallbackTriggers) => {
     const brandName = capitalizeName(brandMatch[0]);
     if (prefix.toLowerCase() === brandName.toLowerCase()) {
       result.name = `${prefix} Auto`;
-      result.confidenceScore += 20; // Increased boost for improvement
+      result.confidenceScore += 20;
       result.flags.push("RepetitionFixed", "BrandAppendedByFallback");
     } else if (isCityOnly) {
       result.name = `${prefix} ${brandName}`;
@@ -280,12 +248,11 @@ const processLead = async (lead, fallbackTriggers) => {
     if (expandedName !== result.name) {
       result.name = expandedName;
       result.flags.push("InitialsExpandedLocally");
-      // Removed confidence penalty unless still ambiguous
       if (isInitialsOnly(expandedName)) {
         result.confidenceScore -= 5;
         result.flags.push("InitialsStillAmbiguous");
       } else {
-        result.confidenceScore += 10; // Boost for successful expansion
+        result.confidenceScore += 10;
       }
     }
   }
