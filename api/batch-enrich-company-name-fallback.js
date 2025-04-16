@@ -1,4 +1,4 @@
-// api/company-name-fallback.js — Version 1.0.39
+// api/company-name-fallback.js — Version 1.0.40
 import {
   humanizeName,
   extractBrandOfCityFromDomain,
@@ -119,9 +119,28 @@ const enforceProperNounMapping = (name) => {
   return mappedWords.join(" ");
 };
 
+// New helper to deduplicate brands
+const deduplicateBrands = (name) => {
+  const words = name.split(" ");
+  const uniqueWords = [];
+  const seenBrands = new Set();
+  for (const word of words) {
+    const wordLower = word.toLowerCase();
+    if (CAR_BRANDS.includes(wordLower) || BRAND_MAPPING[wordLower]) {
+      if (!seenBrands.has(wordLower)) {
+        uniqueWords.push(word);
+        seenBrands.add(wordLower);
+      }
+    } else {
+      uniqueWords.push(word);
+    }
+  }
+  return uniqueWords.join(" ");
+};
+
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
-  console.error(`🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.39)`);
+  console.error(`🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.40)`);
 
   const cacheKey = domain.toLowerCase();
   if (domainCache.has(cacheKey)) {
@@ -150,14 +169,6 @@ const processLead = async (lead, fallbackTriggers) => {
       tokensUsed = result.tokens || 0;
       console.error(`humanizeName result for ${domain}: ${JSON.stringify(result)}`);
       result.flags = Array.isArray(result.flags) ? result.flags : [];
-      return {
-        domain,
-        companyName: result.name || "",
-        confidenceScore: result.confidenceScore,
-        flags: result.flags,
-        tokens: tokensUsed,
-        rowNum
-      };
     } catch (error) {
       console.error(`humanizeName failed for ${domain} despite override: ${error.message}`);
       const name = TEST_CASE_OVERRIDES[domainLower];
@@ -195,11 +206,8 @@ const processLead = async (lead, fallbackTriggers) => {
     result.flags.push("FallbackAPIUsed");
   }
 
-  const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
-  const forceReviewFlags = [
-    "TooGeneric", "CityNameOnly", "PossibleAbbreviation", "BadPrefixOf", "CarBrandSuffixRemaining",
-    "UnverifiedCity"
-  ];
+  // Optimization: Apply deduplication immediately after humanizeName
+  result.name = deduplicateBrands(result.name);
 
   // Optimization: Ensure BrandOnlySkipped halts all processing
   if (result.flags.includes("BrandOnlySkipped")) {
@@ -213,6 +221,12 @@ const processLead = async (lead, fallbackTriggers) => {
       rowNum
     };
   }
+
+  const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
+  const forceReviewFlags = [
+    "TooGeneric", "CityNameOnly", "PossibleAbbreviation", "BadPrefixOf", "CarBrandSuffixRemaining",
+    "UnverifiedCity"
+  ];
 
   // Enforce proper noun mappings (e.g., Galean -> Galeana)
   const correctedName = enforceProperNounMapping(result.name);
@@ -348,7 +362,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.39 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.40 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
