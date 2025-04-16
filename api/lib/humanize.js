@@ -677,7 +677,7 @@ const PROPER_NOUN_PREFIXES = new Set([
 // New: Pattern to detect first/last name combinations
 const FIRST_LAST_NAME_PATTERN = /^[A-Z][a-z]+ [A-Z][a-z]+$/;
 
-const PROPER_NOUN_PATTERN = /\b(?:o[\s']?brien|o[\s']?connor|o[\s']?reilly|mc\w+|mac\w+)\b/gi;
+const PROPER_NOUN_PATTERN = /(o'|mc|mac)\s+[a-z]+/i;
 
 const openAICache = new Map();
 
@@ -858,6 +858,7 @@ function expandInitials(name, domain, brand, city) {
 
 function preprocessProperNouns(name) {
   if (!name || typeof name !== "string") return name;
+  let processedName = name.replace(PROPER_NOUN_PATTERN, match => match.replace(/\s+/g, "").toLowerCase());
 
   const apostropheNames = {
     "obrien": "O'Brien",
@@ -867,53 +868,38 @@ function preprocessProperNouns(name) {
     "oreilly": "O'Reilly",
     "o reilly": "O'Reilly"
   };
+  const nameLower = processedName.toLowerCase();
+  if (apostropheNames[nameLower]) processedName = apostropheNames[nameLower];
 
-  let processedName = name.trim().replace(/\s+/g, " ");
-  let nameLower = processedName.toLowerCase();
-
-  // Step 1: Normalize apostrophe names
-  if (apostropheNames[nameLower]) {
-    processedName = apostropheNames[nameLower];
+  if (name.includes("-")) {
+    const words = processedName.split(/\s+/);
+    processedName = words.map(word => {
+      if (word.includes("-")) {
+        const parts = word.split("-");
+        return parts.map(part => {
+          if (PROPER_NOUN_PREFIXES.has(part.toLowerCase())) {
+            if (part.startsWith("o'")) return "O'" + part.charAt(2).toUpperCase() + part.slice(3);
+            else if (part.startsWith("mc") || part.startsWith("mac")) return part.charAt(0).toUpperCase() + part.charAt(1) + part.charAt(2).toUpperCase() + part.slice(3);
+          }
+          return part;
+        }).join("-");
+      }
+      if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
+        if (word.startsWith("o'")) return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
+        else if (word.startsWith("mc") || part.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
+      }
+      return word;
+    }).join(" ");
+  } else {
+    const words = processedName.split(/\s+/);
+    processedName = words.map(word => {
+      if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
+        if (word.startsWith("o'")) return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
+        else if (word.startsWith("mc") || word.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
+      }
+      return word;
+    }).join(" ");
   }
-
-  // Step 2: Split hyphenated words and process each side
-  const processWord = (word) => {
-    const w = word.toLowerCase();
-    if (apostropheNames[w]) return apostropheNames[w];
-
-    if (w.startsWith("mc") && w.length > 2) {
-      return "Mc" + word.charAt(2).toUpperCase() + word.slice(3).toLowerCase();
-    }
-    if (w.startsWith("mac") && w.length > 3) {
-      return "Mac" + word.charAt(3).toUpperCase() + word.slice(4).toLowerCase();
-    }
-    if (w.startsWith("o'") && w.length > 2) {
-      return "O'" + word.charAt(2).toUpperCase() + word.slice(3).toLowerCase();
-    }
-    return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-  };
-
-  const words = processedName.split(/\s+/).map(word => {
-    if (word.includes("-")) {
-      return word
-        .split("-")
-        .map(sub => processWord(sub))
-        .join("-");
-    }
-    return processWord(word);
-  });
-
-  processedName = words.join(" ");
-
-  // Step 3: Add "Auto" if it's an exact match to a proper noun and no brand/auto suffix exists
-  const finalLower = processedName.toLowerCase();
-  const needsAuto = PROPER_NOUN_PATTERN.test(finalLower) && !finalLower.includes("auto");
-  if (needsAuto) {
-    processedName += " Auto";
-  }
-
-  return processedName;
-}
 
   if (apostropheNames[nameLower] && !processedName.toLowerCase().includes("auto")) processedName = `${processedName} Auto`;
   return processedName;
@@ -1144,6 +1130,9 @@ function handleNamesEndingInS(name, brand, city) {
   const lastWord = words[words.length - 1];
   if (!lastWord.toLowerCase().endsWith("s")) return name;
 
+  // Skip if the name is a known proper noun (e.g., Galeana)
+  if (KNOWN_PROPER_NOUNS.has(name)) return name;
+
   if (CAR_BRANDS.includes(lastWord.toLowerCase()) || lastWord.toLowerCase() === "classics") return name;
 
   if (lastWord.toLowerCase() === "sc") {
@@ -1267,7 +1256,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
       uniqueFlags.add("CompoundSplitBoost");
     }
     if (FIRST_LAST_NAME_PATTERN.test(name) && !appliedBoosts.has("FirstLastNameMatched")) {
-      score += 20; // Boosted to ensure ricksmithsauto.com hits 90+
+      score += 20;
       appliedBoosts.add("ProperNounBoost");
       uniqueFlags.add("ProperNounBoost");
     }
@@ -1314,15 +1303,22 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (uniqueFlags.has("OverrideApplied") && (KNOWN_PROPER_NOUNS.has(name) || FIRST_LAST_NAME_PATTERN.test(name))) score = Math.max(score, 125);
 
   // Remove ProperNounFallbackBypassedThreshold penalty for known proper nouns
-  if (uniqueFlags.has("ProperNounFallbackBypassedThreshold") && uniqueFlags.has("ProperNounMatched") && uniqueFlags.has("SingleWordProperNoun")) {
+  if (uniqueFlags.has("ProperNounFallbackBypassedThreshold") && uniqueFlags.has("ProperNounMatched")) {
     uniqueFlags.delete("ProperNounFallbackBypassedThreshold");
   }
 
-  // Cap overlapping boosts to prevent over-scoring (e.g., fletcherauto.com)
+  // Cap overlapping boosts (e.g., for fletcherauto.com, galeanasc.com)
   const boostCap = 110;
   if (score > boostCap && !uniqueFlags.has("OverrideApplied") && !uniqueFlags.has("SingleWordProperNoun")) {
     score = boostCap;
     uniqueFlags.add("BoostCapped");
+  }
+
+  // Remove conflicting boosts for single-word proper nouns
+  if (uniqueFlags.has("SingleWordProperNoun")) {
+    uniqueFlags.delete("ThreeWordName");
+    uniqueFlags.delete("TwoWordName");
+    uniqueFlags.delete("AutoNameBoost");
   }
 
   if (!name) score = 50;
@@ -1390,6 +1386,12 @@ async function humanizeName(inputName, domain, skipCache = false) {
 
     name = name.replace(/AutoGroup/i, "Auto Group").replace(/auto/i, " Auto ");
     name = preprocessProperNouns(name);
+
+    // Ensure proper nouns aren't overridden later (e.g., for galeanasc.com)
+    if (KNOWN_PROPER_NOUNS.has(name)) {
+      flags.push("ProperNounMatched");
+    }
+
     let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
     if (!name.includes(" ") && confidenceScore < 90 && containsCarBrand(domain)) {
