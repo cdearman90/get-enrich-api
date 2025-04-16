@@ -1,6 +1,6 @@
 // api/company-name-fallback.js — Version 1.0.42
 // Purpose: Enhance company names from dealership domains for cold email personalization
-// Integrates with humanize.js v4.2.34
+// Integrates with humanize.js v4.2.19
 // Deployed via Vercel CLI v41.5.0
 
 import {
@@ -178,7 +178,7 @@ const processLead = async (lead, fallbackTriggers) => {
   const domainLower = domain.toLowerCase();
 
   // Check for brand-only domains before any processing
-  const BRAND_ONLY_DOMAINS = new Set(["chevy.com", "ford.com", "toyota.com"]);
+  const BRAND_ONLY_DOMAINS = new Set(CAR_BRANDS.map((b) => `${b}.com`));
   if (BRAND_ONLY_DOMAINS.has(domainLower)) {
     console.error(
       `[company-name-fallback.js v1.0.42] BrandOnlySkipped for ${domain}, halting processing`
@@ -253,18 +253,8 @@ const processLead = async (lead, fallbackTriggers) => {
   }
 
   result.flags = Array.isArray(result.flags) ? result.flags : [];
-  if (!(domainLower in TEST_CASE_OVERRIDES)) {
-    result.flags.push("FallbackAPIUsed");
-  }
 
-  // Apply deduplication immediately after humanizeName
-  const originalName = result.name;
-  result.name = deduplicateBrands(result.name);
-  if (result.name !== originalName) {
-    result.flags.push("BrandDeduplicated");
-  }
-
-  // Ensure BrandOnlySkipped halts all processing (redundant check for safety)
+  // Ensure BrandOnlySkipped halts all processing
   if (result.flags.includes("BrandOnlySkipped")) {
     console.error(
       `[company-name-fallback.js v1.0.42] BrandOnlySkipped detected post-humanize for ${domain}, halting processing`
@@ -283,6 +273,18 @@ const processLead = async (lead, fallbackTriggers) => {
       flags: finalResult.flags,
     });
     return finalResult;
+  }
+
+  // Apply deduplication immediately after humanizeName
+  const originalName = result.name;
+  result.name = deduplicateBrands(result.name);
+  if (result.name !== originalName) {
+    result.flags.push("BrandDeduplicated");
+  }
+
+  // Add FallbackAPIUsed flag for non-overridden domains
+  if (!(domainLower in TEST_CASE_OVERRIDES)) {
+    result.flags.push("FallbackAPIUsed");
   }
 
   const criticalFlags = [
@@ -329,14 +331,14 @@ const processLead = async (lead, fallbackTriggers) => {
     const splitName = splitFallbackCompounds(result.name);
     if (splitName !== result.name) {
       result.name = splitName;
-      result.confidenceScore += 20;
+      result.confidenceScore = Math.min(125, result.confidenceScore + 20);
       result.flags.push("CompoundSplitByFallback");
     }
   } else if (!result.name.includes(" ") && result.name.length > 10) {
     const splitName = splitFallbackCompounds(result.name);
     if (splitName !== result.name) {
       result.name = splitName;
-      result.confidenceScore += 20;
+      result.confidenceScore = Math.min(125, result.confidenceScore + 20);
       result.flags.push("CompoundSplitByFallback");
     }
   }
@@ -357,13 +359,13 @@ const processLead = async (lead, fallbackTriggers) => {
       result.name = `${result.name} ${
         BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)
       }`;
-      result.confidenceScore += 20;
+      result.confidenceScore = Math.min(125, result.confidenceScore + 20);
       result.flags.push("BrandAppendedForCity", "BrandAppendedByFallback");
     } else if (endsWithS && brandDetected) {
       result.name = `${result.name} ${
         BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)
       }`;
-      result.confidenceScore += 20;
+      result.confidenceScore = Math.min(125, result.confidenceScore + 20);
       result.flags.push("BrandAppendedForS", "BrandAppendedByFallback");
     } else if (
       isProperNoun &&
@@ -374,11 +376,11 @@ const processLead = async (lead, fallbackTriggers) => {
       result.name = `${result.name} ${
         BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)
       }`;
-      result.confidenceScore += 20;
+      result.confidenceScore = Math.min(125, result.confidenceScore + 20);
       result.flags.push("BrandAppendedForProperNoun", "BrandAppendedByFallback");
     } else if (isBrandOnly) {
       result.name = `${result.name} Auto`;
-      result.confidenceScore += 10;
+      result.confidenceScore = Math.min(125, result.confidenceScore + 10);
       result.flags.push("BrandOnlyFixed", "AutoAppendedByFallback");
     }
   }
@@ -389,25 +391,25 @@ const processLead = async (lead, fallbackTriggers) => {
     const splitName = splitFallbackCompounds(domainBase);
     if (splitName.split(" ").length > 1) {
       result.name = splitName;
-      result.confidenceScore += 10;
+      result.confidenceScore = Math.min(125, result.confidenceScore + 10);
       result.flags.push("ShortNameExpandedFromDomain");
     } else {
       result.name = `${result.name} Auto`;
-      result.confidenceScore += 5;
+      result.confidenceScore = Math.min(125, result.confidenceScore + 5);
       result.flags.push("ShortNameAutoAppended");
     }
   }
 
   // Expand initials
   if (isInitialsOnly(result.name)) {
-    const expandedName = expandInitials(result.name, brandDetected, cityDetected);
+    const expandedName = expandInitials(result.name, domain, brandDetected, cityDetected);
     if (expandedName !== result.name) {
       result.name = expandedName;
       result.flags.push("InitialsExpandedLocally");
       if (isInitialsOnly(expandedName)) {
-        result.confidenceScore -= 5;
+        result.confidenceScore = Math.max(50, result.confidenceScore - 5);
       } else {
-        result.confidenceScore += 10;
+        result.confidenceScore = Math.min(125, result.confidenceScore + 10);
       }
     }
   }
