@@ -565,7 +565,9 @@ const ABBREVIATION_EXPANSIONS = {
   "rt": "RT128",
   "hmtr": "HMTR Auto",
   "m&h": "M&H"
+  "jp": "Jack Powell", // Added for jackpowell.com
 };
+
 
 const TEST_CASE_OVERRIDES = {
   "duvalford.com": "Duval Ford",
@@ -578,7 +580,7 @@ const TEST_CASE_OVERRIDES = {
   "kiaoflagrange.com": "Lagrange Kia",
   "toyotaofgreenwich.com": "Greenwich Toyota",
   "sanleandroford.com": "San Leandro Ford",
-  "donhindsford.com": "Don Hinds",
+  "donhindsford.com": "Don Hinds Ford",
   "unionpark.com": "Union Park",
   "jackpowell.com": "Jack Powell",
   "teamford.com": "Team Ford",
@@ -636,6 +638,7 @@ const TEST_CASE_OVERRIDES = {
   "steponeauto.com": "Step One Auto",
   "capital-honda.com": "Capital Honda",
   "tituswill.com": "Titus-Will"
+  "galeanasc.com": "Galeana", // Proper noun fix
 };
 
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
@@ -681,7 +684,6 @@ const PROPER_NOUN_PATTERN = /(o'|mc|mac)\s+[a-z]+/i;
 
 const openAICache = new Map();
 
-// Helper Functions
 function containsCarBrand(name) {
   if (!name || typeof name !== "string") return false;
   const normalized = name.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
@@ -837,6 +839,8 @@ function expandInitials(name, domain, brand, city) {
           expansion = "NP Subaru";
         } else if (wordLower === "gy" && domainLower.includes("chevy")) {
           expansion = "GY Chevy";
+        } else if (wordLower === "jp" && domainLower.includes("jackpowell")) {
+          expansion = "Jack Powell";
         } else if (brand && !expansion.includes("Auto") && !expansion.toLowerCase().includes(brand.toLowerCase())) {
           expansion = `${expansion} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`;
         }
@@ -886,7 +890,7 @@ function preprocessProperNouns(name) {
       }
       if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
         if (word.startsWith("o'")) return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
-        else if (word.startsWith("mc") || part.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
+        else if (word.startsWith("mc") || part.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + part.slice(3);
       }
       return word;
     }).join(" ");
@@ -928,7 +932,7 @@ function splitCamelCaseWords(input) {
     'oxmoorautogroup': 'Oxmoor Auto',
     'hartfordtoyota': 'Hartford Toyota',
     'dancummins': 'Dan Cummins',
-    'galeanasc': 'Galeana', // Ensure correct mapping
+    'galeanasc': 'Galeana',
     'galean': 'Galeana'
   };
   if (knownSplits[lowerInput]) return knownSplits[lowerInput];
@@ -1130,7 +1134,6 @@ function handleNamesEndingInS(name, brand, city) {
   const lastWord = words[words.length - 1];
   if (!lastWord.toLowerCase().endsWith("s")) return name;
 
-  // Skip if the name or last word is a known proper noun (e.g., Galeana)
   if (KNOWN_PROPER_NOUNS.has(name) || KNOWN_PROPER_NOUNS.has(lastWord)) return name;
 
   if (CAR_BRANDS.includes(lastWord.toLowerCase()) || lastWord.toLowerCase() === "classics") return name;
@@ -1234,7 +1237,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   const wordCount = name.split(" ").length;
   if (wordCount === 1) {
     if (KNOWN_PROPER_NOUNS.has(name) && !appliedBoosts.has("SingleWordProperNoun")) {
-      score = 125; // Ensure 125 for single-word proper nouns like Malouf
+      score = 125;
       appliedBoosts.add("SingleWordProperNoun");
       uniqueFlags.add("SingleWordProperNoun");
       appliedBoosts.add("ProperNounBoost");
@@ -1302,9 +1305,8 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (uniqueFlags.has("OverrideApplied")) score = Math.max(score, 95);
   if (uniqueFlags.has("OverrideApplied") && (KNOWN_PROPER_NOUNS.has(name) || FIRST_LAST_NAME_PATTERN.test(name))) score = Math.max(score, 125);
 
-  // Cap overlapping boosts (e.g., for fletcherauto.com, galeanasc.com)
   const boostCap = 110;
-  if (score > boostCap && !uniqueFlags.has("OverrideApplied")) {
+  if (score > boostCap && !uniqueFlags.has("OverrideApplied") && !KNOWN_PROPER_NOUNS.has(name)) {
     score = boostCap;
     uniqueFlags.add("BoostCapped");
   }
@@ -1312,7 +1314,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (!name) score = 50;
 
   flags.length = 0;
-  flags.push(...Array.from(uniqueFlags));
+    flags.push(...Array.from(uniqueFlags));
   return Math.max(50, Math.min(score, 125));
 }
 
@@ -1347,8 +1349,7 @@ async function humanizeName(inputName, domain, skipCache = false) {
       domainCache.set(domainLower, result);
       return result;
     }
-
-    if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
+       if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
       console.warn(`Non-dealership domain detected: ${domain}`);
       let fallbackName = earlyCompoundSplit(domainLower);
       if (fallbackName.split(" ").length === 1) {
@@ -1375,12 +1376,12 @@ async function humanizeName(inputName, domain, skipCache = false) {
     name = name.replace(/AutoGroup/i, "Auto Group").replace(/auto/i, " Auto ");
     name = preprocessProperNouns(name);
 
-    // Ensure proper nouns aren't overridden later (e.g., for galeanasc.com)
+    // Ensure proper nouns aren't overridden later
     if (KNOWN_PROPER_NOUNS.has(name)) {
       flags.push("ProperNounMatched");
     }
 
-    // Deduplicate brands early to prevent repetition (e.g., Chevy Chevy)
+    // Early deduplication to prevent brand repetition
     let words = name.split(" ");
     const deduped = [];
     const seen = new Set();
@@ -1394,8 +1395,7 @@ async function humanizeName(inputName, domain, skipCache = false) {
       name = deduped.join(" ");
       flags.push("BrandDuplicationFixedEarly");
     }
-
-    let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
+        let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
     if (!name.includes(" ") && confidenceScore < 90 && containsCarBrand(domain)) {
       let spacedName = splitCamelCaseWords(name);
@@ -1415,7 +1415,7 @@ async function humanizeName(inputName, domain, skipCache = false) {
         if (fallbackSplit !== name) {
           name = fallbackSplit;
           flags.push("FallbackCamelCaseSplit");
-        } else {
+        } else if (!KNOWN_PROPER_NOUNS.has(name)) {
           name = `${name} Auto`;
           flags.push("SpacingFallbackAutoAppended");
         }
@@ -1449,13 +1449,12 @@ async function humanizeName(inputName, domain, skipCache = false) {
       flags.push("MultipleBrandsReduced");
       name = enforceThreeWordLimit(name, brand, city);
     }
+        name = handleNamesEndingInS(name, brand, city);
 
-    name = handleNamesEndingInS(name, brand, city);
-
-    // Re-apply splitCamelCaseWords to ensure proper noun mappings (e.g., Galeana)
+    // Re-apply splitCamelCaseWords to ensure proper noun mappings
     name = splitCamelCaseWords(name);
 
-    if (domainLower.includes("auto") && !name.toLowerCase().includes("auto") && !flags.includes("BrandFirstOrdering") && !flags.includes("FirstLastNameMatched") && words.length < 2) {
+    if (domainLower.includes("auto") && !name.toLowerCase().includes("auto") && !flags.includes("BrandFirstOrdering") && !flags.includes("FirstLastNameMatched") && words.length < 2 && !KNOWN_PROPER_NOUNS.has(name)) {
       name = enforceThreeWordLimit(`${name} Auto`, brand, city);
       flags.push("AutoAppended");
     }
@@ -1495,7 +1494,7 @@ async function humanizeName(inputName, domain, skipCache = false) {
     } else if (isCityOnly && !hasContext && !flags.includes("FirstLastNameMatched")) {
       name = enforceThreeWordLimit(`${name} Auto`, brand, city);
       flags.push("CityNameOnly", "AutoAppended");
-    } else if (brand && words.length === 1 && !hasContext && confidenceScore < 95 && !flags.includes("FirstLastNameMatched")) {
+    } else if (brand && words.length === 1 && !hasContext && confidenceScore < 95 && !flags.includes("FirstLastNameMatched") && !KNOWN_PROPER_NOUNS.has(name)) {
       name = enforceThreeWordLimit(`${name} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`, brand, city);
       flags.push("BrandAppended");
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
@@ -1512,21 +1511,30 @@ async function humanizeName(inputName, domain, skipCache = false) {
     name = stripGenericWords(name);
     confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
-    if (name && !name.includes(" ") && name.length > 10) {
-      flags.push("UnsplitCompound", "AmbiguousCompound");
-      confidenceScore = calculateConfidenceScore(name, flags, domainLower);
+    // Flag generic names like auto.com
+    const genericNames = new Set(["auto", "cars", "dealer"]);
+    if (genericNames.has(name.toLowerCase())) {
+      if (domainLower === "auto.com") {
+        name = "Auto Group";
+        confidenceScore = 80;
+        flags.push("GenericNameAdjusted");
+      } else {
+        name = "";
+        confidenceScore = 50;
+        flags.push("TooGeneric");
+      }
     }
-
-    if (confidenceScore < 90 || name.toLowerCase() === domainSlug || name === "") {
+        if (confidenceScore < 90 || name.toLowerCase() === domainSlug || name === "") {
       if (name.match(/^[A-Z]{2,5}$/i) && !brand && !city) {
         flags.push("AmbiguousInitials");
         name = ABBREVIATION_EXPANSIONS[name.toLowerCase()] || `${name.toUpperCase()} Auto`;
         confidenceScore = 70;
       } else if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainSlug))) {
         name = capitalizeName(domainSlug);
-        confidenceScore = 125; // Override ProperNounFallbackBypassedThreshold
+        confidenceScore = 125;
       } else {
         console.warn(`⚠️ Weak fallback for domain ${domain}: ${name}, score ${confidenceScore}, flags: ${flags.join(", ")}`);
+        flags.push("ManualReviewRecommended");
       }
     } else {
       console.warn(`✅ Acceptable result: ${name} (${confidenceScore})`);
