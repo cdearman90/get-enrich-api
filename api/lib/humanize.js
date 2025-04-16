@@ -622,23 +622,6 @@ const KNOWN_BAD_COMPOUNDS_SET = new Set([
   "mccarthyautogroup", "kennedyauto", "tommynixautogroup.com", "andersonautogroup", "fletcherauto"
 ]);
 
-const KNOWN_SUFFIX_EXPANSIONS = {
-  "honda": "Honda",
-  "chevrolet": "Chevy",
-  "ford": "Ford",
-  "subaru": "Subaru",
-  "bmw": "BMW",
-  "toyota": "Toyota",
-  "nissan": "Nissan",
-  "kia": "Kia",
-  "lexus": "Lexus",
-  "cadillac": "Cadillac",
-  "vw": "VW",
-  "lincoln": "Lincoln",
-  "hyundai": "Hyundai",
-  "infiniti": "Infiniti"
-};
-
 // Dictionary of proper noun prefixes that should remain concatenated
 const PROPER_NOUN_PREFIXES = new Set([
   "o'brien", "mccarthy", "mcclarty", "o'connor", "o'neil", "o'reilly",
@@ -655,7 +638,7 @@ const openAICache = new Map();
 const KNOWN_DEALERSHIP_WORDS = new Set([
   "dan", "cummins", "golf", "mill", "ford", "chevy", "hyundai", "auto",
   "fletcher", "carl", "black", "potamkin", "mccarthy", "bentley", "davis",
-  "gy", "raceway", "kennedy", "garber", "sunnyside"
+  "gy", "raceway", "kennedy", "garber", "sunnyside", "auto"
 ]);
 
 function containsCarBrand(name) {
