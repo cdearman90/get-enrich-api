@@ -801,17 +801,43 @@ function expandInitials(name, domain, brand, city) {
   if (!name || typeof name !== "string") return "";
   let expanded = [];
   const words = name.split(" ");
+  const domainLower = domain.toLowerCase();
 
   words.forEach(word => {
     if (/^[A-Z]{1,3}$/.test(word)) {
       const wordLower = word.toLowerCase();
       if (ABBREVIATION_EXPANSIONS[wordLower]) {
-        const expansion = ABBREVIATION_EXPANSIONS[wordLower];
-        if (brand && !expansion.includes("Auto") && !expansion.toLowerCase().includes(brand.toLowerCase())) {
-          expanded.push(`${expansion} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`);
-        } else {
-          expanded.push(expansion);
+        let expansion = ABBREVIATION_EXPANSIONS[wordLower];
+        // Special case for "MB"
+        if (wordLower === "mb") {
+          if (domainLower.includes("mbusa")) {
+            expansion = "M.B. USA";
+          } else if (domainLower.includes("mbof")) {
+            expansion = "M.B.";
+            if (brand && !expansion.toLowerCase().includes(brand.toLowerCase())) {
+              expansion = `${expansion} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`;
+            }
+          } else {
+            expansion = "Mercedes";
+          }
         }
+        // Special case for "CZ"
+        else if (wordLower === "cz" && domainLower.includes("czag")) {
+          expansion = "CZAG Auto";
+        }
+        // Special case for "RT"
+        else if (wordLower === "rt" && domainLower.includes("rt128") && domainLower.includes("honda")) {
+          expansion = "RT128 Honda";
+        }
+        // Special case for "NP"
+        else if (wordLower === "np" && domainLower.includes("subaru")) {
+          expansion = "NP Subaru";
+        }
+        // General case: append brand if applicable
+        else if (brand && !expansion.includes("Auto") && !expansion.toLowerCase().includes(brand.toLowerCase())) {
+          expansion = `${expansion} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`;
+        }
+        expanded.push(expansion);
       } else if (city && wordLower === city.toLowerCase().slice(0, word.length)) {
         expanded.push(applyCityShortName(city));
       } else if (brand && wordLower === brand.toLowerCase().slice(0, word.length)) {
@@ -1150,11 +1176,6 @@ function calculateConfidenceScore(name, flags, domainLower) {
     appliedBoosts.add("PatternMatched");
     uniqueFlags.add("PatternMatched");
   }
-  if (uniqueFlags.has("ProperNounMatched") && !appliedBoosts.has("ProperNounMatched")) {
-    score += 15;
-    appliedBoosts.add("ProperNounMatched");
-    uniqueFlags.add("ProperNounMatched");
-  }
   if (uniqueFlags.has("CityMatched") && !appliedBoosts.has("CityMatched")) {
     score += 6;
     appliedBoosts.add("CityMatched");
@@ -1222,7 +1243,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
     uniqueFlags.add("ThreeWordName");
   }
 
-  if ((KNOWN_PROPER_NOUNS.has(name) || Object.values(KNOWN_CITY_SHORT_NAMES).some(city => name.includes(city))) && !appliedBoosts.has("KnownPatternBoost")) {
+  if (Object.values(KNOWN_CITY_SHORT_NAMES).some(city => name.includes(city)) && !appliedBoosts.has("KnownPatternBoost")) {
     score += 5;
     appliedBoosts.add("KnownPatternBoost");
     uniqueFlags.add("KnownPatternBoost");
@@ -1240,13 +1261,6 @@ function calculateConfidenceScore(name, flags, domainLower) {
     score += 10;
     appliedBoosts.add("BrandIncludedBoost");
     uniqueFlags.add("BrandIncludedBoost");
-  }
-
-  if (KNOWN_PROPER_NOUNS.has(name) && !appliedBoosts.has("ProperNounBoost")) {
-    score += 15;
-    appliedBoosts.add("ProperNounBoost");
-    uniqueFlags.add("ProperNounBoost");
-    score = Math.max(score, 100);
   }
 
   if (!name) score = 50;
@@ -1436,15 +1450,6 @@ async function humanizeName(inputName, domain, skipCache = false) {
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
     }
 
-  if (
-  name === "Gy" &&
-  domainLower.includes("chevy") &&
-  !name.toLowerCase().includes("chevy")
-) {
-  name = "GY Chevy";
-  flags.push("AbbreviationExpanded", "BrandAppendedByFinalCheck");
-  confidenceScore = 125;
-}    
     if (confidenceScore < 90 || name.toLowerCase() === domainSlug || !name.includes(" ")) {
       let splitName = earlyCompoundSplit(name || domainSlug);
       if (splitName.split(" ").length >= 2) {
