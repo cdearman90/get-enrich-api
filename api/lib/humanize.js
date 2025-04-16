@@ -878,7 +878,7 @@ function preprocessProperNouns(name) {
         }
         if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
           if (word.startsWith("o'")) {
-            return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
+            return "O'" + word.charAt(2).toUpperCase() + part.slice(3);
           } else if (word.startsWith("mc") || word.startsWith("mac")) {
             return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
           }
