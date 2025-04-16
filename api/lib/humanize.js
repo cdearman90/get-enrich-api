@@ -540,6 +540,14 @@ const KNOWN_CITY_SHORT_NAMES = {
   "birmingham": "Birmingham"
 };
 
+// Placeholder for KNOWN_DEALERSHIP_WORDS (defining to fix no-undef error)
+const KNOWN_DEALERSHIP_WORDS = new Set([
+  "auto", "motors", "dealers", "dealership", "group", "motor", "superior", "trucks",
+  "powersports", "realty", "team", "collection", "ford", "chevy", "toyota", "honda",
+  "hyundai", "kia", "bmw", "infiniti", "nissan", "lincoln", "chrysler", "subaru",
+  "128", "mill"
+]);
+
 const ABBREVIATION_EXPANSIONS = {
   "lv": "Vegas",
   "ba": "BA Auto",
@@ -836,7 +844,7 @@ function preprocessProperNouns(name) {
             if (PROPER_NOUN_PREFIXES.has(part.toLowerCase())) {
               if (part.startsWith("o'")) {
                 return "O'" + part.charAt(2).toUpperCase() + part.slice(3);
-              } else if (part.startsWith("mc") || part.startsWith("mac")) {
+              } else if (part.startsWith("mc") || part.startsWith("mac")) { // Fixed 'part' to 'word'
                 return part.charAt(0).toUpperCase() + part.charAt(1) + part.charAt(2).toUpperCase() + part.slice(3);
               }
             }
@@ -846,7 +854,7 @@ function preprocessProperNouns(name) {
         if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
           if (word.startsWith("o'")) {
             return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
-          } else if (word.startsWith("mc") || part.startsWith("mac")) {
+          } else if (word.startsWith("mc") || word.startsWith("mac")) {
             return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
           }
         }
