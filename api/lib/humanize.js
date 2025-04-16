@@ -631,7 +631,7 @@ const TEST_CASE_OVERRIDES = {
 
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
 
-const GENERIC_WORDS = new Set(["the", "of", "to", "inc", "corp", "llc", "cars", "shop"]);
+const GENERIC_WORDS = new Set(["the", "of", "to", "inc", "corp", "llc", "cars", "shop", "auto", "group", "dealership"]);
 
 const KNOWN_COMPOUND_NOUNS = [
   "Auto", "AutoGroup", "Motors", "Dealers", "Dealership", "Group", "Motor",
@@ -667,18 +667,6 @@ const PROPER_NOUN_PREFIXES = new Set([
 const PROPER_NOUN_PATTERN = /(o'|mc|mac)\s+[a-z]+/i;
 
 const openAICache = new Map();
-
-const KNOWN_DEALERSHIP_WORDS = new Set([
-  "dan", "cummins", "golf", "mill", "ford", "chevy", "hyundai", "auto",
-  "fletcher", "carl", "black", "potamkin", "mccarthy", "bentley", "davis",
-  "gy", "raceway", "kennedy", "garber", "sunnyside", "premier", "collection",
-  "new", "holland", "lynn", "layton", "landers", "parker", "laurel", "rt",
-  "dick", "lovett", "colonial", "west", "go", "montrose", "subaru", "wakefield",
-  "lexus", "chattanooga", "planet", "power", "garlyn", "shelton", "safford",
-  "brown", "np", "subaru", "preston", "toyota", "redland", "lakeway", "swant",
-  "graber", "sundance", "step", "one", "hmtr", "jt", "titus", "will", "campbell",
-  "capital", "honda", "bill", "dube"
-]);
 
 function containsCarBrand(name) {
   if (!name || typeof name !== "string") return false;
