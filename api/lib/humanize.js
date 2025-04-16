@@ -639,10 +639,73 @@ const KNOWN_SUFFIX_EXPANSIONS = {
   "infiniti": "Infiniti"
 };
 
+// Dictionary of proper noun prefixes that should remain concatenated
+const PROPER_NOUN_PREFIXES = new Set([
+  "o'brien", "mccarthy", "mcclarty", "o'connor", "o'neil", "o'reilly",
+  "macdonald", "mcdonald", "mcgregor", "mcguire", "mckinney", "mclaren"
+]);
+
+// Regex to identify these patterns (e.g., "O Brien", "Mc Carthy")
+const PROPER_NOUN_PATTERN = /(o'|mc|mac)\s+[a-z]+/i;
+
+// Cache for OpenAI results
+const openAICache = new Map();
+
+// Dictionary of common dealership words for improved fallback
+const KNOWN_DEALERSHIP_WORDS = new Set([
+  "dan", "cummins", "golf", "mill", "ford", "chevy", "hyundai", "auto",
+  "fletcher", "carl", "black", "potamkin", "mccarthy", "bentley", "davis",
+  "gy", "raceway", "kennedy", "garber", "sunnyside"
+]);
+
 function containsCarBrand(name) {
   if (!name || typeof name !== "string") return false;
   const normalized = name.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
   return CAR_BRANDS.some(brand => normalized.includes(brand));
+}
+
+function extractBrandOfCityFromDomain(domain) {
+  if (!domain || typeof domain !== "string") return { name: "", brand: null, city: null, flags: ["InvalidInput"] };
+  const domainLower = domain.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
+  let name = domainLower;
+  let brand = null;
+  let city = null;
+  const flags = [];
+
+  for (const carBrand of CAR_BRANDS) {
+    const brandLower = carBrand.toLowerCase();
+    if (domainLower.includes(brandLower)) {
+      brand = carBrand;
+      name = domainLower.replace(brandLower, "").trim();
+      flags.push("PatternMatched");
+      break;
+    }
+  }
+
+  for (const knownCity of KNOWN_CITIES_SET) {
+    const cityLower = knownCity.toLowerCase().replace(/\s+/g, "");
+    if (domainLower.includes(cityLower) && (!brand || !cityLower.includes(brand.toLowerCase()))) {
+      city = knownCity;
+      name = name.replace(cityLower, "").trim();
+      flags.push("CityMatched");
+      break;
+    }
+  }
+
+  if (!brand && !city) {
+    const parts = domainLower.split(/(auto|motors|group|dealers|dealership)/i);
+    if (parts.length > 1) {
+      name = parts[0].trim();
+      flags.push("PatternMatched");
+    }
+  }
+
+  if (!name) {
+    name = domainLower;
+    flags.push("FallbackToDomain");
+  }
+
+  return { name: capitalizeName(name), brand, city, flags };
 }
 
 function normalizeText(name) {
@@ -717,9 +780,41 @@ function expandInitials(name, domain, brand, city) {
   return expanded.join(" ");
 }
 
+// Preprocess function to concatenate specific proper noun patterns
+function preprocessProperNouns(name) {
+  if (!name || typeof name !== "string") return name;
+
+  // Normalize patterns like "O Brien" → "O'Brien"
+  let processedName = name.replace(PROPER_NOUN_PATTERN, match => {
+    return match.replace(/\s+/g, "").toLowerCase();
+  });
+
+  // Ensure the normalized form matches a known prefix
+  const words = processedName.toLowerCase().split(/\s+/);
+  processedName = words
+    .map(word => {
+      if (PROPER_NOUN_PREFIXES.has(word)) {
+        // Capitalize according to standard proper noun rules
+        if (word.startsWith("o'")) {
+          return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
+        } else if (word.startsWith("mc") || word.startsWith("mac")) {
+          return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
+        }
+      }
+      return word;
+    })
+    .join(" ");
+
+  return processedName;
+}
+
 function splitCamelCaseWords(input) {
   if (!input || typeof input !== "string") return "";
-  let result = input
+  
+  // Preprocess to handle proper noun patterns
+  let result = preprocessProperNouns(input);
+
+  result = result
     .replace(/([a-z])([A-Z])/g, "$1 $2")
     .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
     .replace(/([a-z])([0-9])/g, "$1 $2")
@@ -727,13 +822,13 @@ function splitCamelCaseWords(input) {
     .replace(/-/g, " ")
     .trim();
 
-  const lowerInput = input.toLowerCase();
+  const lowerInput = result.toLowerCase();
   for (const brand of CAR_BRANDS) {
     const brandLower = brand.toLowerCase();
     if (lowerInput.includes(brandLower)) {
       const brandIndex = lowerInput.indexOf(brandLower);
-      const prefix = input.substring(0, brandIndex);
-      const suffix = input.substring(brandIndex + brandLower.length);
+      const prefix = result.substring(0, brandIndex);
+      const suffix = result.substring(brandIndex + brandLower.length);
       if (prefix && suffix) {
         result = `${prefix} ${capitalizeName(brandLower)} ${suffix}`.trim();
       } else if (prefix) {
@@ -745,20 +840,24 @@ function splitCamelCaseWords(input) {
     }
   }
 
-  for (const noun of KNOWN_PROPER_NOUNS) {
-    const nounLower = noun.toLowerCase().replace(/\s+/g, "");
-    if (lowerInput.includes(nounLower)) {
-      const nounIndex = lowerInput.indexOf(nounLower);
-      const prefix = input.substring(0, nounIndex);
-      const suffix = input.substring(nounIndex + nounLower.length);
-      if (prefix && suffix) {
-        result = `${prefix} ${noun} ${suffix}`.trim();
-      } else if (prefix) {
-        result = `${prefix} ${noun}`.trim();
-      } else if (suffix) {
-        result = `${noun} ${suffix}`.trim();
+  // Dictionary-based splitting for lowercase inputs
+  if (!result.includes(" ")) {
+    let tempResult = lowerInput;
+    for (const word of KNOWN_DEALERSHIP_WORDS) {
+      const wordLower = word.toLowerCase();
+      if (tempResult.includes(wordLower)) {
+        const wordIndex = tempResult.indexOf(wordLower);
+        const prefix = tempResult.substring(0, wordIndex);
+        const suffix = tempResult.substring(wordIndex + wordLower.length);
+        if (prefix && suffix) {
+          result = `${capitalizeName(prefix)} ${capitalizeName(wordLower)} ${capitalizeName(suffix)}`.trim();
+        } else if (prefix) {
+          result = `${capitalizeName(prefix)} ${capitalizeName(wordLower)}`.trim();
+        } else if (suffix) {
+          result = `${capitalizeName(wordLower)} ${capitalizeName(suffix)}`.trim();
+        }
+        break;
       }
-      break;
     }
   }
 
@@ -768,7 +867,16 @@ function splitCamelCaseWords(input) {
 
 async function validateSpacingWithOpenAI(name) {
   if (!name || typeof name !== "string") return name;
-  const prompt = `Given a company name, add a space between concatenated words if they are improperly joined (e.g., 'Fletcherauto' → 'Fletcher Auto', 'Dancummins' → 'Dan Cummins'). Do not add, remove, or modify words. Return the name with corrected spacing in JSON format: { "name": "corrected name" }. Input: ${name}`;
+
+  // Check cache first
+  if (openAICache.has(name)) {
+    return openAICache.get(name);
+  }
+
+  // Preprocess the name to ensure proper noun patterns are concatenated
+  const preprocessedName = preprocessProperNouns(name);
+
+  const prompt = `Given a company name, add a space between concatenated words if they are improperly joined (e.g., 'Fletcherauto' → 'Fletcher Auto', 'Dancummins' → 'Dan Cummins'). Do not add spaces within proper nouns like O'Brien or McCarthy. Do not add, remove, or modify words. Return the name with corrected spacing in JSON format: { "name": "corrected name" }. Input: ${preprocessedName}`;
   try {
     const result = await callOpenAI(prompt, {
       systemMessage: "You are a precise validator for spacing in company names.",
@@ -776,10 +884,28 @@ async function validateSpacingWithOpenAI(name) {
       temperature: 0.1,
     });
     const parsed = JSON.parse(result.output);
-    return parsed.name || name;
+    let spacedName = parsed.name || preprocessedName;
+
+    // Validate OpenAI output
+    const normalizedInput = preprocessedName.toLowerCase().replace(/\s+/g, "");
+    const normalizedOutput = spacedName.toLowerCase().replace(/\s+/g, "");
+    if (normalizedInput !== normalizedOutput) {
+      console.error(`OpenAI modified words for ${preprocessedName}: ${spacedName}`);
+      return preprocessedName; // Revert to preprocessed name if validation fails
+    }
+
+    // Additional validation: Ensure proper noun patterns are not split
+    if (PROPER_NOUN_PATTERN.test(spacedName)) {
+      console.error(`OpenAI split proper noun pattern in ${spacedName}`);
+      return preprocessedName; // Revert if OpenAI splits patterns like "O Brien"
+    }
+
+    // Cache the result
+    openAICache.set(name, spacedName);
+    return spacedName;
   } catch (error) {
     console.error(`OpenAI spacing validation failed for ${name}: ${error.message}`);
-    return name;
+    return preprocessedName;
   }
 }
 
@@ -1033,8 +1159,19 @@ async function humanizeName(inputName, domain) {
     name = name.replace(/AutoGroup/i, "Auto Group");
     name = name.replace(/auto/i, " Auto ");
 
-    // Apply OpenAI spacing validation for names lacking spaces (but not single proper nouns)
-    if (!name.includes(" ") && !KNOWN_PROPER_NOUNS.has(name)) {
+    // Preprocess name to handle proper noun patterns
+    name = preprocessProperNouns(name);
+
+    // Initial confidence score before spacing validation
+    let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
+
+    // Apply OpenAI spacing validation under specific conditions
+    if (
+      !name.includes(" ") &&
+      !KNOWN_PROPER_NOUNS.has(name) &&
+      confidenceScore < 90 &&
+      containsCarBrand(domain)
+    ) {
       const spacedName = await validateSpacingWithOpenAI(name);
       if (spacedName !== name) {
         name = spacedName;
@@ -1044,9 +1181,15 @@ async function humanizeName(inputName, domain) {
         if (fallbackSplit !== name) {
           name = fallbackSplit;
           flags.push("FallbackCamelCaseSplit");
+        } else {
+          // Secondary fallback: append "Auto" if spacing fails
+          name = `${name} Auto`;
+          flags.push("SpacingFallbackAutoAppended");
         }
       }
       name = capitalizeName(name);
+      // Recalculate confidence after spacing
+      confidenceScore = calculateConfidenceScore(name, flags, domainLower);
     }
 
     if (brand && name.includes(BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand))) {
@@ -1111,7 +1254,7 @@ async function humanizeName(inputName, domain) {
       flags.push("BrandCityReordered");
     }
 
-    let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
+    confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
     const isCityOnly = words.length === 1 && (city === words[0].toLowerCase() || KNOWN_CITIES_SET.has(words[0].toLowerCase()));
     const isProperNoun = KNOWN_PROPER_NOUNS.has(name);
