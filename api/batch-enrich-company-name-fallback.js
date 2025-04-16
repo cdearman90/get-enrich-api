@@ -1,4 +1,4 @@
-// api/company-name-fallback.js — Version 1.0.43
+// api/company-name-fallback.js — Version 1.0.44
 // Purpose: Enhance company names from dealership domains for cold email personalization
 // Integrates with humanize.js v4.2.19
 // Deployed via Vercel CLI v41.5.0
@@ -31,7 +31,7 @@ const BRAND_ONLY_DOMAINS = new Set(
 );
 
 // Unique startup log to confirm deployment
-console.error("🧠 company-name-fallback.js v1.0.43 – Initialized (Build ID: 20250416-BRAND-BAN)");
+console.error("🧠 company-name-fallback.js v1.0.44 – Initialized (Build ID: 20250416-BANNED-LIST)");
 
 const pLimit = async (concurrency) => {
   let active = 0;
@@ -154,14 +154,14 @@ const deduplicateBrands = (name) => {
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
   console.error(
-    `🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.43)`
+    `🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.44)`
   );
 
   const cacheKey = domain.toLowerCase();
   if (domainCache.has(cacheKey)) {
     const cached = domainCache.get(cacheKey);
     console.error(
-      `[company-name-fallback.js v1.0.43] Cache hit for ${domain}: ${JSON.stringify(cached)}`
+      `[company-name-fallback.js v1.0.44] Cache hit for ${domain}: ${JSON.stringify(cached)}`
     );
     return {
       domain,
@@ -181,7 +181,7 @@ const processLead = async (lead, fallbackTriggers) => {
   // Check banned franchise brand domains
   if (BRAND_ONLY_DOMAINS.has(domainLower)) {
     console.error(
-      `[company-name-fallback.js v1.0.43] Franchise brand domain ${domain} banned, halting processing`
+      `[company-name-fallback.js v1.0.44] Franchise brand domain ${domain} banned, halting processing`
     );
     const finalResult = {
       domain,
@@ -199,7 +199,7 @@ const processLead = async (lead, fallbackTriggers) => {
     return finalResult;
   }
 
-  // Extract brand and city for fallback logic
+  // Extract brand and city
   const match = extractBrandOfCityFromDomain(domain);
   const brandDetected = match.brand || null;
   const cityDetected = match.city || null;
@@ -210,14 +210,14 @@ const processLead = async (lead, fallbackTriggers) => {
       result = await humanizeName(domain, domain, true);
       tokensUsed = result.tokens || 0;
       console.error(
-        `[company-name-fallback.js v1.0.43] humanizeName result for ${domain}: ${JSON.stringify(
+        `[company-name-fallback.js v1.0.44] humanizeName result for ${domain}: ${JSON.stringify(
           result
         )}`
       );
       result.flags = Array.isArray(result.flags) ? result.flags : [];
     } catch (error) {
       console.error(
-        `[company-name-fallback.js v1.0.43] humanizeName failed for ${domain} despite override: ${error.message}`
+        `[company-name-fallback.js v1.0.44] humanizeName failed for ${domain} despite override: ${error.message}`
       );
       const name = TEST_CASE_OVERRIDES[domainLower];
       const flags = ["OverrideApplied", "LocalFallbackDueToDependencyError"];
@@ -230,20 +230,20 @@ const processLead = async (lead, fallbackTriggers) => {
         result = await humanizeName(domain, domain, true);
         tokensUsed = result.tokens || 0;
         console.error(
-          `[company-name-fallback.js v1.0.43] humanizeName result for ${domain}: ${JSON.stringify(
+          `[company-name-fallback.js v1.0.44] humanizeName result for ${domain}: ${JSON.stringify(
             result
           )}`
         );
         break;
       } catch (error) {
         console.error(
-          `[company-name-fallback.js v1.0.43] humanizeName attempt ${attempt} failed for ${domain}: ${error.message}`
+          `[company-name-fallback.js v1.0.44] humanizeName attempt ${attempt} failed for ${domain}: ${error.message}`
         );
         if (attempt < RETRY_ATTEMPTS) {
           await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
         } else {
           console.error(
-            `[company-name-fallback.js v1.0.43] All retries failed for ${domain}: ${error.message}`
+            `[company-name-fallback.js v1.0.44] All retries failed for ${domain}: ${error.message}`
           );
           result = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
           fallbackTriggers.push({
@@ -258,27 +258,6 @@ const processLead = async (lead, fallbackTriggers) => {
   }
 
   result.flags = Array.isArray(result.flags) ? result.flags : [];
-
-  // Double-check BrandOnlySkipped from humanize.js
-  if (result.flags.includes("BrandOnlySkipped")) {
-    console.error(
-      `[company-name-fallback.js v1.0.43] BrandOnlySkipped detected post-humanize for ${domain}, halting processing`
-    );
-    const finalResult = {
-      domain,
-      companyName: "",
-      confidenceScore: 0,
-      flags: ["BrandOnlySkipped"],
-      tokens: tokensUsed,
-      rowNum,
-    };
-    domainCache.set(cacheKey, {
-      companyName: finalResult.companyName,
-      confidenceScore: finalResult.confidenceScore,
-      flags: finalResult.flags,
-    });
-    return finalResult;
-  }
 
   // Apply deduplication
   const originalName = result.name;
@@ -473,7 +452,7 @@ const processLead = async (lead, fallbackTriggers) => {
   });
 
   console.error(
-    `[company-name-fallback.js v1.0.43] Final result for ${domain}: ${JSON.stringify(finalResult)}`
+    `[company-name-fallback.js v1.0.44] Final result for ${domain}: ${JSON.stringify(finalResult)}`
   );
 
   return finalResult;
@@ -481,7 +460,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.43 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.44 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
