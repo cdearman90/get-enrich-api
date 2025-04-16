@@ -1,6 +1,4 @@
 // api/lib/humanize.js — Version 4.2.14
-import { callOpenAI } from "./openai.js";
-
 const CAR_BRANDS = [
   "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
   "cadillac", "carmax", "cdj", "cdjrf", "cdjr", "chev", "chevvy", "chevrolet", "chrysler", "cjd", "daewoo",
@@ -597,8 +595,6 @@ const KNOWN_SUFFIX_EXPANSIONS = {
   "infiniti": "Infiniti"
 };
 
-const openAICache = new Map();
-
 function containsCarBrand(name) {
   if (!name || typeof name !== "string") return false;
   const normalized = name.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
@@ -987,7 +983,7 @@ function extractBrandOfCityFromDomain(domain) {
   };
 }
 
-async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = true) {
+async function humanizeName(inputName, domain) {
   try {
     if (!domain || typeof domain !== "string") {
       console.error(`Invalid domain: ${domain}`);
