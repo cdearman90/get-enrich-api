@@ -1436,6 +1436,15 @@ async function humanizeName(inputName, domain, skipCache = false) {
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
     }
 
+  if (
+  name === "Gy" &&
+  domainLower.includes("chevy") &&
+  !name.toLowerCase().includes("chevy")
+) {
+  name = "GY Chevy";
+  flags.push("AbbreviationExpanded", "BrandAppendedByFinalCheck");
+  confidenceScore = 125;
+}    
     if (confidenceScore < 90 || name.toLowerCase() === domainSlug || !name.includes(" ")) {
       let splitName = earlyCompoundSplit(name || domainSlug);
       if (splitName.split(" ").length >= 2) {
