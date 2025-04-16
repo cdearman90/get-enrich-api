@@ -800,7 +800,6 @@ function expandInitials(name, domain, brand, city) {
   if (!name || typeof name !== "string") return "";
   let expanded = [];
   const words = name.split(" ");
-  const domainLower = domain.toLowerCase();
 
   words.forEach(word => {
     if (/^[A-Z]{1,3}$/.test(word)) {
@@ -844,7 +843,7 @@ function preprocessProperNouns(name) {
             if (PROPER_NOUN_PREFIXES.has(part.toLowerCase())) {
               if (part.startsWith("o'")) {
                 return "O'" + part.charAt(2).toUpperCase() + part.slice(3);
-              } else if (part.startsWith("mc") || part.startsWith("mac")) { // Fixed 'part' to 'word'
+              } else if (part.startsWith("mc") || part.startsWith("mac")) {
                 return part.charAt(0).toUpperCase() + part.charAt(1) + part.charAt(2).toUpperCase() + part.slice(3);
               }
             }
