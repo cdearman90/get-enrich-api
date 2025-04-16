@@ -1,5 +1,12 @@
 // api/batch-enrich.js — Version 4.2.16
-import { humanizeName, extractBrandOfCityFromDomain, applyCityShortName, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } from "./lib/humanize.js";
+console.error("Starting batch-enrich.js module loading...");
+try {
+  const { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } = await import("./lib/humanize.js");
+  console.error("Successfully imported humanize.js");
+} catch (error) {
+  console.error("Failed to import humanize.js:", error.message, error.stack);
+  throw error;
+}
 
 const pLimit = (concurrency) => {
   let active = 0;
@@ -24,7 +31,7 @@ const processedDomains = new Set();
 
 const FALLBACK_API_URL = "/api/company-name-fallback";
 const FALLBACK_API_TIMEOUT_MS = parseInt(process.env.FALLBACK_API_TIMEOUT_MS, 10) || 6000;
-const RETRY_ATTEMPTS = 2; // Retry humanizeName once before fallback
+const RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 1000;
 
 const callFallbackAPI = async (domain, rowNum) => {
@@ -65,7 +72,6 @@ const callFallbackAPI = async (domain, rowNum) => {
     };
   } catch (error) {
     console.error(`Fallback API failed for ${domain}: ${error.message}`);
-    // Enhanced local fallback using humanize.js logic
     let local = await humanizeName(domain, domain, true);
     let tokensUsed = local.tokens || 0;
 
@@ -126,7 +132,7 @@ const streamToString = async (req) => {
 
 export default async function handler(req, res) {
   try {
-    console.log("🧠 batch-enrich.js v4.2.16 – Domain Processing Start");
+    console.error("🧠 batch-enrich.js v4.2.16 – Domain Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
@@ -189,12 +195,12 @@ export default async function handler(req, res) {
           const { domain, rowNum } = lead;
           const domainKey = domain.toLowerCase();
 
-          console.log(`Processing lead: ${domain} (Row ${rowNum})`);
+          console.error(`Processing lead: ${domain} (Row ${rowNum})`);
 
           if (processedDomains.has(domainKey)) {
             const cached = domainCache.get(domainKey);
             if (cached) {
-              console.log(`Skipping duplicate: ${domain}`);
+              console.error(`Skipping duplicate: ${domain}`);
               return {
                 domain,
                 companyName: cached.companyName || "",
@@ -353,7 +359,6 @@ export default async function handler(req, res) {
             finalResult.confidenceScore = Math.max(finalResult.confidenceScore || 0, 50);
           }
 
-          // Use humanize.js's expandInitials
           if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
             const expandedName = expandInitials(finalResult.companyName, domain, brandDetected, cityDetected);
             if (expandedName && expandedName !== finalResult.companyName) {
@@ -385,7 +390,7 @@ export default async function handler(req, res) {
       successful.push(...chunkResults);
     }
 
-    console.log(
+    console.error(
       `Batch complete: enriched=${successful.length}, review=${manualReviewQueue.length}, fallbacks=${fallbackTriggers.length}, tokens=${totalTokens}`
     );
 
