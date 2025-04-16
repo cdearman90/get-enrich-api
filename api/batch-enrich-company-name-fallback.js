@@ -1,4 +1,8 @@
-// api/company-name-fallback.js — Version 1.0.40
+// api/company-name-fallback.js — Version 1.0.41
+// Purpose: Enhance company names from dealership domains for cold email personalization
+// Integrates with humanize.js v4.2.34
+// Deployed via Vercel CLI v41.5.0
+
 import {
   humanizeName,
   extractBrandOfCityFromDomain,
@@ -10,7 +14,7 @@ import {
   expandInitials,
   calculateConfidenceScore,
   CAR_BRANDS,
-  BRAND_MAPPING
+  BRAND_MAPPING,
 } from "./lib/humanize.js";
 
 const BATCH_SIZE = 10;
@@ -38,10 +42,11 @@ const pLimit = async (concurrency) => {
       await next();
     }
   };
-  return (fn) => new Promise((resolve, reject) => {
-    queue.push({ fn, resolve, reject });
-    next();
-  });
+  return (fn) =>
+    new Promise((resolve, reject) => {
+      queue.push({ fn, resolve, reject });
+      next();
+    });
 };
 
 const streamToString = (stream) =>
@@ -83,7 +88,7 @@ const validateLeads = (leads) => {
 
 const isInitialsOnly = (name) => {
   const words = name.split(" ");
-  return words.every(w => /^[A-Z]{1,3}$/.test(w));
+  return words.every((w) => /^[A-Z]{1,3}$/.test(w));
 };
 
 const splitFallbackCompounds = (name) => {
@@ -93,24 +98,25 @@ const splitFallbackCompounds = (name) => {
     .trim();
 
   for (const noun of KNOWN_COMPOUND_NOUNS) {
-    const regex = new RegExp(`(${noun.toLowerCase()})`, 'i');
+    const regex = new RegExp(`(${noun.toLowerCase()})`, "i");
     if (regex.test(result)) {
-      result = result.replace(regex, ' $1').trim();
+      result = result.replace(regex, " $1").trim();
     }
   }
 
-  result = result.split(' ').map(word =>
-    word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
-  ).join(' ');
+  result = result
+    .split(" ")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(" ");
 
   return result;
 };
 
 const enforceProperNounMapping = (name) => {
   const words = name.split(" ");
-  const mappedWords = words.map(word => {
+  const mappedWords = words.map((word) => {
     const wordLower = word.toLowerCase();
-    const properMatch = Array.from(KNOWN_PROPER_NOUNS).find(noun => {
+    const properMatch = Array.from(KNOWN_PROPER_NOUNS).find((noun) => {
       const nounLower = noun.toLowerCase();
       return nounLower === wordLower || nounLower.startsWith(wordLower);
     });
@@ -119,7 +125,6 @@ const enforceProperNounMapping = (name) => {
   return mappedWords.join(" ");
 };
 
-// New helper to deduplicate brands
 const deduplicateBrands = (name) => {
   const words = name.split(" ");
   const uniqueWords = [];
@@ -140,18 +145,23 @@ const deduplicateBrands = (name) => {
 
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
-  console.error(`🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.40)`);
+  console.error(
+    `🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.41)`
+  );
 
   const cacheKey = domain.toLowerCase();
   if (domainCache.has(cacheKey)) {
     const cached = domainCache.get(cacheKey);
+    console.error(
+      `[company-name-fallback.js v1.0.41] Cache hit for ${domain}: ${JSON.stringify(cached)}`
+    );
     return {
       domain,
       companyName: cached.companyName,
       confidenceScore: cached.confidenceScore,
       flags: [...cached.flags, "CacheHit"],
       tokens: 0,
-      rowNum
+      rowNum,
     };
   }
 
@@ -163,14 +173,44 @@ const processLead = async (lead, fallbackTriggers) => {
   const cityDetected = match.city || null;
 
   const domainLower = domain.toLowerCase();
+
+  // Check for brand-only domains (e.g., chevy.com) before calling humanizeName
+  const BRAND_ONLY_DOMAINS = new Set(["chevy.com", "ford.com", "toyota.com"]);
+  if (BRAND_ONLY_DOMAINS.has(domainLower)) {
+    console.error(
+      `[company-name-fallback.js v1.0.41] BrandOnlySkipped for ${domain}, halting processing`
+    );
+    const finalResult = {
+      domain,
+      companyName: "",
+      confidenceScore: 0,
+      flags: ["BrandOnlySkipped"],
+      tokens: 0,
+      rowNum,
+    };
+    domainCache.set(cacheKey, {
+      companyName: finalResult.companyName,
+      confidenceScore: finalResult.confidenceScore,
+      flags: finalResult.flags,
+    });
+    return finalResult;
+  }
+
+  // Process with humanizeName
   if (domainLower in TEST_CASE_OVERRIDES) {
     try {
       result = await humanizeName(domain, domain, true);
       tokensUsed = result.tokens || 0;
-      console.error(`humanizeName result for ${domain}: ${JSON.stringify(result)}`);
+      console.error(
+        `[company-name-fallback.js v1.0.41] humanizeName result for ${domain}: ${JSON.stringify(
+          result
+        )}`
+      );
       result.flags = Array.isArray(result.flags) ? result.flags : [];
     } catch (error) {
-      console.error(`humanizeName failed for ${domain} despite override: ${error.message}`);
+      console.error(
+        `[company-name-fallback.js v1.0.41] humanizeName failed for ${domain} despite override: ${error.message}`
+      );
       const name = TEST_CASE_OVERRIDES[domainLower];
       const flags = ["OverrideApplied", "LocalFallbackDueToDependencyError"];
       const confidenceScore = calculateConfidenceScore(name, flags, domainLower);
@@ -181,20 +221,28 @@ const processLead = async (lead, fallbackTriggers) => {
       try {
         result = await humanizeName(domain, domain, true);
         tokensUsed = result.tokens || 0;
-        console.error(`humanizeName result for ${domain}: ${JSON.stringify(result)}`);
+        console.error(
+          `[company-name-fallback.js v1.0.41] humanizeName result for ${domain}: ${JSON.stringify(
+            result
+          )}`
+        );
         break;
       } catch (error) {
-        console.error(`humanizeName attempt ${attempt} failed for ${domain}: ${error.message}`);
+        console.error(
+          `[company-name-fallback.js v1.0.41] humanizeName attempt ${attempt} failed for ${domain}: ${error.message}`
+        );
         if (attempt < RETRY_ATTEMPTS) {
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
         } else {
-          console.error(`All retries failed for ${domain}: ${error.message}`);
+          console.error(
+            `[company-name-fallback.js v1.0.41] All retries failed for ${domain}: ${error.message}`
+          );
           result = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
           fallbackTriggers.push({
             domain,
             rowNum,
             reason: "MaxRetriesExceeded",
-            details: { error: error.message }
+            details: { error: error.message },
           });
         }
       }
@@ -206,26 +254,47 @@ const processLead = async (lead, fallbackTriggers) => {
     result.flags.push("FallbackAPIUsed");
   }
 
-  // Optimization: Apply deduplication immediately after humanizeName
+  // Apply deduplication immediately after humanizeName
   result.name = deduplicateBrands(result.name);
+  if (result.name !== result.name) {
+    result.flags.push("BrandDeduplicated");
+  }
 
-  // Optimization: Ensure BrandOnlySkipped halts all processing
+  // Ensure BrandOnlySkipped halts all processing (redundant check for safety)
   if (result.flags.includes("BrandOnlySkipped")) {
-    console.error(`BrandOnlySkipped detected for ${domain}, halting processing`);
-    return {
+    console.error(
+      `[company-name-fallback.js v1.0.41] BrandOnlySkipped detected for ${domain}, halting processing`
+    );
+    const finalResult = {
       domain,
       companyName: "",
       confidenceScore: 0,
       flags: ["BrandOnlySkipped"],
       tokens: tokensUsed,
-      rowNum
+      rowNum,
     };
+    domainCache.set(cacheKey, {
+      companyName: finalResult.companyName,
+      confidenceScore: finalResult.confidenceScore,
+      flags: finalResult.flags,
+    });
+    return finalResult;
   }
 
-  const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
+  const criticalFlags = [
+    "TooGeneric",
+    "CityNameOnly",
+    "Skipped",
+    "FallbackFailed",
+    "PossibleAbbreviation",
+  ];
   const forceReviewFlags = [
-    "TooGeneric", "CityNameOnly", "PossibleAbbreviation", "BadPrefixOf", "CarBrandSuffixRemaining",
-    "UnverifiedCity"
+    "TooGeneric",
+    "CityNameOnly",
+    "PossibleAbbreviation",
+    "BadPrefixOf",
+    "CarBrandSuffixRemaining",
+    "UnverifiedCity",
   ];
 
   // Enforce proper noun mappings (e.g., Galean -> Galeana)
@@ -238,7 +307,9 @@ const processLead = async (lead, fallbackTriggers) => {
   // Adjust confidence for known proper nouns (e.g., Malouf)
   if (KNOWN_PROPER_NOUNS.has(result.name) && result.confidenceScore < 125) {
     result.confidenceScore = 125;
-    result.flags = result.flags.filter(flag => flag !== "ProperNounFallbackBypassedThreshold");
+    result.flags = result.flags.filter(
+      (flag) => flag !== "ProperNounFallbackBypassedThreshold"
+    );
     result.flags.push("ConfidenceAdjustedForProperNoun");
   }
 
@@ -248,7 +319,7 @@ const processLead = async (lead, fallbackTriggers) => {
     result.flags.push("ConfidenceCapped");
   }
 
-    // Fix 5: Split compound blobs for any single-word name containing "auto"
+  // Split compound blobs for single-word names containing "auto"
   let words = result.name.split(" ");
   if (words.length === 1 && result.name.toLowerCase().includes("auto")) {
     const splitName = splitFallbackCompounds(result.name);
@@ -266,24 +337,39 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   }
 
-  // Fix 1 & 4: Handle incomplete/generic names and single-word city names
+  // Handle incomplete/generic names and single-word city names
   const isOverride = result.flags.includes("OverrideApplied");
   const isProperNoun = KNOWN_PROPER_NOUNS.has(result.name);
-  const isCityOnly = words.length === 1 && (cityDetected === words[0].toLowerCase() || KNOWN_CITIES_SET.has(words[0].toLowerCase()));
+  const isCityOnly =
+    words.length === 1 &&
+    (cityDetected === words[0].toLowerCase() || KNOWN_CITIES_SET.has(words[0].toLowerCase()));
   const endsWithS = isProperNoun && result.name.toLowerCase().endsWith("s");
-  const isBrandOnly = words.length === 1 && (CAR_BRANDS.includes(result.name.toLowerCase()) || BRAND_MAPPING[result.name.toLowerCase()]);
+  const isBrandOnly =
+    words.length === 1 &&
+    (CAR_BRANDS.includes(result.name.toLowerCase()) || BRAND_MAPPING[result.name.toLowerCase()]);
 
   if (!isOverride) {
     if (isCityOnly && brandDetected) {
-      result.name = `${result.name} ${BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)}`;
+      result.name = `${result.name} ${
+        BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)
+      }`;
       result.confidenceScore += 20;
       result.flags.push("BrandAppendedForCity", "BrandAppendedByFallback");
     } else if (endsWithS && brandDetected) {
-      result.name = `${result.name} ${BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)}`;
+      result.name = `${result.name} ${
+        BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)
+      }`;
       result.confidenceScore += 20;
       result.flags.push("BrandAppendedForS", "BrandAppendedByFallback");
-    } else if (isProperNoun && result.confidenceScore < 95 && !result.name.toLowerCase().includes("auto") && brandDetected) {
-      result.name = `${result.name} ${BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)}`;
+    } else if (
+      isProperNoun &&
+      result.confidenceScore < 95 &&
+      !result.name.toLowerCase().includes("auto") &&
+      brandDetected
+    ) {
+      result.name = `${result.name} ${
+        BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected)
+      }`;
       result.confidenceScore += 20;
       result.flags.push("BrandAppendedForProperNoun", "BrandAppendedByFallback");
     } else if (isBrandOnly) {
@@ -293,9 +379,7 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   }
 
-  // Fix 2: Prevent brand duplication (already handled earlier)
-
-  // Fix 3: Handle short names lacking context
+  // Handle short names lacking context
   if (words.length === 1 && !isProperNoun && !isCityOnly && !isBrandOnly) {
     const domainBase = domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "");
     const splitName = splitFallbackCompounds(domainBase);
@@ -310,6 +394,7 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   }
 
+  // Expand initials
   if (isInitialsOnly(result.name)) {
     const expandedName = expandInitials(result.name, brandDetected, cityDetected);
     if (expandedName !== result.name) {
@@ -317,16 +402,35 @@ const processLead = async (lead, fallbackTriggers) => {
       result.flags.push("InitialsExpandedLocally");
       if (isInitialsOnly(expandedName)) {
         result.confidenceScore -= 5;
-        result.flags.push("InitialsStillAmbiguous");
       } else {
         result.confidenceScore += 10;
       }
     }
   }
 
-  let isAcceptable = result.confidenceScore >= 75 && !result.flags.some(f => criticalFlags.includes(f));
+  // Enforce 1–3 word limit
+  words = result.name.split(" ").filter(Boolean);
+  if (words.length > 3) {
+    result.name = words.slice(0, 3).join(" ");
+    result.flags.push("WordCountTruncated");
+  }
 
-  if (!isAcceptable || result.confidenceScore < 75 || result.flags.some(f => forceReviewFlags.includes(f))) {
+  // Reject generic names unless explicitly allowed
+  const genericNames = new Set(["auto", "cars", "dealer"]);
+  if (genericNames.has(result.name.toLowerCase()) && domainLower !== "auto.com") {
+    result.name = "";
+    result.confidenceScore = 50;
+    result.flags.push("GenericNameRejected");
+  }
+
+  let isAcceptable =
+    result.confidenceScore >= 75 && !result.flags.some((f) => criticalFlags.includes(f));
+
+  if (
+    !isAcceptable ||
+    result.confidenceScore < 75 ||
+    result.flags.some((f) => forceReviewFlags.includes(f))
+  ) {
     fallbackTriggers.push({
       domain,
       rowNum,
@@ -336,9 +440,9 @@ const processLead = async (lead, fallbackTriggers) => {
         confidenceScore: result.confidenceScore,
         flags: result.flags,
         brand: brandDetected,
-        city: cityDetected
+        city: cityDetected,
       },
-      tokens: tokensUsed
+      tokens: tokensUsed,
     });
   }
 
@@ -348,27 +452,33 @@ const processLead = async (lead, fallbackTriggers) => {
     confidenceScore: result.confidenceScore,
     flags: result.flags,
     tokens: tokensUsed,
-    rowNum
+    rowNum,
   };
 
   domainCache.set(cacheKey, {
     companyName: finalResult.companyName,
     confidenceScore: finalResult.confidenceScore,
-    flags: finalResult.flags
+    flags: finalResult.flags,
   });
+
+  console.error(
+    `[company-name-fallback.js v1.0.41] Final result for ${domain}: ${JSON.stringify(finalResult)}`
+  );
 
   return finalResult;
 };
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.40 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.41 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
 
     const body = JSON.parse(raw);
-    const { validatedLeads, validationErrors } = validateLeads(body.leads || body.leadList || body.domains);
+    const { validatedLeads, validationErrors } = validateLeads(
+      body.leads || body.leadList || body.domains
+    );
 
     if (validatedLeads.length === 0) {
       return res.status(400).json({ error: "No valid leads", details: validationErrors });
@@ -381,37 +491,54 @@ export default async function handler(req, res) {
     const fallbackTriggers = [];
     let totalTokens = 0;
 
-    const chunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
-      validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
+    const chunks = Array.from(
+      { length: Math.ceil(validatedLeads.length / BATCH_SIZE) },
+      (_, i) => validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
     );
 
     for (const chunk of chunks) {
       if (Date.now() - startTime > PROCESSING_TIMEOUT_MS) {
-        return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
+        return res.status(200).json({
+          successful,
+          manualReviewQueue,
+          totalTokens,
+          fallbackTriggers,
+          partial: true,
+        });
       }
 
       const chunkResults = await Promise.all(
-        chunk.map(lead => limit(() => processLead(lead, fallbackTriggers)))
+        chunk.map((lead) => limit(() => processLead(lead, fallbackTriggers)))
       );
 
-      chunkResults.forEach(result => {
-        const criticalFlags = ["TooGeneric", "CityNameOnly", "Skipped", "FallbackFailed", "PossibleAbbreviation"];
+      chunkResults.forEach((result) => {
+        const criticalFlags = [
+          "TooGeneric",
+          "CityNameOnly",
+          "Skipped",
+          "FallbackFailed",
+          "PossibleAbbreviation",
+        ];
         const forceReviewFlags = [
-          "TooGeneric", "CityNameOnly", "PossibleAbbreviation", "BadPrefixOf", "CarBrandSuffixRemaining",
-          "UnverifiedCity"
+          "TooGeneric",
+          "CityNameOnly",
+          "PossibleAbbreviation",
+          "BadPrefixOf",
+          "CarBrandSuffixRemaining",
+          "UnverifiedCity",
         ];
 
         if (
           result.confidenceScore < 75 ||
-          result.flags.some(f => forceReviewFlags.includes(f)) ||
-          result.flags.some(f => criticalFlags.includes(f))
+          result.flags.some((f) => forceReviewFlags.includes(f)) ||
+          result.flags.some((f) => criticalFlags.includes(f))
         ) {
           manualReviewQueue.push({
             domain: result.domain,
             name: result.companyName,
             confidenceScore: result.confidenceScore,
             flags: result.flags,
-            rowNum: result.rowNum
+            rowNum: result.rowNum,
           });
         } else {
           successful.push({
@@ -419,7 +546,8 @@ export default async function handler(req, res) {
             companyName: result.companyName,
             confidenceScore: result.confidenceScore,
             flags: result.flags,
-            rowNum: result.rowNum
+            rowNum: result.rowNum,
+            tokens: result.tokens,
           });
         }
 
@@ -429,7 +557,7 @@ export default async function handler(req, res) {
 
     console.error(
       `Fallback complete: ${successful.length} enriched, ${manualReviewQueue.length} to review, ` +
-      `${fallbackTriggers.length} fallbacks, ${totalTokens} tokens used`
+        `${fallbackTriggers.length} fallbacks, ${totalTokens} tokens used`
     );
 
     return res.status(200).json({
@@ -437,7 +565,7 @@ export default async function handler(req, res) {
       manualReviewQueue,
       fallbackTriggers,
       totalTokens,
-      partial: false
+      partial: false,
     });
   } catch (error) {
     console.error(`❌ Fallback handler error: ${error.message}\n${error.stack}`);
@@ -447,6 +575,6 @@ export default async function handler(req, res) {
 
 export const config = {
   api: {
-    bodyParser: false
-  }
+    bodyParser: false,
+  },
 };
