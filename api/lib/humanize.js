@@ -104,7 +104,7 @@ const KNOWN_PROPER_NOUNS = new Set([
   "Bill Smith Buick GMC", "Victory Chevy Charlotte", "Midway Ford Miami", "Toyota of Gastonia", "Butler CDJ", "Drive Victory", "Toyota World Newton",
   "Hillsboro Ford", "Infiniti of Beachwood", "Toyota of Murfreesboro", "Palm Coast Ford", "Roseville Kia", "Livermore Honda", "Cadillac Norwood",
   "Classic Kia Carrollton", "Honda Morristown", "Sands Chevrolet", "Northwest Hyundai", "Malouf", "Demontrond", "Tasca", "Avis", "Rod Baker",
-  "Pat Milliken", "Gus Machado", "San Leandro", "Martin Chevy", "GY Chevy"
+  "Pat Milliken", "Gus Machado", "San Leandro", "Martin Chevy", "GY Chevy", "Ricart", "Pugmire", "Atamian"
 ]);
 
 const NON_DEALERSHIP_KEYWORDS = [
@@ -703,7 +703,6 @@ function earlyCompoundSplit(input) {
   let result = splitCamelCaseWords(input);
   const capitalCount = (result.match(/[A-Z]/g) || []).length;
 
-  // Relaxed condition: split if ≥2 capitalized segments or known bad compound
   if (capitalCount >= 2 || KNOWN_BAD_COMPOUNDS_SET.has(domainLower)) {
     for (const noun of KNOWN_COMPOUND_NOUNS) {
       const regex = new RegExp(`(${noun.toLowerCase()})`, 'i');
@@ -781,7 +780,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (!name || typeof name !== "string") return 0;
   let score = 100;
   if (flags.includes("PatternMatched")) score += 10;
-  if (flags.includes("ProperNounMatched")) score += 15; // Boosted for proper nouns
+  if (flags.includes("ProperNounMatched")) score += 15;
   if (flags.includes("CityMatched")) score += 6;
   if (flags.includes("AbbreviationExpanded")) score += 5;
   if (flags.includes("FallbackBlobSplit")) score += 10;
@@ -809,7 +808,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   const wordCount = name.split(" ").length;
   if (wordCount === 1) {
     if (KNOWN_PROPER_NOUNS.has(name)) {
-      score += 20; // Increased boost for single-word proper nouns
+      score += 20;
       flags.push("SingleWordProperNoun");
     } else {
       score += 10;
@@ -880,7 +879,7 @@ function extractBrandOfCityFromDomain(domain) {
     }
   }
 
- for (const cityLower in KNOWN_CITY_SHORT_NAMES) {
+  for (const cityLower in KNOWN_CITY_SHORT_NAMES) {
     const cityKey = cityLower.replace(/\s+/g, "");
     if (domainLower.includes(cityKey)) {
       for (const brand of CAR_BRANDS) {
@@ -1106,7 +1105,7 @@ async function humanizeName(inputName, domain, excludeCarBrandIfProperNoun = tru
     name = enforceThreeWordLimit(name, brand, city);
     confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
-    if (name && !name.includes(" ") && name.length > 10) { // Relaxed condition for unsplit compounds
+    if (name && !name.includes(" ") && name.length > 10) {
       flags.push("UnsplitCompound");
       flags.push("AmbiguousCompound");
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
@@ -1164,6 +1163,7 @@ export {
   containsCarBrand,
   applyCityShortName,
   earlyCompoundSplit,
+  expandInitials,
   calculateConfidenceScore,
   extractBrandOfCityFromDomain,
   humanizeName
@@ -1172,23 +1172,3 @@ export {
 process.on("unhandledRejection", (reason, p) => {
   console.error("Unhandled Rejection at:", p, "reason:", reason);
 });
-
-#### Validation Outputs
-**tasca.com** (Previously "TASCA Auto"):
-```json
-{
-  "successful": [
-    {
-      "domain": "tasca.com",
-      "companyName": "Tasca",
-      "confidenceScore": 125,
-      "flags": ["SingleWordProperNoun", "ProperNounBoost"],
-      "rowNum": 1,
-      "tokens": 0
-    }
-  ],
-  "manualReviewQueue": [],
-  "fallbackTriggers": [],
-  "totalTokens": 0,
-  "partial": false
-}
