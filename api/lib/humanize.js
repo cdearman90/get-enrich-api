@@ -806,7 +806,8 @@ function expandInitials(name, domain, brand, city) {
       const wordLower = word.toLowerCase();
       if (ABBREVIATION_EXPANSIONS[wordLower]) {
         const expansion = ABBREVIATION_EXPANSIONS[wordLower];
-        if (brand && !expansion.includes("Auto") && !expansion.match(/^[A-Z]{2,5}$/)) {
+        // Append brand if present, unless the expansion already includes "Auto" or the brand
+        if (brand && !expansion.includes("Auto") && !expansion.toLowerCase().includes(brand.toLowerCase())) {
           expanded.push(`${expansion} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`);
         } else {
           expanded.push(expansion);
@@ -1149,31 +1150,38 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (flags.includes("PatternMatched") && !appliedBoosts.has("PatternMatched")) {
     score += 10;
     appliedBoosts.add("PatternMatched");
+    flags.push("PatternMatched");
   }
   if (flags.includes("ProperNounMatched") && !appliedBoosts.has("ProperNounMatched")) {
     score += 15;
     appliedBoosts.add("ProperNounMatched");
+    flags.push("ProperNounMatched");
   }
   if (flags.includes("CityMatched") && !appliedBoosts.has("CityMatched")) {
     score += 6;
     appliedBoosts.add("CityMatched");
+    flags.push("CityMatched");
   }
   if (flags.includes("AbbreviationExpanded") && !appliedBoosts.has("AbbreviationExpanded")) {
     score += 10;
     appliedBoosts.add("AbbreviationExpanded");
+    flags.push("AbbreviationExpanded");
   }
   if (flags.includes("FallbackBlobSplit") && !appliedBoosts.has("FallbackBlobSplit")) {
     score += 10;
     appliedBoosts.add("FallbackBlobSplit");
+    flags.push("FallbackBlobSplit");
   }
   if (flags.includes("BrandFirstOrdering") && !appliedBoosts.has("BrandFirstOrdering")) {
     score += 10;
     appliedBoosts.add("BrandFirstOrdering");
+    flags.push("BrandFirstOrdering");
   }
   if (flags.includes("AmbiguousInitials")) score -= 10;
   if (flags.includes("InitialsExpandedWithBrand") && !appliedBoosts.has("InitialsExpandedWithBrand")) {
     score += 10;
     appliedBoosts.add("InitialsExpandedWithBrand");
+    flags.push("InitialsExpandedWithBrand");
   }
   if (flags.includes("AmbiguousCompound")) score -= 10;
   if (flags.includes("FallbackToDomain")) {
@@ -1191,49 +1199,58 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (flags.includes("PartialProperNoun")) score -= 15;
   if (["penske", "landers", "ciocca", "helloauto", "classicbmw"].some(k => domainLower.includes(k)) && !appliedBoosts.has("KnownAutoGroup")) {
     score += 5;
-    flags.push("KnownAutoGroup");
     appliedBoosts.add("KnownAutoGroup");
+    flags.push("KnownAutoGroup");
   }
+
   const wordCount = name.split(" ").length;
   if (wordCount === 1) {
     if (KNOWN_PROPER_NOUNS.has(name) && !appliedBoosts.has("SingleWordProperNoun")) {
       score += 45;
-      flags.push("SingleWordProperNoun");
       appliedBoosts.add("SingleWordProperNoun");
-    } else {
+      flags.push("SingleWordProperNoun");
+    } else if (!appliedBoosts.has("OneWordName")) {
       score += 10;
+      appliedBoosts.add("OneWordName");
       flags.push("OneWordName");
     }
-  } else if (wordCount === 2) {
+  } else if (wordCount === 2 && !appliedBoosts.has("TwoWordName")) {
     score += 8;
+    appliedBoosts.add("TwoWordName");
     flags.push("TwoWordName");
-  } else if (wordCount === 3) {
+  } else if (wordCount === 3 && !appliedBoosts.has("ThreeWordName")) {
     score += 5;
+    appliedBoosts.add("ThreeWordName");
     flags.push("ThreeWordName");
   }
-  if (KNOWN_PROPER_NOUNS.has(name) || Object.values(KNOWN_CITY_SHORT_NAMES).some(city => name.includes(city)) && !appliedBoosts.has("KnownPatternBoost")) {
+
+  if ((KNOWN_PROPER_NOUNS.has(name) || Object.values(KNOWN_CITY_SHORT_NAMES).some(city => name.includes(city))) && !appliedBoosts.has("KnownPatternBoost")) {
     score += 5;
-    flags.push("KnownPatternBoost");
     appliedBoosts.add("KnownPatternBoost");
+    flags.push("KnownPatternBoost");
   }
+
   if (flags.includes("UnsplitCompound")) {
     score = Math.min(score, 90);
   }
+
   const brandCount = name.split(" ").filter(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]).length;
   if (brandCount > 1) {
     score -= 10;
-    flags.push("BrandOverusePenalty");
+    if (!flags.includes("BrandOverusePenalty")) flags.push("BrandOverusePenalty");
   } else if (brandCount === 1 && !appliedBoosts.has("BrandIncludedBoost")) {
     score += 10;
-    flags.push("BrandIncludedBoost");
     appliedBoosts.add("BrandIncludedBoost");
+    flags.push("BrandIncludedBoost");
   }
+
   if (KNOWN_PROPER_NOUNS.has(name) && !appliedBoosts.has("ProperNounBoost")) {
     score += 15;
-    flags.push("ProperNounBoost");
     appliedBoosts.add("ProperNounBoost");
+    flags.push("ProperNounBoost");
     score = Math.max(score, 100);
   }
+
   if (!name) score = 50;
   return Math.max(50, Math.min(score, 125));
 }
