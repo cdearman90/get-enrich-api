@@ -773,7 +773,8 @@ function capitalizeName(words) {
       }
       const properMatch = Array.from(KNOWN_PROPER_NOUNS).find(noun => noun.toLowerCase() === word.toLowerCase());
       if (properMatch) return properMatch;
-      if (/^[A-Z]{2,5}$/.test(word) || ABBREVIATION_EXPANSIONS[word.toLowerCase()]?.match(/^[A-Z]{2,5}$/)) return word.toUpperCase();
+      if (/^[A-Z]{2,5}$/.test(word)) return word.toUpperCase();
+      if (ABBREVIATION_EXPANSIONS[word.toLowerCase()]?.match(/^[A-Z]{2,5}$/)) return ABBREVIATION_EXPANSIONS[word.toLowerCase()];
       if (BRAND_MAPPING[word.toLowerCase()]) return BRAND_MAPPING[word.toLowerCase()];
       if (["and"].includes(word.toLowerCase()) && i > 0) return word.toLowerCase();
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
@@ -806,7 +807,6 @@ function expandInitials(name, domain, brand, city) {
       const wordLower = word.toLowerCase();
       if (ABBREVIATION_EXPANSIONS[wordLower]) {
         const expansion = ABBREVIATION_EXPANSIONS[wordLower];
-        // Append brand if present, unless the expansion already includes "Auto" or the brand
         if (brand && !expansion.includes("Auto") && !expansion.toLowerCase().includes(brand.toLowerCase())) {
           expanded.push(`${expansion} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`);
         } else {
@@ -817,7 +817,6 @@ function expandInitials(name, domain, brand, city) {
       } else if (brand && wordLower === brand.toLowerCase().slice(0, word.length)) {
         expanded.push(BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand));
       } else {
-        // Fallback for unknown abbreviations
         expanded.push(`${word.toUpperCase()} Auto`);
       }
     } else {
@@ -1252,7 +1251,6 @@ function calculateConfidenceScore(name, flags, domainLower) {
 
   if (!name) score = 50;
 
-  // Update the original flags array with unique flags
   flags.length = 0;
   flags.push(...Array.from(uniqueFlags));
 
