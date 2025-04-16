@@ -564,7 +564,7 @@ const ABBREVIATION_EXPANSIONS = {
   "eh": "East Hills",
   "rt": "RT128",
   "hmtr": "HMTR Auto",
-  "m&h": "M&H"
+  "m&h": "M&H",
   "jp": "Jack Powell", // Added for jackpowell.com
 };
 
