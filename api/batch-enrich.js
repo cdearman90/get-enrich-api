@@ -1,4 +1,4 @@
-// api/batch-enrich.js — Version 4.2.16
+// api/batch-enrich.js — Version 4.2.17
 import { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } from "./lib/humanize.js";
 
 console.error("Successfully imported humanize.js");
@@ -31,6 +31,7 @@ const RETRY_DELAY_MS = 1000;
 
 const callFallbackAPI = async (domain, rowNum) => {
   try {
+    console.warn(`Calling fallback API for ${domain} (Row ${rowNum})`);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), FALLBACK_API_TIMEOUT_MS);
 
@@ -127,7 +128,7 @@ const streamToString = async (req) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 batch-enrich.js v4.2.16 – Domain Processing Start");
+    console.warn("🧠 batch-enrich.js v4.2.17 – Domain Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
@@ -190,12 +191,12 @@ export default async function handler(req, res) {
           const { domain, rowNum } = lead;
           const domainKey = domain.toLowerCase();
 
-          console.error(`Processing lead: ${domain} (Row ${rowNum})`);
+          console.warn(`Processing lead: ${domain} (Row ${rowNum})`);
 
           if (processedDomains.has(domainKey)) {
             const cached = domainCache.get(domainKey);
             if (cached) {
-              console.error(`Skipping duplicate: ${domain}`);
+              console.warn(`Skipping duplicate: ${domain}`);
               return {
                 domain,
                 companyName: cached.companyName || "",
@@ -385,7 +386,7 @@ export default async function handler(req, res) {
       successful.push(...chunkResults);
     }
 
-    console.error(
+    console.warn(
       `Batch complete: enriched=${successful.length}, review=${manualReviewQueue.length}, fallbacks=${fallbackTriggers.length}, tokens=${totalTokens}`
     );
 
