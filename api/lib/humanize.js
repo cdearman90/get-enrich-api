@@ -672,10 +672,14 @@ const PROPER_NOUN_PREFIXES = new Set([
   "macdonald", "mcdonald", "mcgregor", "mcguire", "mckinney", "mclaren"
 ]);
 
+// New: Pattern to detect first/last name combinations
+const FIRST_LAST_NAME_PATTERN = /^[A-Z][a-z]+ [A-Z][a-z]+$/;
+
 const PROPER_NOUN_PATTERN = /(o'|mc|mac)\s+[a-z]+/i;
 
 const openAICache = new Map();
 
+// Helper Functions
 function containsCarBrand(name) {
   if (!name || typeof name !== "string") return false;
   const normalized = name.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
@@ -722,6 +726,7 @@ function extractBrandOfCityFromDomain(domain) {
     }
   }
 
+  // Enhanced: Check for first/last name pattern in proper nouns
   for (const properNoun of KNOWN_PROPER_NOUNS) {
     const nounLower = properNoun.toLowerCase().replace(/\s+/g, "");
     if (domainLower.includes(nounLower)) {
@@ -731,7 +736,14 @@ function extractBrandOfCityFromDomain(domain) {
     }
   }
 
-  if (!brand && !city && !flags.includes("ProperNounMatched")) {
+  // New: Check for first/last name pattern in the domain
+  const splitName = splitCamelCaseWords(domainLower);
+  if (FIRST_LAST_NAME_PATTERN.test(splitName)) {
+    name = splitName;
+    flags.push("FirstLastNameMatched");
+  }
+
+  if (!brand && !city && !flags.includes("ProperNounMatched") && !flags.includes("FirstLastNameMatched")) {
     const parts = domainLower.split(/(auto|motors|group|dealers|dealership)/i);
     if (parts.length > 1) {
       name = parts[0].trim();
@@ -808,7 +820,6 @@ function expandInitials(name, domain, brand, city) {
       const wordLower = word.toLowerCase();
       if (ABBREVIATION_EXPANSIONS[wordLower]) {
         let expansion = ABBREVIATION_EXPANSIONS[wordLower];
-        // Special case for "MB"
         if (wordLower === "mb") {
           if (domainLower.includes("mbusa")) {
             expansion = "M.B. USA";
@@ -820,21 +831,13 @@ function expandInitials(name, domain, brand, city) {
           } else {
             expansion = "Mercedes";
           }
-        }
-        // Special case for "CZ"
-        else if (wordLower === "cz" && domainLower.includes("czag")) {
+        } else if (wordLower === "cz" && domainLower.includes("czag")) {
           expansion = "CZAG Auto";
-        }
-        // Special case for "RT"
-        else if (wordLower === "rt" && domainLower.includes("rt128") && domainLower.includes("honda")) {
+        } else if (wordLower === "rt" && domainLower.includes("rt128") && domainLower.includes("honda")) {
           expansion = "RT128 Honda";
-        }
-        // Special case for "NP"
-        else if (wordLower === "np" && domainLower.includes("subaru")) {
+        } else if (wordLower === "np" && domainLower.includes("subaru")) {
           expansion = "NP Subaru";
-        }
-        // General case: append brand if applicable
-        else if (brand && !expansion.includes("Auto") && !expansion.toLowerCase().includes(brand.toLowerCase())) {
+        } else if (brand && !expansion.includes("Auto") && !expansion.toLowerCase().includes(brand.toLowerCase())) {
           expansion = `${expansion} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`;
         }
         expanded.push(expansion);
@@ -878,7 +881,7 @@ function preprocessProperNouns(name) {
         }
         if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
           if (word.startsWith("o'")) {
-            return "O'" + word.charAt(2).toUpperCase() + part.slice(3);
+            return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
           } else if (word.startsWith("mc") || word.startsWith("mac")) {
             return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
           }
@@ -910,6 +913,23 @@ function splitCamelCaseWords(input) {
   let result = preprocessProperNouns(input);
   const lowerInput = result.toLowerCase();
 
+  // New: Add known splits for deterministic handling
+  const knownSplits = {
+    'thepremiercollection': 'Premier Collection',
+    'fletcherauto': 'Fletcher Auto',
+    'potamkinatlanta': 'Potamkin Atlanta',
+    'prestonmotor': 'Preston Motor',
+    'billdube': 'Bill Dube',
+    'colonialwest': 'Colonial-West',
+    'scottclarkstoyota': 'Scott Clark', // Updated to exclude Toyota
+    'donhattan': 'Don Hattan',
+    'avisford': 'Avis Ford',
+    'davischevrolet': 'Davis Chevy'
+  };
+  if (knownSplits[lowerInput]) {
+    return knownSplits[lowerInput];
+  }
+
   if (lowerInput.startsWith("the")) {
     const afterThe = result.substring(3);
     const lowerAfterThe = afterThe.toLowerCase();
@@ -940,6 +960,12 @@ function splitCamelCaseWords(input) {
     .replace(/([a-z])([0-9])/g, "$1 $2")
     .replace(/([A-Z]+)([0-9]+)/g, "$1 $2")
     .trim();
+
+  // Enhanced: Detect first/last name pattern before brand splitting
+  const words = result.split(" ");
+  if (words.length >= 2 && FIRST_LAST_NAME_PATTERN.test(result)) {
+    return result; // Preserve first/last name combination
+  }
 
   for (const brand of CAR_BRANDS) {
     const brandLower = brand.toLowerCase();
@@ -1168,7 +1194,7 @@ function reorderBrandCity(name) {
 function calculateConfidenceScore(name, flags, domainLower) {
   if (!name || typeof name !== "string") return 0;
 
-  let score = 100;
+  let score = 50; // Base score
   const appliedBoosts = new Set();
   const uniqueFlags = new Set(flags);
 
@@ -1227,18 +1253,29 @@ function calculateConfidenceScore(name, flags, domainLower) {
   const wordCount = name.split(" ").length;
   if (wordCount === 1) {
     if (KNOWN_PROPER_NOUNS.has(name) && !appliedBoosts.has("SingleWordProperNoun")) {
-      score += 45;
+      score += 45; // SingleWordProperNoun
+      score += 15; // ProperNounBoost
       appliedBoosts.add("SingleWordProperNoun");
       uniqueFlags.add("SingleWordProperNoun");
+      appliedBoosts.add("ProperNounBoost");
+      uniqueFlags.add("ProperNounBoost");
     } else if (!appliedBoosts.has("OneWordName")) {
       score += 10;
       appliedBoosts.add("OneWordName");
       uniqueFlags.add("OneWordName");
     }
-  } else if (wordCount === 2 && !appliedBoosts.has("TwoWordName")) {
-    score += 8;
-    appliedBoosts.add("TwoWordName");
-    uniqueFlags.add("TwoWordName");
+  } else if (wordCount === 2) {
+    if (!appliedBoosts.has("TwoWordName")) {
+      score += 8; // TwoWordName
+      appliedBoosts.add("TwoWordName");
+      uniqueFlags.add("TwoWordName");
+    }
+    // New: Boost for first/last name pattern
+    if (FIRST_LAST_NAME_PATTERN.test(name) && !appliedBoosts.has("FirstLastNameMatched")) {
+      score += 15; // ProperNounBoost
+      appliedBoosts.add("ProperNounBoost");
+      uniqueFlags.add("ProperNounBoost");
+    }
   } else if (wordCount === 3 && !appliedBoosts.has("ThreeWordName")) {
     score += 5;
     appliedBoosts.add("ThreeWordName");
@@ -1269,7 +1306,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   }
 
   // FINAL OVERRIDE BOOST
-  if (uniqueFlags.has("OverrideApplied") && KNOWN_PROPER_NOUNS.has(name)) {
+  if (uniqueFlags.has("OverrideApplied") && (KNOWN_PROPER_NOUNS.has(name) || FIRST_LAST_NAME_PATTERN.test(name))) {
     score = Math.max(score, 125);
     uniqueFlags.add("ProperNounBoost");
   }
@@ -1282,7 +1319,6 @@ function calculateConfidenceScore(name, flags, domainLower) {
 
   return Math.max(50, Math.min(score, 125));
 }
-
 
 async function humanizeName(inputName, domain, skipCache = false) {
   try {
@@ -1369,7 +1405,10 @@ async function humanizeName(inputName, domain, skipCache = false) {
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
     }
 
-    if (brand && name.includes(BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand))) {
+    // New: Skip brand appending if the name is a first/last name combination
+    if (FIRST_LAST_NAME_PATTERN.test(name)) {
+      flags.push("FirstLastNameMatched");
+    } else if (brand && name.includes(BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand))) {
       const properNoun = Array.from(KNOWN_PROPER_NOUNS).find(noun => name.toLowerCase().includes(noun.toLowerCase().replace(/\s+/g, "")) && !noun.toLowerCase().includes(brand.toLowerCase()));
       if (properNoun && !city) {
         name = `${properNoun} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`;
@@ -1400,7 +1439,7 @@ async function humanizeName(inputName, domain, skipCache = false) {
 
     name = handleNamesEndingInS(name, brand, city);
 
-    if (domainLower.includes("auto") && !name.toLowerCase().includes("auto") && !flags.includes("BrandFirstOrdering")) {
+    if (domainLower.includes("auto") && !name.toLowerCase().includes("auto") && !flags.includes("BrandFirstOrdering") && !flags.includes("FirstLastNameMatched")) {
       name = enforceThreeWordLimit(`${name} Auto`, brand, city);
       flags.push("AutoAppended");
     }
@@ -1436,15 +1475,15 @@ async function humanizeName(inputName, domain, skipCache = false) {
 
     const isCityOnly = words.length === 1 && (city === words[0].toLowerCase() || KNOWN_CITIES_SET.has(words[0].toLowerCase()));
     const hasContext = name.toLowerCase().includes("auto") || words.length > 1 || flags.includes("BrandFirstOrdering");
-    if (isCityOnly && brand) {
+    if (isCityOnly && brand && !flags.includes("FirstLastNameMatched")) {
       name = enforceThreeWordLimit(`${name} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`, brand, city);
       flags.push("BrandSuffixAdded");
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
-    } else if (isCityOnly && !hasContext) {
+    } else if (isCityOnly && !hasContext && !flags.includes("FirstLastNameMatched")) {
       name = enforceThreeWordLimit(`${name} Auto`, brand, city);
       flags.push("CityNameOnly");
       flags.push("AutoAppended");
-    } else if (brand && words.length === 1 && !hasContext && confidenceScore < 95) {
+    } else if (brand && words.length === 1 && !hasContext && confidenceScore < 95 && !flags.includes("FirstLastNameMatched")) {
       name = enforceThreeWordLimit(`${name} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`, brand, city);
       flags.push("BrandAppended");
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
