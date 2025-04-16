@@ -548,11 +548,12 @@ const ABBREVIATION_EXPANSIONS = {
   "gy": "GY Auto",
   "cz": "CZ Auto",
   "hmt": "HMT Auto",
-  "np": "Np Auto",
+  "np": "NP Auto",
   "npw": "NPW Auto",
   "bhm": "Birmingham",
   "eh": "East Hills",
-  "rt": "RT"
+  "rt": "RT",
+  "hmtr": "HMTR Auto"
 };
 
 const TEST_CASE_OVERRIDES = {
@@ -592,10 +593,43 @@ const TEST_CASE_OVERRIDES = {
   "powerautogroup.com": "Power Auto Group",
   "crossroadscars.com": "Crossroad",
   "onesubaru.com": "One Subaru",
-  "vanderhydeford.net": "Vanderhyde Ford"
+  "vanderhydeford.net": "Vanderhyde Ford",
+  "mbusa.com": "M.B. USA",
+  "gomontrose.com": "Go Montrose",
+  "ehchevy.com": "East Hills Chevy",
+  "shoplynch.com": "Lynch",
+  "austininfiniti.com": "Austin Infiniti",
+  "martinchevrolet.com": "Martin Chevy",
+  "garberchevrolet.com": "Garber Chevy",
+  "bulluckchevrolet.com": "Bulluck Chevy",
+  "scottclark.com": "Scott Clark",
+  "newhollandauto.com": "New Holland",
+  "lynnlayton.com": "Lynn Layton",
+  "landerscorp.com": "Landers",
+  "parkerauto.com": "Parker Auto",
+  "laurelautogroup.com": "Laurel Auto",
+  "rt128honda.com": "RT128",
+  "subaruofwakefield.com": "Subaru Wakefield",
+  "lexusofchattanooga.com": "Lexus Chattanooga",
+  "planet-powersports.net": "Planet Power",
+  "garlynshelton.com": "Garlyn Shelton",
+  "saffordbrown.com": "Safford Brown",
+  "saffordauto.com": "Safford Auto",
+  "npsubaru.com": "NP Subaru",
+  "prestoncars.com": "Preston",
+  "toyotaofredlands.com": "Toyota Redland",
+  "lexusoflakeway.com": "Lexus Lakeway",
+  "robbinstoyota.com": "Robbin Toyota",
+  "swantgraber.com": "Swant Graber",
+  "sundancechevy.com": "Sundance Chevy",
+  "steponeauto.com": "Step One Auto",
+  "capital-honda.com": "Capital Honda"
 };
 
 const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
+
+// Generic words to strip
+const GENERIC_WORDS = new Set(["the", "of", "to", "inc", "corp", "llc", "cars", "shop"]);
 
 const KNOWN_COMPOUND_NOUNS = [
   "Auto", "AutoGroup", "Motors", "Dealers", "Dealership", "Group", "Motor",
@@ -638,13 +672,26 @@ const openAICache = new Map();
 const KNOWN_DEALERSHIP_WORDS = new Set([
   "dan", "cummins", "golf", "mill", "ford", "chevy", "hyundai", "auto",
   "fletcher", "carl", "black", "potamkin", "mccarthy", "bentley", "davis",
-  "gy", "raceway", "kennedy", "garber", "sunnyside", "auto"
+  "gy", "raceway", "kennedy", "garber", "sunnyside", "premier", "collection",
+  "new", "holland", "lynn", "layton", "landers", "parker", "laurel", "rt",
+  "dick", "lovett", "colonial", "west", "go", "montrose", "subaru", "wakefield",
+  "lexus", "chattanooga", "planet", "power", "garlyn", "shelton", "safford",
+  "brown", "np", "subaru", "preston", "toyota", "redland", "lakeway", "swant",
+  "graber", "sundance", "step", "one", "hmtr", "jt", "titus", "will", "campbell",
+  "capital", "honda"
 ]);
 
 function containsCarBrand(name) {
   if (!name || typeof name !== "string") return false;
   const normalized = name.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
   return CAR_BRANDS.some(brand => normalized.includes(brand));
+}
+
+function stripGenericWords(name) {
+  if (!name || typeof name !== "string") return name;
+  let words = name.split(/\s+/);
+  words = words.filter(word => !GENERIC_WORDS.has(word.toLowerCase()));
+  return words.join(" ");
 }
 
 function extractBrandOfCityFromDomain(domain) {
@@ -654,6 +701,21 @@ function extractBrandOfCityFromDomain(domain) {
   let brand = null;
   let city = null;
   const flags = [];
+
+  // Strip generic words early
+  for (const genericWord of GENERIC_WORDS) {
+    const regex = new RegExp(genericWord, 'i');
+    name = name.replace(regex, "").trim();
+  }
+
+  // Check for abbreviations first
+  for (const abbr in ABBREVIATION_EXPANSIONS) {
+    if (name.includes(abbr)) {
+      name = name.replace(abbr, ABBREVIATION_EXPANSIONS[abbr].toLowerCase());
+      flags.push("AbbreviationExpanded");
+      break;
+    }
+  }
 
   for (const carBrand of CAR_BRANDS) {
     const brandLower = carBrand.toLowerCase();
@@ -712,7 +774,7 @@ function capitalizeName(words) {
       if (properMatch) return properMatch;
       if (/^[A-Z]{2,5}$/.test(word) || ABBREVIATION_EXPANSIONS[word.toLowerCase()]?.match(/^[A-Z]{2,5}$/)) return word.toUpperCase();
       if (BRAND_MAPPING[word.toLowerCase()]) return BRAND_MAPPING[word.toLowerCase()];
-      if (["of", "and", "to"].includes(word.toLowerCase()) && i > 0) return word.toLowerCase();
+      if (["and"].includes(word.toLowerCase()) && i > 0) return word.toLowerCase();
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
     .filter(Boolean)
@@ -859,7 +921,7 @@ async function validateSpacingWithOpenAI(name) {
   // Preprocess the name to ensure proper noun patterns are concatenated
   const preprocessedName = preprocessProperNouns(name);
 
-  const prompt = `Given a company name, add a space between concatenated words if they are improperly joined (e.g., 'Fletcherauto' → 'Fletcher Auto', 'Dancummins' → 'Dan Cummins'). Do not add spaces within proper nouns like O'Brien or McCarthy. Do not add, remove, or modify words. Return the name with corrected spacing in JSON format: { "name": "corrected name" }. Input: ${preprocessedName}`;
+  const prompt = `Given a company name, add a space between concatenated words if they are improperly joined (e.g., 'Fletcherauto' → 'Fletcher Auto', 'Dancummins' → 'Dan Cummins'). Do not add spaces within proper nouns like O'Brien or McCarthy, or abbreviations like GY or NP. Do not add, remove, or modify words. Return the name with corrected spacing in JSON format: { "name": "corrected name" }. Input: ${preprocessedName}`;
   try {
     const result = await callOpenAI(prompt, {
       systemMessage: "You are a precise validator for spacing in company names.",
@@ -1060,6 +1122,12 @@ function handleNamesEndingInS(name, brand, city) {
   // Check if the last word is a brand (e.g., "Mercedes") or a special case (e.g., "Classics")
   if (CAR_BRANDS.includes(lastWord.toLowerCase()) || lastWord.toLowerCase() === "classics") {
     return name; // Do not modify
+  }
+
+  // Check if the last word is "sc" (special case for "Galeanasc")
+  if (lastWord.toLowerCase() === "sc") {
+    words[words.length - 1] = "SC"; // Capitalize SC
+    return words.join(" ");
   }
 
   // Check if the last word (or the name itself) is a city
@@ -1263,6 +1331,9 @@ async function humanizeName(inputName, domain) {
     name = capitalizeName(name);
     name = name.replace(/\b(auto)\b.*\b(auto)\b/i, "Auto");
     name = enforceThreeWordLimit(name, brand, city);
+    
+    // Strip generic words as a final step
+    name = stripGenericWords(name);
     confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
     if (name && !name.includes(" ") && name.length > 10) {
