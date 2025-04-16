@@ -1123,14 +1123,12 @@ function reorderBrandCity(name) {
   const firstLower = first.toLowerCase();
   const secondLower = second.toLowerCase();
 
-  // Check for proper noun + brand
   const isProperNounFirst = KNOWN_PROPER_NOUNS.has(first) || /^[A-Z][a-z]+$/.test(first);
   const isBrandSecond = CAR_BRANDS.includes(secondLower) || BRAND_MAPPING[secondLower];
   if (isProperNounFirst && isBrandSecond) {
     return `${first} ${BRAND_MAPPING[secondLower] || capitalizeName(second)}`;
   }
 
-  // Existing city + brand logic
   const isBrandFirst = CAR_BRANDS.includes(firstLower) || BRAND_MAPPING[firstLower];
   const isCitySecond = KNOWN_CITIES_SET.has(secondLower) || Object.keys(KNOWN_CITY_SHORT_NAMES).includes(secondLower);
   if (isBrandFirst && isCitySecond) {
@@ -1146,61 +1144,62 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (!name || typeof name !== "string") return 0;
   let score = 100;
   const appliedBoosts = new Set();
+  const uniqueFlags = new Set(flags);
 
-  if (flags.includes("PatternMatched") && !appliedBoosts.has("PatternMatched")) {
+  if (uniqueFlags.has("PatternMatched") && !appliedBoosts.has("PatternMatched")) {
     score += 10;
     appliedBoosts.add("PatternMatched");
-    flags.push("PatternMatched");
+    uniqueFlags.add("PatternMatched");
   }
-  if (flags.includes("ProperNounMatched") && !appliedBoosts.has("ProperNounMatched")) {
+  if (uniqueFlags.has("ProperNounMatched") && !appliedBoosts.has("ProperNounMatched")) {
     score += 15;
     appliedBoosts.add("ProperNounMatched");
-    flags.push("ProperNounMatched");
+    uniqueFlags.add("ProperNounMatched");
   }
-  if (flags.includes("CityMatched") && !appliedBoosts.has("CityMatched")) {
+  if (uniqueFlags.has("CityMatched") && !appliedBoosts.has("CityMatched")) {
     score += 6;
     appliedBoosts.add("CityMatched");
-    flags.push("CityMatched");
+    uniqueFlags.add("CityMatched");
   }
-  if (flags.includes("AbbreviationExpanded") && !appliedBoosts.has("AbbreviationExpanded")) {
+  if (uniqueFlags.has("AbbreviationExpanded") && !appliedBoosts.has("AbbreviationExpanded")) {
     score += 10;
     appliedBoosts.add("AbbreviationExpanded");
-    flags.push("AbbreviationExpanded");
+    uniqueFlags.add("AbbreviationExpanded");
   }
-  if (flags.includes("FallbackBlobSplit") && !appliedBoosts.has("FallbackBlobSplit")) {
+  if (uniqueFlags.has("FallbackBlobSplit") && !appliedBoosts.has("FallbackBlobSplit")) {
     score += 10;
     appliedBoosts.add("FallbackBlobSplit");
-    flags.push("FallbackBlobSplit");
+    uniqueFlags.add("FallbackBlobSplit");
   }
-  if (flags.includes("BrandFirstOrdering") && !appliedBoosts.has("BrandFirstOrdering")) {
+  if (uniqueFlags.has("BrandFirstOrdering") && !appliedBoosts.has("BrandFirstOrdering")) {
     score += 10;
     appliedBoosts.add("BrandFirstOrdering");
-    flags.push("BrandFirstOrdering");
+    uniqueFlags.add("BrandFirstOrdering");
   }
-  if (flags.includes("AmbiguousInitials")) score -= 10;
-  if (flags.includes("InitialsExpandedWithBrand") && !appliedBoosts.has("InitialsExpandedWithBrand")) {
+  if (uniqueFlags.has("AmbiguousInitials")) score -= 10;
+  if (uniqueFlags.has("InitialsExpandedWithBrand") && !appliedBoosts.has("InitialsExpandedWithBrand")) {
     score += 10;
     appliedBoosts.add("InitialsExpandedWithBrand");
-    flags.push("InitialsExpandedWithBrand");
+    uniqueFlags.add("InitialsExpandedWithBrand");
   }
-  if (flags.includes("AmbiguousCompound")) score -= 10;
-  if (flags.includes("FallbackToDomain")) {
+  if (uniqueFlags.has("AmbiguousCompound")) score -= 10;
+  if (uniqueFlags.has("FallbackToDomain")) {
     const wordCount = name.split(" ").length;
     score -= wordCount > 1 ? 5 : 10;
     if (wordCount === 1 && !KNOWN_PROPER_NOUNS.has(name)) score = 75;
   }
-  if (flags.includes("CityNameOnly")) score -= 5;
-  if (flags.includes("TooGeneric")) score -= 10;
-  if (flags.includes("TooVerbose")) score -= 10;
-  if (flags.includes("InitialsHeavy")) score -= 5;
-  if (flags.includes("RawDomain")) score -= 10;
-  if (flags.includes("UnsplitCompound")) score -= 5;
-  if (flags.includes("OpenAIParseError")) score -= 10;
-  if (flags.includes("PartialProperNoun")) score -= 15;
+  if (uniqueFlags.has("CityNameOnly")) score -= 5;
+  if (uniqueFlags.has("TooGeneric")) score -= 10;
+  if (uniqueFlags.has("TooVerbose")) score -= 10;
+  if (uniqueFlags.has("InitialsHeavy")) score -= 5;
+  if (uniqueFlags.has("RawDomain")) score -= 10;
+  if (uniqueFlags.has("UnsplitCompound")) score -= 5;
+  if (uniqueFlags.has("OpenAIParseError")) score -= 10;
+  if (uniqueFlags.has("PartialProperNoun")) score -= 15;
   if (["penske", "landers", "ciocca", "helloauto", "classicbmw"].some(k => domainLower.includes(k)) && !appliedBoosts.has("KnownAutoGroup")) {
     score += 5;
     appliedBoosts.add("KnownAutoGroup");
-    flags.push("KnownAutoGroup");
+    uniqueFlags.add("KnownAutoGroup");
   }
 
   const wordCount = name.split(" ").length;
@@ -1208,50 +1207,55 @@ function calculateConfidenceScore(name, flags, domainLower) {
     if (KNOWN_PROPER_NOUNS.has(name) && !appliedBoosts.has("SingleWordProperNoun")) {
       score += 45;
       appliedBoosts.add("SingleWordProperNoun");
-      flags.push("SingleWordProperNoun");
+      uniqueFlags.add("SingleWordProperNoun");
     } else if (!appliedBoosts.has("OneWordName")) {
       score += 10;
       appliedBoosts.add("OneWordName");
-      flags.push("OneWordName");
+      uniqueFlags.add("OneWordName");
     }
   } else if (wordCount === 2 && !appliedBoosts.has("TwoWordName")) {
     score += 8;
     appliedBoosts.add("TwoWordName");
-    flags.push("TwoWordName");
+    uniqueFlags.add("TwoWordName");
   } else if (wordCount === 3 && !appliedBoosts.has("ThreeWordName")) {
     score += 5;
     appliedBoosts.add("ThreeWordName");
-    flags.push("ThreeWordName");
+    uniqueFlags.add("ThreeWordName");
   }
 
   if ((KNOWN_PROPER_NOUNS.has(name) || Object.values(KNOWN_CITY_SHORT_NAMES).some(city => name.includes(city))) && !appliedBoosts.has("KnownPatternBoost")) {
     score += 5;
     appliedBoosts.add("KnownPatternBoost");
-    flags.push("KnownPatternBoost");
+    uniqueFlags.add("KnownPatternBoost");
   }
 
-  if (flags.includes("UnsplitCompound")) {
+  if (uniqueFlags.has("UnsplitCompound")) {
     score = Math.min(score, 90);
   }
 
   const brandCount = name.split(" ").filter(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]).length;
   if (brandCount > 1) {
     score -= 10;
-    if (!flags.includes("BrandOverusePenalty")) flags.push("BrandOverusePenalty");
+    if (!uniqueFlags.has("BrandOverusePenalty")) uniqueFlags.add("BrandOverusePenalty");
   } else if (brandCount === 1 && !appliedBoosts.has("BrandIncludedBoost")) {
     score += 10;
     appliedBoosts.add("BrandIncludedBoost");
-    flags.push("BrandIncludedBoost");
+    uniqueFlags.add("BrandIncludedBoost");
   }
 
   if (KNOWN_PROPER_NOUNS.has(name) && !appliedBoosts.has("ProperNounBoost")) {
     score += 15;
     appliedBoosts.add("ProperNounBoost");
-    flags.push("ProperNounBoost");
+    uniqueFlags.add("ProperNounBoost");
     score = Math.max(score, 100);
   }
 
   if (!name) score = 50;
+
+  // Update the original flags array with unique flags
+  flags.length = 0;
+  flags.push(...Array.from(uniqueFlags));
+
   return Math.max(50, Math.min(score, 125));
 }
 
@@ -1316,7 +1320,6 @@ async function humanizeName(inputName, domain, skipCache = false) {
 
     if (
       !name.includes(" ") &&
-      !KNOWN_PROPER_NOUNS.has(name) &&
       confidenceScore < 90 &&
       containsCarBrand(domain)
     ) {
@@ -1367,12 +1370,12 @@ async function humanizeName(inputName, domain, skipCache = false) {
     name = words.join(" ");
     if (brandCount > 1) {
       flags.push("MultipleBrandsReduced");
-      name = enforceThreeWordLimit(name, brand, city); // Enforce brand cap
+      name = enforceThreeWordLimit(name, brand, city);
     }
 
     name = handleNamesEndingInS(name, brand, city);
 
-    if (domainLower.includes("auto") && !name.toLowerCase().includes("auto") && !flags.includes("BrandFirstOrdering") && !KNOWN_PROPER_NOUNS.has(name)) {
+    if (domainLower.includes("auto") && !name.toLowerCase().includes("auto") && !flags.includes("BrandFirstOrdering")) {
       name = enforceThreeWordLimit(`${name} Auto`, brand, city);
       flags.push("AutoAppended");
     }
@@ -1407,9 +1410,8 @@ async function humanizeName(inputName, domain, skipCache = false) {
     confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
     const isCityOnly = words.length === 1 && (city === words[0].toLowerCase() || KNOWN_CITIES_SET.has(words[0].toLowerCase()));
-    const isProperNoun = KNOWN_PROPER_NOUNS.has(name);
     const hasContext = name.toLowerCase().includes("auto") || words.length > 1 || flags.includes("BrandFirstOrdering");
-    if (isCityOnly && !isProperNoun && brand) {
+    if (isCityOnly && brand) {
       name = enforceThreeWordLimit(`${name} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`, brand, city);
       flags.push("BrandSuffixAdded");
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
@@ -1417,18 +1419,13 @@ async function humanizeName(inputName, domain, skipCache = false) {
       name = enforceThreeWordLimit(`${name} Auto`, brand, city);
       flags.push("CityNameOnly");
       flags.push("AutoAppended");
-    } else if (brand && words.length === 1 && !isProperNoun && !hasContext && confidenceScore < 95) {
+    } else if (brand && words.length === 1 && !hasContext && confidenceScore < 95) {
       name = enforceThreeWordLimit(`${name} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`, brand, city);
       flags.push("BrandAppended");
-      confidenceScore = calculateConfidenceScore(name, flags, domainLower);
-    } else if (isProperNoun && words.length === 1 && !hasContext && confidenceScore < 95 && brand) {
-      name = enforceThreeWordLimit(`${name} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`, brand, city);
-      flags.push("BrandAppendedForProperNoun");
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
     }
 
     name = capitalizeName(name);
-    // Enhanced deduplication
     name = name.replace(/\b(auto|group|dealership)\b.*\b(auto|group|dealership)\b/i, "$1");
     name = enforceThreeWordLimit(name, brand, city);
 
