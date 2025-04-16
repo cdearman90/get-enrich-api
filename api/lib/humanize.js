@@ -1,4 +1,4 @@
-// api/lib/humanize.js — Version 4.2.19
+// api/lib/humanize.js — Version 4.2.20
 import { callOpenAI } from "./openai.js";
 
 const domainCache = new Map();
