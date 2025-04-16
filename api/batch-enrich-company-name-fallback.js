@@ -1,4 +1,4 @@
-// api/company-name-fallback.js — Version 1.0.38
+// api/company-name-fallback.js — Version 1.0.39
 import {
   humanizeName,
   extractBrandOfCityFromDomain,
@@ -106,7 +106,6 @@ const splitFallbackCompounds = (name) => {
   return result;
 };
 
-// New helper to enforce proper noun mappings
 const enforceProperNounMapping = (name) => {
   const words = name.split(" ");
   const mappedWords = words.map(word => {
@@ -122,7 +121,7 @@ const enforceProperNounMapping = (name) => {
 
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
-  console.error(`🌀 Fallback processing row ${rowNum}: ${domain}`);
+  console.error(`🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.39)`);
 
   const cacheKey = domain.toLowerCase();
   if (domainCache.has(cacheKey)) {
@@ -202,8 +201,9 @@ const processLead = async (lead, fallbackTriggers) => {
     "UnverifiedCity"
   ];
 
-  // Optimization 1: Respect BrandOnlySkipped flag
+  // Optimization: Ensure BrandOnlySkipped halts all processing
   if (result.flags.includes("BrandOnlySkipped")) {
+    console.error(`BrandOnlySkipped detected for ${domain}, halting processing`);
     return {
       domain,
       companyName: "",
@@ -214,21 +214,21 @@ const processLead = async (lead, fallbackTriggers) => {
     };
   }
 
-  // Optimization 2: Enforce proper noun mappings (e.g., Galean -> Galeana)
+  // Enforce proper noun mappings (e.g., Galean -> Galeana)
   const correctedName = enforceProperNounMapping(result.name);
   if (correctedName !== result.name) {
     result.name = correctedName;
     result.flags.push("ProperNounMappingEnforced");
   }
 
-  // Optimization 3: Adjust confidence for known proper nouns (e.g., Malouf)
+  // Adjust confidence for known proper nouns (e.g., Malouf)
   if (KNOWN_PROPER_NOUNS.has(result.name) && result.confidenceScore < 125) {
     result.confidenceScore = 125;
     result.flags = result.flags.filter(flag => flag !== "ProperNounFallbackBypassedThreshold");
     result.flags.push("ConfidenceAdjustedForProperNoun");
   }
 
-  // Optimization 4: Cap confidence for non-overridden results (e.g., Fletcher)
+  // Cap confidence for non-overridden results (e.g., Fletcher)
   if (!result.flags.includes("OverrideApplied") && result.confidenceScore > 110) {
     result.confidenceScore = 110;
     result.flags.push("ConfidenceCapped");
@@ -348,7 +348,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.38 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.39 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
