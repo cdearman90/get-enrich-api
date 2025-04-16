@@ -1,4 +1,4 @@
-// api/company-name-fallback.js — Version 1.0.41
+// api/company-name-fallback.js — Version 1.0.42
 // Purpose: Enhance company names from dealership domains for cold email personalization
 // Integrates with humanize.js v4.2.34
 // Deployed via Vercel CLI v41.5.0
@@ -24,6 +24,9 @@ const RETRY_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 
 const domainCache = new Map();
+
+// Log script version on startup
+console.error("🧠 company-name-fallback.js v1.0.42 – Initialized");
 
 const pLimit = async (concurrency) => {
   let active = 0;
@@ -146,14 +149,14 @@ const deduplicateBrands = (name) => {
 const processLead = async (lead, fallbackTriggers) => {
   const { domain, rowNum } = lead;
   console.error(
-    `🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.41)`
+    `🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.42)`
   );
 
   const cacheKey = domain.toLowerCase();
   if (domainCache.has(cacheKey)) {
     const cached = domainCache.get(cacheKey);
     console.error(
-      `[company-name-fallback.js v1.0.41] Cache hit for ${domain}: ${JSON.stringify(cached)}`
+      `[company-name-fallback.js v1.0.42] Cache hit for ${domain}: ${JSON.stringify(cached)}`
     );
     return {
       domain,
@@ -174,11 +177,11 @@ const processLead = async (lead, fallbackTriggers) => {
 
   const domainLower = domain.toLowerCase();
 
-  // Check for brand-only domains (e.g., chevy.com) before calling humanizeName
+  // Check for brand-only domains before any processing
   const BRAND_ONLY_DOMAINS = new Set(["chevy.com", "ford.com", "toyota.com"]);
   if (BRAND_ONLY_DOMAINS.has(domainLower)) {
     console.error(
-      `[company-name-fallback.js v1.0.41] BrandOnlySkipped for ${domain}, halting processing`
+      `[company-name-fallback.js v1.0.42] BrandOnlySkipped for ${domain}, halting processing`
     );
     const finalResult = {
       domain,
@@ -202,14 +205,14 @@ const processLead = async (lead, fallbackTriggers) => {
       result = await humanizeName(domain, domain, true);
       tokensUsed = result.tokens || 0;
       console.error(
-        `[company-name-fallback.js v1.0.41] humanizeName result for ${domain}: ${JSON.stringify(
+        `[company-name-fallback.js v1.0.42] humanizeName result for ${domain}: ${JSON.stringify(
           result
         )}`
       );
       result.flags = Array.isArray(result.flags) ? result.flags : [];
     } catch (error) {
       console.error(
-        `[company-name-fallback.js v1.0.41] humanizeName failed for ${domain} despite override: ${error.message}`
+        `[company-name-fallback.js v1.0.42] humanizeName failed for ${domain} despite override: ${error.message}`
       );
       const name = TEST_CASE_OVERRIDES[domainLower];
       const flags = ["OverrideApplied", "LocalFallbackDueToDependencyError"];
@@ -222,20 +225,20 @@ const processLead = async (lead, fallbackTriggers) => {
         result = await humanizeName(domain, domain, true);
         tokensUsed = result.tokens || 0;
         console.error(
-          `[company-name-fallback.js v1.0.41] humanizeName result for ${domain}: ${JSON.stringify(
+          `[company-name-fallback.js v1.0.42] humanizeName result for ${domain}: ${JSON.stringify(
             result
           )}`
         );
         break;
       } catch (error) {
         console.error(
-          `[company-name-fallback.js v1.0.41] humanizeName attempt ${attempt} failed for ${domain}: ${error.message}`
+          `[company-name-fallback.js v1.0.42] humanizeName attempt ${attempt} failed for ${domain}: ${error.message}`
         );
         if (attempt < RETRY_ATTEMPTS) {
           await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
         } else {
           console.error(
-            `[company-name-fallback.js v1.0.41] All retries failed for ${domain}: ${error.message}`
+            `[company-name-fallback.js v1.0.42] All retries failed for ${domain}: ${error.message}`
           );
           result = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
           fallbackTriggers.push({
@@ -255,15 +258,16 @@ const processLead = async (lead, fallbackTriggers) => {
   }
 
   // Apply deduplication immediately after humanizeName
+  const originalName = result.name;
   result.name = deduplicateBrands(result.name);
-  if (result.name !== result.name) {
+  if (result.name !== originalName) {
     result.flags.push("BrandDeduplicated");
   }
 
   // Ensure BrandOnlySkipped halts all processing (redundant check for safety)
   if (result.flags.includes("BrandOnlySkipped")) {
     console.error(
-      `[company-name-fallback.js v1.0.41] BrandOnlySkipped detected for ${domain}, halting processing`
+      `[company-name-fallback.js v1.0.42] BrandOnlySkipped detected post-humanize for ${domain}, halting processing`
     );
     const finalResult = {
       domain,
@@ -297,14 +301,14 @@ const processLead = async (lead, fallbackTriggers) => {
     "UnverifiedCity",
   ];
 
-  // Enforce proper noun mappings (e.g., Galean -> Galeana)
+  // Enforce proper noun mappings
   const correctedName = enforceProperNounMapping(result.name);
   if (correctedName !== result.name) {
     result.name = correctedName;
     result.flags.push("ProperNounMappingEnforced");
   }
 
-  // Adjust confidence for known proper nouns (e.g., Malouf)
+  // Adjust confidence for known proper nouns
   if (KNOWN_PROPER_NOUNS.has(result.name) && result.confidenceScore < 125) {
     result.confidenceScore = 125;
     result.flags = result.flags.filter(
@@ -313,13 +317,13 @@ const processLead = async (lead, fallbackTriggers) => {
     result.flags.push("ConfidenceAdjustedForProperNoun");
   }
 
-  // Cap confidence for non-overridden results (e.g., Fletcher)
+  // Cap confidence for non-overridden results
   if (!result.flags.includes("OverrideApplied") && result.confidenceScore > 110) {
     result.confidenceScore = 110;
     result.flags.push("ConfidenceCapped");
   }
 
-  // Split compound blobs for single-word names containing "auto"
+  // Split compound blobs
   let words = result.name.split(" ");
   if (words.length === 1 && result.name.toLowerCase().includes("auto")) {
     const splitName = splitFallbackCompounds(result.name);
@@ -379,7 +383,7 @@ const processLead = async (lead, fallbackTriggers) => {
     }
   }
 
-  // Handle short names lacking context
+  // Handle short names
   if (words.length === 1 && !isProperNoun && !isCityOnly && !isBrandOnly) {
     const domainBase = domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "");
     const splitName = splitFallbackCompounds(domainBase);
@@ -415,7 +419,7 @@ const processLead = async (lead, fallbackTriggers) => {
     result.flags.push("WordCountTruncated");
   }
 
-  // Reject generic names unless explicitly allowed
+  // Reject generic names unless allowed
   const genericNames = new Set(["auto", "cars", "dealer"]);
   if (genericNames.has(result.name.toLowerCase()) && domainLower !== "auto.com") {
     result.name = "";
@@ -462,7 +466,7 @@ const processLead = async (lead, fallbackTriggers) => {
   });
 
   console.error(
-    `[company-name-fallback.js v1.0.41] Final result for ${domain}: ${JSON.stringify(finalResult)}`
+    `[company-name-fallback.js v1.0.42] Final result for ${domain}: ${JSON.stringify(finalResult)}`
   );
 
   return finalResult;
@@ -470,7 +474,7 @@ const processLead = async (lead, fallbackTriggers) => {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.41 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.42 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
