@@ -1176,38 +1176,39 @@ function calculateConfidenceScore(name, flags, domainLower) {
     appliedBoosts.add("PatternMatched");
     uniqueFlags.add("PatternMatched");
   }
+
   if (uniqueFlags.has("CityMatched") && !appliedBoosts.has("CityMatched")) {
     score += 6;
     appliedBoosts.add("CityMatched");
     uniqueFlags.add("CityMatched");
   }
+
   if (uniqueFlags.has("AbbreviationExpanded") && !appliedBoosts.has("AbbreviationExpanded")) {
     score += 10;
     appliedBoosts.add("AbbreviationExpanded");
     uniqueFlags.add("AbbreviationExpanded");
   }
+
   if (uniqueFlags.has("FallbackBlobSplit") && !appliedBoosts.has("FallbackBlobSplit")) {
     score += 10;
     appliedBoosts.add("FallbackBlobSplit");
     uniqueFlags.add("FallbackBlobSplit");
   }
+
   if (uniqueFlags.has("BrandFirstOrdering") && !appliedBoosts.has("BrandFirstOrdering")) {
     score += 10;
     appliedBoosts.add("BrandFirstOrdering");
     uniqueFlags.add("BrandFirstOrdering");
   }
-  if (uniqueFlags.has("AmbiguousInitials")) score -= 10;
+
   if (uniqueFlags.has("InitialsExpandedWithBrand") && !appliedBoosts.has("InitialsExpandedWithBrand")) {
     score += 10;
     appliedBoosts.add("InitialsExpandedWithBrand");
     uniqueFlags.add("InitialsExpandedWithBrand");
   }
+
+  if (uniqueFlags.has("AmbiguousInitials")) score -= 10;
   if (uniqueFlags.has("AmbiguousCompound")) score -= 10;
-  if (uniqueFlags.has("FallbackToDomain")) {
-    const wordCount = name.split(" ").length;
-    score -= wordCount > 1 ? 5 : 10;
-    if (wordCount === 1 && !KNOWN_PROPER_NOUNS.has(name)) score = 75;
-  }
   if (uniqueFlags.has("CityNameOnly")) score -= 5;
   if (uniqueFlags.has("TooGeneric")) score -= 10;
   if (uniqueFlags.has("TooVerbose")) score -= 10;
@@ -1216,7 +1217,19 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (uniqueFlags.has("UnsplitCompound")) score -= 5;
   if (uniqueFlags.has("OpenAIParseError")) score -= 10;
   if (uniqueFlags.has("PartialProperNoun")) score -= 15;
-  if (["penske", "landers", "ciocca", "helloauto", "classicbmw"].some(k => domainLower.includes(k)) && !appliedBoosts.has("KnownAutoGroup")) {
+
+  if (uniqueFlags.has("FallbackToDomain")) {
+    const wordCount = name.split(" ").length;
+    score -= wordCount > 1 ? 5 : 10;
+    if (wordCount === 1 && !KNOWN_PROPER_NOUNS.has(name)) score = 75;
+  }
+
+  if (
+    ["penske", "landers", "ciocca", "helloauto", "classicbmw"].some(k =>
+      domainLower.includes(k)
+    ) &&
+    !appliedBoosts.has("KnownAutoGroup")
+  ) {
     score += 5;
     appliedBoosts.add("KnownAutoGroup");
     uniqueFlags.add("KnownAutoGroup");
@@ -1228,6 +1241,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
       score += 45;
       appliedBoosts.add("SingleWordProperNoun");
       uniqueFlags.add("SingleWordProperNoun");
+      score = Math.max(score, 125); // Force to 125 for single-word known proper noun
     } else if (!appliedBoosts.has("OneWordName")) {
       score += 10;
       appliedBoosts.add("OneWordName");
@@ -1243,7 +1257,10 @@ function calculateConfidenceScore(name, flags, domainLower) {
     uniqueFlags.add("ThreeWordName");
   }
 
-  if (Object.values(KNOWN_CITY_SHORT_NAMES).some(city => name.includes(city)) && !appliedBoosts.has("KnownPatternBoost")) {
+  if (
+    Object.values(KNOWN_CITY_SHORT_NAMES).some(city => name.includes(city)) &&
+    !appliedBoosts.has("KnownPatternBoost")
+  ) {
     score += 5;
     appliedBoosts.add("KnownPatternBoost");
     uniqueFlags.add("KnownPatternBoost");
@@ -1253,10 +1270,13 @@ function calculateConfidenceScore(name, flags, domainLower) {
     score = Math.min(score, 90);
   }
 
-  const brandCount = name.split(" ").filter(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]).length;
+  const brandCount = name
+    .split(" ")
+    .filter(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]).length;
+
   if (brandCount > 1) {
     score -= 10;
-    if (!uniqueFlags.has("BrandOverusePenalty")) uniqueFlags.add("BrandOverusePenalty");
+    uniqueFlags.add("BrandOverusePenalty");
   } else if (brandCount === 1 && !appliedBoosts.has("BrandIncludedBoost")) {
     score += 10;
     appliedBoosts.add("BrandIncludedBoost");
