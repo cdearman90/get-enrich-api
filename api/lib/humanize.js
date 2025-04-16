@@ -878,7 +878,7 @@ function expandInitials(name, domain, brand, city) {
         }
         expanded.push(expansion);
       } else if (city && wordLower === city.toLowerCase().slice(0, word.length)) {
-       拡大.push(applyCityShortName(city));
+        expanded.push(applyCityShortName(city));
       } else if (brand && wordLower === brand.toLowerCase().slice(0, word.length)) {
         expanded.push(BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand));
       } else {
@@ -922,7 +922,7 @@ function preprocessProperNouns(name) {
       }
       if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
         if (word.startsWith("o'")) return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
-        else if (word.startsWith("mc") || part.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
+        else if (word.startsWith("mc") || word.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
       }
       return word;
     }).join(" ");
@@ -1388,6 +1388,11 @@ async function humanizeName(inputName, domain, skipCache = false) {
       return { ...cached, flags: [...cached.flags, "CacheHit"] };
     }
 
+    if (BRAND_ONLY_DOMAINS.has(domainLower)) {
+      console.warn(`Brand-only domain detected: ${domain}, skipping`);
+      return { name: "", confidenceScore: 0, flags: ["BrandOnlySkipped"], tokens: 0 };
+    }
+
     if (TEST_CASE_OVERRIDES[domainLower]) {
       const name = TEST_CASE_OVERRIDES[domainLower];
       console.warn(`🧪 TEST_CASE_OVERRIDES applied for ${domainLower}: "${name}"`);
@@ -1398,26 +1403,28 @@ async function humanizeName(inputName, domain, skipCache = false) {
       return result;
     }
 
-    if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
-      console.warn(`Non-dealership domain detected: ${domain}`);
-      let fallbackName = earlyCompoundSplit(domainLower);
-      if (fallbackName.split(" ").length === 1) {
-        const splitName = earlyCompoundSplit(fallbackName);
-        if (splitName !== fallbackName) fallbackName = splitName;
-      }
-      if (domainLower.includes("realty")) {
-        const baseName = domainLower.replace(/realty/i, "").replace(/\.(com|net|org|co\.uk)/i, "").trim();
-        fallbackName = `${capitalizeName(baseName)} Realty`;
-      } else {
-        fallbackName = `${capitalizeName(fallbackName)} Auto`;
-      }
-      fallbackName = enforceThreeWordLimit(fallbackName, null, null);
-      const flags = ["NonDealership", "FallbackCompoundSplitAfterNonDealership"];
-      const confidenceScore = calculateConfidenceScore(fallbackName, flags, domainLower);
-      const result = { name: capitalizeName(fallbackName), confidenceScore: Math.max(confidenceScore, 80), flags, tokens: 0 };
-      domainCache.set(domainLower, result);
-      return result;
-    }
+ if (!containsCarBrand(domain) && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
+  console.warn(`Non-dealership domain detected: ${domain}`);
+  let fallbackName = earlyCompoundSplit(domainLower);
+
+  // Handle specific non-dealership keywords
+  if (domainLower.includes("realty")) {
+    const baseName = domainLower.replace(/realty/i, "").replace(/\.(com|net|org|co\.uk)/i, "").replace(/[^a-zA-Z0-9\s-]/g, "").trim();
+    fallbackName = `${capitalizeName(baseName)} Realty`;
+  } else if (domainLower.includes("insurance")) {
+    const baseName = domainLower.replace(/insurance/i, "").replace(/\.(com|net|org|co\.uk)/i, "").replace(/[^a-zA-Z0-9\s-]/g, "").trim();
+    fallbackName = `${capitalizeName(baseName)} Insurance`;
+  } else {
+    fallbackName = `${capitalizeName(fallbackName)} Auto`;
+  }
+
+  fallbackName = enforceThreeWordLimit(fallbackName, null, null);
+  const flags = ["NonDealership", "FallbackCompoundSplitAfterNonDealership"];
+  const confidenceScore = calculateConfidenceScore(fallbackName, flags, domainLower);
+  const result = { name: capitalizeName(fallbackName), confidenceScore: Math.max(confidenceScore, 80), flags, tokens: 0 };
+  domainCache.set(domainLower, result);
+  return result;
+}
 
     let { name, flags, brand, city } = extractBrandOfCityFromDomain(domain);
     let tokens = 0;
@@ -1548,8 +1555,7 @@ async function humanizeName(inputName, domain, skipCache = false) {
         flags.push("AllInitialsAvoided", "InitialsHeavy");
       } else {
         const prefix = ABBREVIATION_EXPANSIONS[words[0].toLowerCase()] || `${words[0]} Auto`;
-        const brandPart = BRAND_MAPPING[words[words.length - 1].toLowerCase()]
-        || words[words.length - 1];
+        const brandPart = BRAND_MAPPING[words[words.length - 1].toLowerCase()] || words[words.length - 1];
         name = enforceThreeWordLimit(`${prefix} ${brandPart}`, brand, city);
         flags.push("AllInitialsAvoided", "InitialsHeavy");
       }
@@ -1648,3 +1654,4 @@ export {
 process.on("unhandledRejection", (reason, p) => {
   console.error("Unhandled Rejection at:", p, "reason:", reason);
 });
+                                             
