@@ -620,6 +620,55 @@ const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "motors", "dealers", "dea
 
 const GENERIC_WORDS = new Set(["the", "of", "to", "inc", "corp", "llc", "cars", "shop", "auto", "group", "dealership"]);
 
+const BRAND_ONLY_DOMAINS = new Set([
+  // American
+  "chevy.com",
+  "ford.com",
+  "cadillac.com",
+  "buick.com",
+  "gmc.com",
+  "chrysler.com",
+  "dodge.com",
+  "ramtrucks.com",
+  "jeep.com",
+  "lincoln.com",
+
+  // Japanese
+  "toyota.com",
+  "honda.com",
+  "nissanusa.com",
+  "subaru.com",
+  "mazdausa.com",
+  "mitsubishicars.com",
+  "acura.com",
+  "lexus.com",
+  "infinitiusa.com",
+
+  // Korean
+  "hyundaiusa.com",
+  "kia.com",
+  "genesis.com",
+
+  // German
+  "bmwusa.com",
+  "mercedes-benz.com",
+  "audiusa.com",
+  "vw.com",
+  "volkswagen.com",
+  "porsche.com",
+  "miniusa.com",
+
+  // Others (US presence or specialty)
+  "fiatusa.com",
+  "alfa-romeo.com",
+  "landroverusa.com",
+  "jaguarusa.com",
+  "tesla.com",
+  "lucidmotors.com",
+  "rivian.com",
+  "volvocars.com"
+]);
+
 const KNOWN_COMPOUND_NOUNS = [
   "Auto", "AutoGroup", "Motors", "Dealers", "Dealership", "Group", "Motor",
   "Superior", "Trucks", "Powersports", "Realty", "Team", "Collection", "Ford", "Chevy",
