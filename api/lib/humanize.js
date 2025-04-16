@@ -1,4 +1,4 @@
-// api/lib/humanize.js — Version 4.2.20
+// api/lib/humanize.js — Version 4.2.25
 import { callOpenAI } from "./openai.js";
 
 const domainCache = new Map();
@@ -23,7 +23,7 @@ const BRAND_MAPPING = {
   "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
   "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
   "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
-  "lincoln": "Lincoln", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
+  "lincoln": "Ford", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
   "mb": "Mercedes", "merc": "Mercedes", "mercedes": "Mercedes", "mercedes-benz": "Mercedes", "mercedesbenz": "Mercedes", "merk": "Mercedes",
   "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile", "plymouth": "Plymouth",
   "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram", "rivian": "Rivian",
@@ -65,30 +65,6 @@ const KNOWN_PROPER_NOUNS = new Set([
   "Century", "Five Star", "Beck Masten", "Sansone", "Ocean", "Hawk", "Stadium", "Cavender", "Carter", "Crevier", "Bristol",
   "Gengras", "Ciocca", "Currie", "Sarant", "M Terry", "Larry H. Miller", "Calavan",
   "Tasca", "Avis", "Rod Baker", "Davis", "Gy", "Machens", "Taylor", "Dan Cummins", "Kennedy", "Garber",
-  "Sunnyside", "Hillside", "Valley Nissan", "Bulluck", "Cz Agnet", "Edwards", "Keating", "Signature Auto NY",
-  "Smithtown", "Regal", "Big Horn", "Bulldog", "Premier Collection", "Ac Dealer Group", "New Holland", "Jake Sweeney",
-  "Shottenkirk", "Wilsonville", "Elway", "Street Toyota", "Metro Ford", "Chapman Choice", "Williams Subaru", "Tom Hesser",
-  "Dick Lovett", "Colonial West", "Gravity Autos", "Rt 128", "Phil Smith", "Chmb", "Power Autogroup", "Westgate Cars",
-  "Star Toyota", "Go Montrose", "Rosen", "O Brien", "Campbell Cars", "Londoff", "Jim Taylor", "Deacons", "Rossi",
-  "Alderman", "Banks Autos", "Caldwell Cares", "Hawk Auto", "Stadium Toyota",
-  "Montrose", "Dube", "Lovett", "Britt", "Titus", "Lynn", "Bob Smith",
-  "Rich", "MH", "Robins", "Marhofer", "Planet Ford", "Hansel", "Matt Bowers", "Landmark", "Randy Marion", "Ogara Coach",
-  "Helfman", "Tom Wood", "Auto Fair", "McGovern", "Mullinax", "Baker Motor Company", "Jim Shorkey", "VH Cars", "Mike Kelly",
-  "Gossett Motors", "Valenti Auto", "Torq Dist", "Gary Crossley", "Dahl Auto", "Mills Auto Group", "Apple Ford", "Hardy Automotive",
-  "Mac Haik", "GNS Auto", "Team Sewell", "Midwest Kia", "Driving Southern", "Russell Smith", "NPW Companies", "Al West",
-  "USA Auto Trust", "Watson Chevrolet", "Bruce Lowrie", "Ourisman", "Northtown Auto", "Auto Star USA", "Courtesy Chevrolet",
-  "Bill Dodge", "SB Auto Group", "Bert Ogden", "Volume Cars", "Car Center MI", "Hamilton Chevy", "NYE Auto", "Dutch Miller",
-  "Bill Walsh", "Estero Bay Chevrolet", "Diehl Auto", "Riverside Chevy", "Murdock Chevrolet", "Towne Auto", "Emich Auto",
-  "Bergeys", "Reineke", "Niello", "Al Hendrickson", "Gateway Fargo", "Seth Wadley", "Sutherlin Automotive", "Waldorf Chevy Cadillac",
-  "Beardmore", "Ewald Auto", "Fairway Ford", "Gerber Collision", "Voss Auto", "Serpentini Chevy", "Vol Auto", "Team Auto Group",
-  "Mountain Motorsports", "Joe Morgan", "Dennis Co", "Mercedes-Benz Southwest", "Rountree Auto", "Five Star", "Rusty Wallace",
-  "Habberstad BMW", "Jack Burford", "Stevens 112", "Allen Mello", "Advantage Chevrolet", "Harris Ford", "Kenny Ross", "Power Auto Group",
-  "Stevens Ford", "Group 1 Auto", "Nissan St. Augustine", "Acura Peabody", "Rogers Motors", "Lynnes", "Ganley Auto", "Gray Chevrolet",
-  "Western Toyota", "Yeomans", "Scott Robinson", "Slimans", "Serra Ford RH", "Used Car King", "Mike Erdman", "Gitcha 1",
-  "Seelye", "Honda on 30", "Galleria BMW", "Lexus of Highland Park", "Mike Bass", "Cobb County Toyota", "Central Auto Group CT",
-  "Bristol Toyota", "Paul Miller", "Tooele Motor Company", "Luther Auto", "Zeigler", "MV Auto", "Pape Subaru", "Rusty Wallis",
-  "JK Chevrolet", "Twin City Dealerships", "Crown Acura", "RHB Motors", "Val Cars", "CAC Auto Group", "66 Auto Mall",
-  "Auto Gallery Inc", "North Main Motors", "Auto Now KC", "S Motor", "Monster Motors", "Car Mart", "Susan Schein", "Strong Auto Group",
   "Sunnyside", "Bulluck", "MB BHM", "EH Chevy", "Classic BMW", "Masano", "Drive Superior", "New Holland", "Mercedes-Benz USA", "Galpin",
   "SLV Dodge", "Barlow Auto Group", "Shults Auto", "Titus Will", "Sundance Chevy", "Np Lincoln", "Century Trucks", "Planet Powersports",
   "Findlay Auto", "Barnett Auto", "Safford Brown", "Safford Auto", "Crews Chevrolet", "KC Metro", "Williams Auto World", "Lexus of Northborough",
@@ -123,7 +99,7 @@ const KNOWN_PROPER_NOUNS = new Set([
   "Haley", "Hartford", "Hello Auto", "Hilltop", "Hillsboro",
   "Huntington Beach", "Ingersoll", "Jack Powell", "Jake Sweeney", "Jay Wolfe",
   "Jim Falk", "Jim Taylor", "JT Auto", "Karl Stuart", "Keating", "Kennedy",
-  "Killeen", "Kingston", "Kings Ford", "Lakeland", "Laurel", "Lexus of Chattanooga",
+  "Killeen", "Kingston", "Kings Ford", "Lakeland", "Laurel", "Lexus Chattanooga",
   "Lou Sobh", "Malloy", "Manhattan", "Maita", "Martin", "Masano",
   "Matt Blatt", "McCarthy", "McLarty", "Medlin", "Mercedes-Benz USA",
   "Metro", "Miami Lakes", "Mike Erdman", "Mike Shaw", "Milwaukee North",
@@ -540,14 +516,6 @@ const KNOWN_CITY_SHORT_NAMES = {
   "birmingham": "Birmingham"
 };
 
-// Placeholder for KNOWN_DEALERSHIP_WORDS (defining to fix no-undef error)
-const KNOWN_DEALERSHIP_WORDS = new Set([
-  "auto", "motors", "dealers", "dealership", "group", "motor", "superior", "trucks",
-  "powersports", "realty", "team", "collection", "ford", "chevy", "toyota", "honda",
-  "hyundai", "kia", "bmw", "infiniti", "nissan", "lincoln", "chrysler", "subaru",
-  "128", "mill"
-]);
-
 const ABBREVIATION_EXPANSIONS = {
   lv: "Vegas",
   ba: "BA Auto",
@@ -568,6 +536,13 @@ const ABBREVIATION_EXPANSIONS = {
   jp: "Jack Powell"
 };
 
+// Placeholder for KNOWN_DEALERSHIP_WORDS (defining to fix no-undef error)
+const KNOWN_DEALERSHIP_WORDS = new Set([
+  "auto", "motors", "dealers", "dealership", "group", "motor", "superior", "trucks",
+  "powersports", "realty", "team", "collection", "ford", "chevy", "toyota", "honda",
+  "hyundai", "kia", "bmw", "infiniti", "nissan", "lincoln", "chrysler", "subaru",
+  "128", "mill"
+]);
 
 const TEST_CASE_OVERRIDES = {
   "duvalford.com": "Duval Ford",
@@ -649,7 +624,7 @@ const KNOWN_COMPOUND_NOUNS = [
   "Auto", "AutoGroup", "Motors", "Dealers", "Dealership", "Group", "Motor",
   "Superior", "Trucks", "Powersports", "Realty", "Team", "Collection", "Ford", "Chevy",
   "Toyota", "Honda", "Hyundai", "Kia", "BMW", "Infiniti", "Nissan", "Lincoln", "Chrysler",
-  "Subaru", "128", "Mill"
+  "Subaru", "128", "Mill", "dayton", "freehold", "elkgrove", "fortcollins", "georgewhite", "miami", "south"
 ];
 
 const KNOWN_BAD_COMPOUNDS_SET = new Set([
@@ -668,7 +643,7 @@ const KNOWN_BAD_COMPOUNDS_SET = new Set([
   "aldermansvt", "banksautos", "caldwellcares", "hawkauto", "stadiumtoyota",
   "golfmillford", "caminorealchevrolet", "dougrehchevrolet",
   "mccarthyautogroup", "kennedyauto", "tommynixautogroup.com", "andersonautogroup", "fletcherauto",
-  "thepremiercollection", "billdube", "dancummins", "donhattan"
+  "thepremiercollection", "billdube", "dancummins", "donhattan", "acuraofmemphis", "audiofbirmingham", "theaudiconnection", "chevystore"
 ]);
 
 const PROPER_NOUN_PREFIXES = new Set([
@@ -692,8 +667,17 @@ function containsCarBrand(name) {
 function stripGenericWords(name) {
   if (!name || typeof name !== "string") return name;
   let words = name.split(/\s+/);
-  words = words.filter(word => !GENERIC_WORDS.has(word.toLowerCase()));
-  return words.join(" ");
+  const preserved = [];
+  for (let i = 0; i < words.length; i++) {
+    const w = words[i].toLowerCase();
+    if (GENERIC_WORDS.has(w) && i < words.length - 1 && KNOWN_PROPER_NOUNS.has(words[i + 1])) {
+      preserved.push(`${words[i + 1]} Auto`); // e.g., "crossroad cars" → "Crossroad Auto"
+      i++;
+    } else if (!GENERIC_WORDS.has(w)) {
+      preserved.push(words[i]);
+    }
+  }
+  return preserved.join(" ").trim();
 }
 
 function extractBrandOfCityFromDomain(domain) {
@@ -845,7 +829,7 @@ function expandInitials(name, domain, brand, city) {
         }
         expanded.push(expansion);
       } else if (city && wordLower === city.toLowerCase().slice(0, word.length)) {
-        expanded.push(applyCityShortName(city));
+       拡大.push(applyCityShortName(city));
       } else if (brand && wordLower === brand.toLowerCase().slice(0, word.length)) {
         expanded.push(BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand));
       } else {
@@ -889,7 +873,7 @@ function preprocessProperNouns(name) {
       }
       if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
         if (word.startsWith("o'")) return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
-        else if (word.startsWith("mc") || word.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
+        else if (word.startsWith("mc") || part.startsWith("mac")) return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
       }
       return word;
     }).join(" ");
@@ -936,7 +920,7 @@ function splitCamelCaseWords(input) {
   };
   if (knownSplits[lowerInput]) return knownSplits[lowerInput];
 
-  if (lowerInput === "southcharlotte" && KNOWN_CITIES_SET.has("South Charlotte")) return "South Charlotte";
+  if (lowerInput === "southcharlotte") return "South Charlotte";
 
   if (lowerInput.startsWith("the")) {
     const afterThe = result.substring(3);
@@ -1051,6 +1035,19 @@ function earlyCompoundSplit(input) {
   if (CAR_BRANDS.includes(domainLower)) return domainLower;
   if (domainLower.length < 5) return domainLower;
 
+  // City-brand detection
+  for (const city of KNOWN_CITIES_SET) {
+    if (domainLower.includes(city)) {
+      for (const brand of CAR_BRANDS) {
+        if (domainLower.includes(brand) && domainLower.indexOf(brand) < domainLower.indexOf(city)) {
+          let result = `${brand} ${city}`.trim();
+          flags.push("CityBrandMatch");
+          return result.charAt(0).toUpperCase() + result.slice(1);
+        }
+      }
+    }
+  }
+
   for (const noun of KNOWN_PROPER_NOUNS) {
     const nounLower = noun.toLowerCase().replace(/\s+/g, "");
     if (domainLower.includes(nounLower)) return noun;
@@ -1070,6 +1067,11 @@ function earlyCompoundSplit(input) {
     result = result.replace(/\s+/g, ' ').split(' ').map(word =>
       word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()
     ).join(' ');
+  }
+
+  if (result.split(" ").length === 2 && calculateConfidenceScore(result, flags, domainLower) > 90) {
+    flags.push("HighConfidenceTwoWord");
+    return result; // Skip further splitting for high-confidence two-word names
   }
 
   if (result.length <= 5 && !result.includes(" ") && /^[a-zA-Z]+$/.test(result) && !/[aeiou]{2}/.test(result.toLowerCase())) {
@@ -1218,6 +1220,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (uniqueFlags.has("OpenAIParseError")) score -= 10;
   if (uniqueFlags.has("PartialProperNoun")) score -= 15;
   if (uniqueFlags.has("FallbackAPIFailed")) score -= 10;
+  if (uniqueFlags.has("LocalCompoundSplit")) score -= 10;
 
   if (uniqueFlags.has("FallbackToDomain")) {
     const wordCount = name.split(" ").length;
@@ -1312,6 +1315,9 @@ function calculateConfidenceScore(name, flags, domainLower) {
 
   if (!name) score = 50;
 
+  if (uniqueFlags.has("TooGeneric")) score = Math.min(score, 75);
+  if (uniqueFlags.has("GenericNameAdjusted")) score = 80;
+
   flags.length = 0;
   flags.push(...Array.from(uniqueFlags));
   return Math.max(50, Math.min(score, 125));
@@ -1326,12 +1332,6 @@ async function humanizeName(inputName, domain, skipCache = false) {
     const domainLower = domain.toLowerCase();
     const domainSlug = domainLower.replace(/\.(com|net|org|co\.uk)$/, "");
     console.warn(`🔍 Processing domain: ${domain}`);
-
-    // Skip brand-only domains (fixed for chevy.com)
-    if (CAR_BRANDS.includes(domainSlug.toLowerCase())) {
-      console.warn(`Brand-only domain detected: ${domain}, skipping`);
-      return { name: "", confidenceScore: 0, flags: ["BrandOnlySkipped"], tokens: 0 };
-    }
 
     if (!skipCache && domainCache.has(domainLower)) {
       const cached = domainCache.get(domainLower);
@@ -1376,26 +1376,37 @@ async function humanizeName(inputName, domain, skipCache = false) {
     name = name.replace(/AutoGroup/i, "Auto Group").replace(/auto/i, " Auto ");
     name = preprocessProperNouns(name);
 
-    // Ensure proper nouns aren't overridden later
     if (KNOWN_PROPER_NOUNS.has(name)) {
       flags.push("ProperNounMatched");
     }
 
-    // Early deduplication to prevent brand repetition
     let words = name.split(" ");
     const deduped = [];
     const seen = new Set();
-    for (const word of words) {
-      const w = word.toLowerCase();
-      if ((CAR_BRANDS.includes(w) || BRAND_MAPPING[w]) && seen.has(w)) continue;
-      deduped.push(word);
-      seen.add(w);
+    let cityDetected = false;
+    for (let i = 0; i < words.length; i++) {
+      const w = words[i].toLowerCase();
+      if (KNOWN_CITIES_SET.has(w)) {
+        cityDetected = true;
+        deduped.push(words[i]);
+        continue;
+      }
+      if ((CAR_BRANDS.includes(w) || BRAND_MAPPING[w]) && seen.has(w)) {
+        if (cityDetected || (i > 0 && CAR_BRANDS.includes(words[i - 1].toLowerCase()))) continue;
+      } else if (CAR_BRANDS.includes(w) || BRAND_MAPPING[w]) {
+        deduped.push(words[i]);
+        seen.add(w);
+        flags.push("BrandIncludedBoost");
+      } else {
+        deduped.push(words[i]);
+      }
     }
+    name = deduped.join(" ");
     if (deduped.length < words.length) {
-      name = deduped.join(" ");
       flags.push("BrandDuplicationFixedEarly");
     }
-        let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
+
+    let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
     if (!name.includes(" ") && confidenceScore < 90 && containsCarBrand(domain)) {
       let spacedName = splitCamelCaseWords(name);
@@ -1436,11 +1447,15 @@ async function humanizeName(inputName, domain, skipCache = false) {
     name = capitalizeName(name).replace(/Automotive/i, "Auto").replace(/Auto\s+Group/i, "Auto");
     words = name.split(" ");
     let brandCount = 0;
+    const seenBrands = new Set();
     words = words.filter(word => {
-      const isBrand = CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()];
+      const w = word.toLowerCase();
+      const isBrand = CAR_BRANDS.includes(w) || BRAND_MAPPING[w];
       if (isBrand) {
+        if (seenBrands.has(w)) return false;
+        seenBrands.add(w);
         brandCount++;
-        return brandCount === 1;
+        return true;
       }
       return true;
     });
@@ -1450,9 +1465,18 @@ async function humanizeName(inputName, domain, skipCache = false) {
       name = enforceThreeWordLimit(name, brand, city);
     }
 
-    name = handleNamesEndingInS(name, brand, city);
+    if (seen.size > 1 && !cityDetected) {
+      let nonBrandParts = domainLower;
+      for (const brand of CAR_BRANDS) nonBrandParts = nonBrandParts.replace(brand, "").trim();
+      for (const [key] of Object.entries(BRAND_MAPPING)) nonBrandParts = nonBrandParts.replace(key, "").trim();
+      nonBrandParts = earlyCompoundSplit(nonBrandParts);
+      if (nonBrandParts && !GENERIC_WORDS.has(nonBrandParts.toLowerCase())) {
+        name = `${nonBrandParts} ${name}`.trim();
+        flags.push("MultiBrandNonBrandPartAdded");
+      }
+    }
 
-    // Re-apply splitCamelCaseWords to ensure proper noun mappings
+    name = handleNamesEndingInS(name, brand, city);
     name = splitCamelCaseWords(name);
 
     if (domainLower.includes("auto") && !name.toLowerCase().includes("auto") && !flags.includes("BrandFirstOrdering") && !flags.includes("FirstLastNameMatched") && words.length < 2 && !KNOWN_PROPER_NOUNS.has(name)) {
@@ -1465,7 +1489,8 @@ async function humanizeName(inputName, domain, skipCache = false) {
       name = expandedName;
       flags.push("InitialsExpanded", "AbbreviationExpanded");
     }
-        const allInitials = words.every(word => /^[A-Z]{1,3}$/.test(word));
+
+    const allInitials = words.every(word => /^[A-Z]{1,3}$/.test(word));
     if (allInitials && words.length > 1) {
       if (city) {
         const fullCity = applyCityShortName(city);
@@ -1474,7 +1499,8 @@ async function humanizeName(inputName, domain, skipCache = false) {
         flags.push("AllInitialsAvoided", "InitialsHeavy");
       } else {
         const prefix = ABBREVIATION_EXPANSIONS[words[0].toLowerCase()] || `${words[0]} Auto`;
-        const brandPart = BRAND_MAPPING[words[words.length - 1].toLowerCase()] || words[words.length - 1];
+        const brandPart = BRAND_MAPPING[words[words.length - 1].toLowerCase()]
+        || words[words.length - 1];
         name = enforceThreeWordLimit(`${prefix} ${brandPart}`, brand, city);
         flags.push("AllInitialsAvoided", "InitialsHeavy");
       }
@@ -1485,7 +1511,7 @@ async function humanizeName(inputName, domain, skipCache = false) {
 
     confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
-    const isCityOnly = words.length <= 2 && words.every(word => KNOWN_CITIES_SET.has(word) || KNOWN_CITIES_SET.has(words.join(" ")));
+    const isCityOnly = words.length <= 2 && words.every(word => KNOWN_CITIES_SET.has(word.toLowerCase()) || KNOWN_CITIES_SET.has(words.join(" ").toLowerCase()));
     const hasContext = name.toLowerCase().includes("auto") || words.length > 1 || flags.includes("BrandFirstOrdering");
     if (isCityOnly && brand && !flags.includes("FirstLastNameMatched")) {
       name = enforceThreeWordLimit(`${name} ${BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand)}`, brand, city);
@@ -1511,9 +1537,9 @@ async function humanizeName(inputName, domain, skipCache = false) {
     name = stripGenericWords(name);
     confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
-    // Flag generic names like auto.com
-    const genericNames = new Set(["auto", "cars", "dealer"]);
-    if (genericNames.has(name.toLowerCase())) {
+    // Handle generic names like auto.com
+    const genericNamesCheck = new Set(["auto", "cars", "dealer"]);
+    if (name.split(" ").length === 1 && genericNamesCheck.has(name.toLowerCase())) {
       if (domainLower === "auto.com") {
         name = "Auto Group";
         confidenceScore = 80;
@@ -1556,7 +1582,6 @@ export {
   KNOWN_PROPER_NOUNS,
   GENERIC_SUFFIXES,
   NON_DEALERSHIP_KEYWORDS,
-  KNOWN_CITIES_SET,
   KNOWN_CITY_SHORT_NAMES,
   ABBREVIATION_EXPANSIONS,
   TEST_CASE_OVERRIDES,
