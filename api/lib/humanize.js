@@ -1167,44 +1167,34 @@ function reorderBrandCity(name) {
 
 function calculateConfidenceScore(name, flags, domainLower) {
   if (!name || typeof name !== "string") return 0;
+
   let score = 100;
   const appliedBoosts = new Set();
   const uniqueFlags = new Set(flags);
 
-  if (uniqueFlags.has("PatternMatched") && !appliedBoosts.has("PatternMatched")) {
+  if (uniqueFlags.has("PatternMatched")) {
     score += 10;
     appliedBoosts.add("PatternMatched");
-    uniqueFlags.add("PatternMatched");
   }
-
-  if (uniqueFlags.has("CityMatched") && !appliedBoosts.has("CityMatched")) {
+  if (uniqueFlags.has("CityMatched")) {
     score += 6;
     appliedBoosts.add("CityMatched");
-    uniqueFlags.add("CityMatched");
   }
-
-  if (uniqueFlags.has("AbbreviationExpanded") && !appliedBoosts.has("AbbreviationExpanded")) {
+  if (uniqueFlags.has("AbbreviationExpanded")) {
     score += 10;
     appliedBoosts.add("AbbreviationExpanded");
-    uniqueFlags.add("AbbreviationExpanded");
   }
-
-  if (uniqueFlags.has("FallbackBlobSplit") && !appliedBoosts.has("FallbackBlobSplit")) {
+  if (uniqueFlags.has("FallbackBlobSplit")) {
     score += 10;
     appliedBoosts.add("FallbackBlobSplit");
-    uniqueFlags.add("FallbackBlobSplit");
   }
-
-  if (uniqueFlags.has("BrandFirstOrdering") && !appliedBoosts.has("BrandFirstOrdering")) {
+  if (uniqueFlags.has("BrandFirstOrdering")) {
     score += 10;
     appliedBoosts.add("BrandFirstOrdering");
-    uniqueFlags.add("BrandFirstOrdering");
   }
-
-  if (uniqueFlags.has("InitialsExpandedWithBrand") && !appliedBoosts.has("InitialsExpandedWithBrand")) {
+  if (uniqueFlags.has("InitialsExpandedWithBrand")) {
     score += 10;
     appliedBoosts.add("InitialsExpandedWithBrand");
-    uniqueFlags.add("InitialsExpandedWithBrand");
   }
 
   if (uniqueFlags.has("AmbiguousInitials")) score -= 10;
@@ -1221,18 +1211,17 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (uniqueFlags.has("FallbackToDomain")) {
     const wordCount = name.split(" ").length;
     score -= wordCount > 1 ? 5 : 10;
-    if (wordCount === 1 && !KNOWN_PROPER_NOUNS.has(name)) score = 75;
+    if (wordCount === 1 && !KNOWN_PROPER_NOUNS.has(name)) {
+      score = Math.min(score, 75);
+    }
   }
 
-  if (
-    ["penske", "landers", "ciocca", "helloauto", "classicbmw"].some(k =>
-      domainLower.includes(k)
-    ) &&
-    !appliedBoosts.has("KnownAutoGroup")
-  ) {
-    score += 5;
-    appliedBoosts.add("KnownAutoGroup");
-    uniqueFlags.add("KnownAutoGroup");
+  if (["penske", "landers", "ciocca", "helloauto", "classicbmw"].some(k => domainLower.includes(k))) {
+    if (!appliedBoosts.has("KnownAutoGroup")) {
+      score += 5;
+      appliedBoosts.add("KnownAutoGroup");
+      uniqueFlags.add("KnownAutoGroup");
+    }
   }
 
   const wordCount = name.split(" ").length;
@@ -1241,7 +1230,6 @@ function calculateConfidenceScore(name, flags, domainLower) {
       score += 45;
       appliedBoosts.add("SingleWordProperNoun");
       uniqueFlags.add("SingleWordProperNoun");
-      score = Math.max(score, 125); // Force to 125 for single-word known proper noun
     } else if (!appliedBoosts.has("OneWordName")) {
       score += 10;
       appliedBoosts.add("OneWordName");
@@ -1257,10 +1245,7 @@ function calculateConfidenceScore(name, flags, domainLower) {
     uniqueFlags.add("ThreeWordName");
   }
 
-  if (
-    Object.values(KNOWN_CITY_SHORT_NAMES).some(city => name.includes(city)) &&
-    !appliedBoosts.has("KnownPatternBoost")
-  ) {
+  if (Object.values(KNOWN_CITY_SHORT_NAMES).some(city => name.includes(city)) && !appliedBoosts.has("KnownPatternBoost")) {
     score += 5;
     appliedBoosts.add("KnownPatternBoost");
     uniqueFlags.add("KnownPatternBoost");
@@ -1270,9 +1255,9 @@ function calculateConfidenceScore(name, flags, domainLower) {
     score = Math.min(score, 90);
   }
 
-  const brandCount = name
-    .split(" ")
-    .filter(word => CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]).length;
+  const brandCount = name.split(" ").filter(word =>
+    CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()]
+  ).length;
 
   if (brandCount > 1) {
     score -= 10;
@@ -1283,13 +1268,21 @@ function calculateConfidenceScore(name, flags, domainLower) {
     uniqueFlags.add("BrandIncludedBoost");
   }
 
+  // FINAL OVERRIDE BOOST
+  if (uniqueFlags.has("OverrideApplied") && KNOWN_PROPER_NOUNS.has(name)) {
+    score = Math.max(score, 125);
+    uniqueFlags.add("ProperNounBoost");
+  }
+
   if (!name) score = 50;
 
+  // Sync final deduped flags back
   flags.length = 0;
   flags.push(...Array.from(uniqueFlags));
 
   return Math.max(50, Math.min(score, 125));
 }
+
 
 async function humanizeName(inputName, domain, skipCache = false) {
   try {
