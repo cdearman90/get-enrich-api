@@ -1130,8 +1130,8 @@ function handleNamesEndingInS(name, brand, city) {
   const lastWord = words[words.length - 1];
   if (!lastWord.toLowerCase().endsWith("s")) return name;
 
-  // Skip if the name is a known proper noun (e.g., Galeana)
-  if (KNOWN_PROPER_NOUNS.has(name)) return name;
+  // Skip if the name or last word is a known proper noun (e.g., Galeana)
+  if (KNOWN_PROPER_NOUNS.has(name) || KNOWN_PROPER_NOUNS.has(lastWord)) return name;
 
   if (CAR_BRANDS.includes(lastWord.toLowerCase()) || lastWord.toLowerCase() === "classics") return name;
 
@@ -1302,23 +1302,11 @@ function calculateConfidenceScore(name, flags, domainLower) {
   if (uniqueFlags.has("OverrideApplied")) score = Math.max(score, 95);
   if (uniqueFlags.has("OverrideApplied") && (KNOWN_PROPER_NOUNS.has(name) || FIRST_LAST_NAME_PATTERN.test(name))) score = Math.max(score, 125);
 
-  // Remove ProperNounFallbackBypassedThreshold penalty for known proper nouns
-  if (uniqueFlags.has("ProperNounFallbackBypassedThreshold") && uniqueFlags.has("ProperNounMatched")) {
-    uniqueFlags.delete("ProperNounFallbackBypassedThreshold");
-  }
-
   // Cap overlapping boosts (e.g., for fletcherauto.com, galeanasc.com)
   const boostCap = 110;
-  if (score > boostCap && !uniqueFlags.has("OverrideApplied") && !uniqueFlags.has("SingleWordProperNoun")) {
+  if (score > boostCap && !uniqueFlags.has("OverrideApplied")) {
     score = boostCap;
     uniqueFlags.add("BoostCapped");
-  }
-
-  // Remove conflicting boosts for single-word proper nouns
-  if (uniqueFlags.has("SingleWordProperNoun")) {
-    uniqueFlags.delete("ThreeWordName");
-    uniqueFlags.delete("TwoWordName");
-    uniqueFlags.delete("AutoNameBoost");
   }
 
   if (!name) score = 50;
@@ -1392,6 +1380,21 @@ async function humanizeName(inputName, domain, skipCache = false) {
       flags.push("ProperNounMatched");
     }
 
+    // Deduplicate brands early to prevent repetition (e.g., Chevy Chevy)
+    let words = name.split(" ");
+    const deduped = [];
+    const seen = new Set();
+    for (const word of words) {
+      const w = word.toLowerCase();
+      if ((CAR_BRANDS.includes(w) || BRAND_MAPPING[w]) && seen.has(w)) continue;
+      deduped.push(word);
+      seen.add(w);
+    }
+    if (deduped.length < words.length) {
+      name = deduped.join(" ");
+      flags.push("BrandDuplicationFixedEarly");
+    }
+
     let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
 
     if (!name.includes(" ") && confidenceScore < 90 && containsCarBrand(domain)) {
@@ -1431,7 +1434,7 @@ async function humanizeName(inputName, domain, skipCache = false) {
     }
 
     name = capitalizeName(name).replace(/Automotive/i, "Auto").replace(/Auto\s+Group/i, "Auto");
-    let words = name.split(" ");
+    words = name.split(" ");
     let brandCount = 0;
     words = words.filter(word => {
       const isBrand = CAR_BRANDS.includes(word.toLowerCase()) || BRAND_MAPPING[word.toLowerCase()];
@@ -1448,6 +1451,9 @@ async function humanizeName(inputName, domain, skipCache = false) {
     }
 
     name = handleNamesEndingInS(name, brand, city);
+
+    // Re-apply splitCamelCaseWords to ensure proper noun mappings (e.g., Galeana)
+    name = splitCamelCaseWords(name);
 
     if (domainLower.includes("auto") && !name.toLowerCase().includes("auto") && !flags.includes("BrandFirstOrdering") && !flags.includes("FirstLastNameMatched") && words.length < 2) {
       name = enforceThreeWordLimit(`${name} Auto`, brand, city);
@@ -1511,15 +1517,6 @@ async function humanizeName(inputName, domain, skipCache = false) {
       confidenceScore = calculateConfidenceScore(name, flags, domainLower);
     }
 
-    if (confidenceScore < 90 || name.toLowerCase() === domainSlug || !name.includes(" ")) {
-      let splitName = earlyCompoundSplit(name || domainSlug);
-      if (splitName.split(" ").length >= 2) {
-        name = capitalizeName(splitName);
-        flags.push("FallbackCompoundSplit");
-        confidenceScore = calculateConfidenceScore(name, flags, domainLower);
-      }
-    }
-
     if (confidenceScore < 90 || name.toLowerCase() === domainSlug || name === "") {
       if (name.match(/^[A-Z]{2,5}$/i) && !brand && !city) {
         flags.push("AmbiguousInitials");
@@ -1527,29 +1524,12 @@ async function humanizeName(inputName, domain, skipCache = false) {
         confidenceScore = 70;
       } else if (KNOWN_PROPER_NOUNS.has(capitalizeName(domainSlug))) {
         name = capitalizeName(domainSlug);
-        flags.push("ProperNounFallbackBypassedThreshold");
-        confidenceScore = 80;
+        confidenceScore = 125; // Override ProperNounFallbackBypassedThreshold
       } else {
         console.warn(`⚠️ Weak fallback for domain ${domain}: ${name}, score ${confidenceScore}, flags: ${flags.join(", ")}`);
       }
     } else {
       console.warn(`✅ Acceptable result: ${name} (${confidenceScore})`);
-    }
-
-    // Deduplicate brands (e.g., prevent "Chevy Chevy")
-    const wordsFinal = name.split(" ");
-    const deduped = [];
-    const seen = new Set();
-    for (const word of wordsFinal) {
-      const w = word.toLowerCase();
-      if ((CAR_BRANDS.includes(w) || BRAND_MAPPING[w]) && seen.has(w)) continue;
-      deduped.push(word);
-      seen.add(w);
-    }
-    if (deduped.length < wordsFinal.length) {
-      name = deduped.join(" ");
-      flags.push("BrandDuplicationFixed");
-      confidenceScore = calculateConfidenceScore(name, flags, domainLower);
     }
 
     const result = { name, confidenceScore, flags, tokens };
