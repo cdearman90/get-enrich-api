@@ -1,12 +1,7 @@
 // api/batch-enrich.js — Version 4.2.16
-console.error("Starting batch-enrich.js module loading...");
-try {
-  const { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } = await import("./lib/humanize.js");
-  console.error("Successfully imported humanize.js");
-} catch (error) {
-  console.error("Failed to import humanize.js:", error.message, error.stack);
-  throw error;
-}
+import { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } from "./lib/humanize.js";
+
+console.error("Successfully imported humanize.js");
 
 const pLimit = (concurrency) => {
   let active = 0;
