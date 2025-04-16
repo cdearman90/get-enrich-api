@@ -545,7 +545,7 @@ const ABBREVIATION_EXPANSIONS = {
   "dv": "DV Auto",
   "jm": "JM Auto",
   "jt": "JT Auto",
-  "gy": "GY Auto",
+  "gy": "GY",
   "cz": "CZ Auto",
   "hmt": "HMT Auto",
   "np": "NP Auto",
@@ -665,6 +665,7 @@ const PROPER_NOUN_PREFIXES = new Set([
 const PROPER_NOUN_PATTERN = /(o'|mc|mac)\s+[a-z]+/i;
 
 const openAICache = new Map();
+const domainCache = new Map(); // Moved to global scope with const
 
 const KNOWN_DEALERSHIP_WORDS = new Set([
   "dan", "cummins", "golf", "mill", "ford", "chevy", "hyundai", "auto",
@@ -859,7 +860,7 @@ function preprocessProperNouns(name) {
         if (PROPER_NOUN_PREFIXES.has(word.toLowerCase())) {
           if (word.startsWith("o'")) {
             return "O'" + word.charAt(2).toUpperCase() + word.slice(3);
-          } else if (word.startsWith("mc") || word.startsWith("mac")) {
+          } else if (word.startsWith("mc") || part.startsWith("mac")) {
             return word.charAt(0).toUpperCase() + word.charAt(1) + word.charAt(2).toUpperCase() + word.slice(3);
           }
         }
@@ -1214,7 +1215,6 @@ async function humanizeName(inputName, domain, skipCache = false) {
     const domainSlug = domainLower.replace(/\.(com|net|org|co\.uk)$/, "");
     console.warn(`🔍 Processing domain: ${domain}`);
 
-    static domainCache = new Map();
     if (!skipCache && domainCache.has(domainLower)) {
       const cached = domainCache.get(domainLower);
       console.warn(`🧪 Cache hit for ${domainLower}: "${cached.name}"`);
