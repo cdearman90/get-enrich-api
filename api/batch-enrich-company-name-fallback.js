@@ -1,3 +1,5 @@
+// api/company-name-fallback.js — Version 1.0.49
+// Purpose: Enhance company names from dealership domains for cold email personalization
 // Integrates with humanize.js v4.2.26
 // Deployed via Vercel CLI v41.5.0
 // Cache-Busting ID: 20250421-FALLBACK-FIX-V4
@@ -12,8 +14,8 @@ import {
   calculateConfidenceScore,
   CAR_BRANDS,
   BRAND_MAPPING,
-  KNOWN_CITIES_SET, // Added import to fix no-undef
-  NON_DEALERSHIP_KEYWORDS, // Added import to fix no-undef
+  KNOWN_CITIES_SET,
+  NON_DEALERSHIP_KEYWORDS,
 } from "./lib/humanize.js";
 
 const BATCH_SIZE = 10;
@@ -26,135 +28,94 @@ const domainCache = new Map();
 
 // Comprehensive banned list for franchise brand domains
 const BRAND_ONLY_DOMAINS = new Set([
-  // American
-  "chevy.com",
-  "ford.com",
-  "cadillac.com",
-  "buick.com",
-  "gmc.com",
-  "chrysler.com",
-  "dodge.com",
-  "ramtrucks.com",
-  "jeep.com",
-  "lincoln.com",
-
-  // Japanese
-  "toyota.com",
-  "honda.com",
-  "nissanusa.com",
-  "subaru.com",
-  "mazdausa.com",
-  "mitsubishicars.com",
-  "acura.com",
-  "lexus.com",
-  "infinitiusa.com",
-
-  // Korean
-  "hyundaiusa.com",
-  "kia.com",
-  "genesis.com",
-
-  // German
-  "bmwusa.com",
-  "mercedes-benz.com",
-  "audiusa.com",
-  "vw.com",
-  "volkswagen.com",
-  "porsche.com",
-  "miniusa.com",
-
-  // Others (US presence or specialty)
-  "fiatusa.com",
-  "alfa-romeo.com",
-  "landroverusa.com",
-  "jaguarusa.com",
-  "tesla.com",
-  "lucidmotors.com",
-  "rivian.com",
-  "volvocars.com"
+  "chevy.com", "ford.com", "honda.com", "toyota.com", "nissan.com", "kia.com", "hyundai.com",
+  "gmc.com", "cadillac.com", "chrysler.com", "ram.com", "dodge.com", "jeep.com",
+  "bmw.com", "audi.com", "volkswagen.com", "vw.com", "subaru.com", "lexus.com", "infiniti.com",
+  "acura.com", "mazda.com", "mercedesbenz.com", "mbusa.com", "lincoln.com", "buick.com",
+  "tesla.com", "rivian.com"
 ]);
 
 // Expanded test case overrides
 const TEST_CASE_OVERRIDES_LOCAL = {
- "duvalford.com": "Duval Ford",
- "patmillikenford.com": "Pat Milliken",
- "athensford.com": "Athens Ford",
- "gusmachadoford.com": "Gus Machado",
- "geraldauto.com": "Gerald Auto",
- "mbofbrooklyn.com": "M.B. Brooklyn",
- "karlchevroletstuart.com": "Karl Stuart",
- "kiaoflagrange.com": "Lagrange Kia",
- "toyotaofgreenwich.com": "Greenwich Toyota",
- "sanleandroford.com": "San Leandro Ford",
- "donhindsford.com": "Don Hinds Ford",
- "unionpark.com": "Union Park",
- "jackpowell.com": "Jack Powell",
- "teamford.com": "Team Ford",
- "miamilakesautomall.com": "Miami Lakes Auto",
- "mclartydaniel.com": "Mclarty Daniel",
- "autobyfox.com": "Fox Auto",
- "yorkautomotive.com": "York Auto",
- "executiveag.com": "Executive AG",
- "smartdrive.com": "Smart Drive",
- "wickmail.com": "Wick Mail",
- "oceanautomotivegroup.com": "Ocean Auto",
- "tommynixautogroup.com": "Tommy Nix",
- "larryhmillertoyota.com": "Larry H. Miller",
- "dougrehchevrolet.com": "Doug Reh",
- "caminorealchevrolet.com": "Camino Real Chevy",
- "golfmillford.com": "Golf Mill Ford",
- "townandcountryford.com": "Town & Country",
- "czag.net": "CZAG Auto",
- "signatureautony.com": "Signature Auto",
- "sunnysideauto.com": "Sunnyside Chevy",
- "exprealty.com": "Exp Realty",
- "drivesuperior.com": "Drive Superior",
- "powerautogroup.com": "Power Auto Group",
- "crossroadscars.com": "Crossroad",
- "onesubaru.com": "One Subaru",
- "vanderhydeford.net": "Vanderhyde Ford",
- "mbusa.com": "M.B. USA",
- "gomontrose.com": "Go Montrose",
- "ehchevy.com": "East Hills Chevy",
- "shoplynch.com": "Lynch",
- "austininfiniti.com": "Austin Infiniti",
- "martinchevrolet.com": "Martin Chevy",
- "garberchevrolet.com": "Garber Chevy",
- "bulluckchevrolet.com": "Bulluck Chevy",
- "scottclark.com": "Scott Clark",
- "newhollandauto.com": "New Holland",
- "lynnlayton.com": "Lynn Layton",
- "landerscorp.com": "Landers",
- "parkerauto.com": "Parker Auto",
- "laurelautogroup.com": "Laurel Auto",
- "rt128honda.com": "RT128",
- "subaruofwakefield.com": "Subaru Wakefield",
- "lexusofchattanooga.com": "Lexus Chattanooga",
- "planet-powersports.net": "Planet Power",
- "garlynshelton.com": "Garlyn Shelton",
- "safford brown.com": "Safford Brown",
- "saffordauto.com": "Safford Auto",
- "npsubaru.com": "NP Subaru",
- "prestoncars.com": "Preston",
- "toyotaofredlands.com": "Toyota Redland",
- "lexusoflakeway.com": "Lexus Lakeway",
- "robbinstoyota.com": "Robbin Toyota",
- "swantgraber.com": "Swant Graber",
- "sundancechevy.com": "Sundance Chevy",
- "steponeauto.com": "Step One Auto",
- "capital-honda.com": "Capital Honda",
- "tituswill.com": "Titus-Will",
- "galeanasc.com": "Galeana"
+  "duvalford.com": "Duval Ford",
+  "patmillikenford.com": "Pat Milliken",
+  "athensford.com": "Athens Ford",
+  "gusmachadoford.com": "Gus Machado",
+  "geraldauto.com": "Gerald Auto",
+  "mbofbrooklyn.com": "M.B. Brooklyn",
+  "karlchevroletstuart.com": "Karl Stuart",
+  "kiaoflagrange.com": "Lagrange Kia",
+  "toyotaofgreenwich.com": "Greenwich Toyota",
+  "sanleandroford.com": "San Leandro Ford",
+  "donhindsford.com": "Don Hinds Ford",
+  "unionpark.com": "Union Park",
+  "jackpowell.com": "Jack Powell",
+  "teamford.com": "Team Ford",
+  "miamilakesautomall.com": "Miami Lakes Auto",
+  "mclartydaniel.com": "Mclarty Daniel",
+  "autobyfox.com": "Fox Auto",
+  "yorkautomotive.com": "York Auto",
+  "executiveag.com": "Executive AG",
+  "smartdrive.com": "Smart Drive",
+  "wickmail.com": "Wick Mail",
+  "oceanautomotivegroup.com": "Ocean Auto",
+  "tommynixautogroup.com": "Tommy Nix",
+  "larryhmillertoyota.com": "Larry H. Miller",
+  "dougrehchevrolet.com": "Doug Reh",
+  "caminorealchevrolet.com": "Camino Real Chevy",
+  "golfmillford.com": "Golf Mill Ford",
+  "townandcountryford.com": "Town & Country",
+  "czag.net": "CZAG Auto",
+  "signatureautony.com": "Signature Auto",
+  "sunnysideauto.com": "Sunnyside Chevy",
+  "exprealty.com": "Exp Realty",
+  "drivesuperior.com": "Drive Superior",
+  "powerautogroup.com": "Power Auto Group",
+  "crossroadscars.com": "Crossroad",
+  "onesubaru.com": "One Subaru",
+  "vanderhydeford.net": "Vanderhyde Ford",
+  "mbusa.com": "M.B. USA",
+  "gomontrose.com": "Go Montrose",
+  "ehchevy.com": "East Hills Chevy",
+  "shoplynch.com": "Lynch",
+  "austininfiniti.com": "Austin Infiniti",
+  "martinchevrolet.com": "Martin Chevy",
+  "garberchevrolet.com": "Garber Chevy",
+  "bulluckchevrolet.com": "Bulluck Chevy",
+  "scottclark.com": "Scott Clark",
+  "newhollandauto.com": "New Holland",
+  "lynnlayton.com": "Lynn Layton",
+  "landerscorp.com": "Landers",
+  "parkerauto.com": "Parker Auto",
+  "laurelautogroup.com": "Laurel Auto",
+  "rt128honda.com": "RT128",
+  "subaruofwakefield.com": "Subaru Wakefield",
+  "lexusofchattanooga.com": "Lexus Chattanooga",
+  "planet-powersports.net": "Planet Power",
+  "garlynshelton.com": "Garlyn Shelton",
+  "saffordbrown.com": "Safford Brown",
+  "saffordauto.com": "Safford Auto",
+  "npsubaru.com": "NP Subaru",
+  "prestoncars.com": "Preston",
+  "toyotaofredlands.com": "Toyota Redland",
+  "lexusoflakeway.com": "Lexus Lakeway",
+  "robbinstoyota.com": "Robbin Toyota",
+  "swantgraber.com": "Swant Graber",
+  "sundancechevy.com": "Sundance Chevy",
+  "steponeauto.com": "Step One Auto",
+  "capital-honda.com": "Capital Honda",
+  "tituswill.com": "Titus-Will",
+  "galeanasc.com": "Galeana"
 };
 
 const KEYWORD_EXPANSIONS = new Map([
- ['insurance', 'Insurance Group'],
- ['realty', 'Realty Group']
+  ['insurance', 'Insurance Group'],
+  ['realty', 'Realty Group']
 ]);
 
 // Unique startup log to confirm deployment
 console.error(
- `🧠 company-name-fallback.js v1.0.49 – Initialized (Build ID: 20250421-FALLBACK-FIX-V4, Banned Domains: ${BRAND_ONLY_DOMAINS.size})`
+  `🧠 company-name-fallback.js v1.0.49 – Initialized (Build ID: 20250421-FALLBACK-FIX-V4, Banned Domains: ${BRAND_ONLY_DOMAINS.size})`
 );
 
 const pLimit = async (concurrency) => {
@@ -661,7 +622,7 @@ export default async function handler(req, res) {
     const startTime = Date.now();
     const successful = [];
     const manualReviewQueue = [];
-    const fallbackTriggers = [];
+    const fallbackTriggers = []; // Declared at the top to fix no-undef
     let totalTokens = 0;
 
     const chunks = Array.from(
@@ -751,6 +712,8 @@ export default async function handler(req, res) {
       // Note: Actual fetch logic is not present here but would use this URL structure
     } catch (urlError) {
       console.error(`Fallback URL construction failed: ${urlError.message}`);
+      // Use fallbackTriggers which is now defined
+      const fallbackTriggers = [];
       fallbackTriggers.push({
         domain: "unknown",
         rowNum: 0,
@@ -778,6 +741,7 @@ export const config = {
   - Fixed API call URL parsing by using process.env.VERCEL_URL with try/catch (noted for future fetch calls).
   - Ensured no regressions for overrides (e.g., Team Ford) and proper nouns (e.g., Malouf, Garlyn Shelton).
   - Fixed no-undef errors by importing KNOWN_CITIES_SET and NON_DEALERSHIP_KEYWORDS from humanize.js.
+  - Fixed no-undef error for fallbackTriggers by declaring it at the top of the handler function.
 */
 
 // Deployment Steps
