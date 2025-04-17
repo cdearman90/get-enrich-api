@@ -1,4 +1,4 @@
-// api/lib/openai.js — Version 1.0.3
+// api/lib/openai.js v1.0.3
 export async function callOpenAI(prompt, options = {}) {
   const apiKey = process.env.OPENAI_API_KEY;
 
@@ -12,7 +12,6 @@ export async function callOpenAI(prompt, options = {}) {
   };
   const opts = { ...defaults, ...options };
 
-  // Fallback if API key is missing
   if (!apiKey) {
     console.warn("⚠️ OPENAI_API_KEY is not set — returning default response");
     return {
@@ -71,35 +70,10 @@ export async function callOpenAI(prompt, options = {}) {
       const content = json.choices?.[0]?.message?.content?.trim();
       if (!content) throw new Error("Empty OpenAI response");
 
-      const jsonMatch = content.match(/\{.*?\}/);
-      const output = jsonMatch ? jsonMatch[0] : null;
-      if (!output) {
-        logToGPTErrorTab(prompt, content, "No JSON in response");
-        return {
-          output: JSON.stringify({ isReadable: true, isConfident: false }),
-          tokens: json.usage?.total_tokens || opts.max_tokens,
-          confidence: "low",
-          source: "GPT",
-        };
-      }
-
-      try {
-        JSON.parse(output);
-      } catch (err) {
-        console.error(`Invalid JSON in response: ${err.message}`);
-        logToGPTErrorTab(prompt, content, "Invalid JSON in response");
-        return {
-          output: JSON.stringify({ isReadable: true, isConfident: false }),
-          tokens: json.usage?.total_tokens || opts.max_tokens,
-          confidence: "low",
-          source: "GPT",
-        };
-      }
-
       return {
-        output,
+        output: content,
         tokens: json.usage?.total_tokens || opts.max_tokens,
-        confidence: output.length > 10 ? "high" : "low",
+        confidence: content.length > 10 ? "high" : "low",
         source: "GPT",
       };
     } catch (err) {
@@ -117,7 +91,6 @@ export async function callOpenAI(prompt, options = {}) {
   };
 }
 
-// Error logging to Google Apps Script
 async function logToGPTErrorTab(prompt, errorMsg, errorType) {
   const gasUrl = "https://script.google.com/a/macros/ipsys.ai/s/AKfycbxRTWC8MNpCdsukETju2Ovhk5zvqdXHJ8RGxrg_nDa0EpmygTG6M5Nrld7V7X5UCQ3c/exec";
   const secret = process.env.GAS_SECRET;
