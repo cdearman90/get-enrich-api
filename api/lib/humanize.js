@@ -657,19 +657,20 @@ function extractTokens(domain) {
     if (token.length > 4 && !CAR_BRANDS.includes(tokenLower) && !KNOWN_CITIES_SET.has(tokenLower)) {
       let splitTokens = [];
 
-      // Explicit regex-based brand-city splitting
+      // Explicit brand-city splitting with boundaries
       const brandCityPatterns = [
-        { regex: /^(ford)(tustin)$/i, brand: "ford", city: "tustin" },
-        { regex: /^(toyota)(chicago)$/i, brand: "toyota", city: "chicago" },
-        { regex: /^(kia)(lagrange)$/i, brand: "kia", city: "lagrange" },
-        { regex: /^(toyota)(greenwich)$/i, brand: "toyota", city: "greenwich" }
+        { brand: "ford", city: "tustin" },
+        { brand: "toyota", city: "chicago" },
+        { brand: "honda", city: "kingsport" },
+        { brand: "chevrolet", city: "columbus" }
       ];
       for (const pattern of brandCityPatterns) {
-        const match = tokenLower.match(pattern.regex);
+        const regex = new RegExp(`^(${pattern.brand})(${pattern.city})$`, 'i');
+        const match = tokenLower.match(regex);
         if (match) {
           splitTokens.push(capitalizeName(pattern.brand).name);
           splitTokens.push(capitalizeName(pattern.city).name);
-          log('info', 'Matched brand-city regex', { domain, token, split: splitTokens });
+          log('info', 'Matched brand-city pattern', { domain, token, split: splitTokens });
           return splitTokens;
         }
       }
@@ -714,7 +715,7 @@ function extractTokens(domain) {
           }
         }
 
-        // Fallback splitting for names (e.g., donjacobs → Don Jacobs)
+        // Fallback splitting for names
         if (!matched && remaining.length > 3) {
           const namePatterns = [
             { prefix: "don", suffix: "jacobs" },
@@ -824,11 +825,9 @@ export function extractBrandOfCityFromDomain(domain) {
   const flags = new Set();
   log('info', 'extractBrandOfCityFromDomain started', { domain });
 
-  // Normalize domain
   const cleanDomain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, '');
   log('info', 'Normalized domain', { domain: cleanDomain });
 
-  // Try regex for "brandofcity" (e.g., toyotaofchicago)
   const brandOfCityMatch = cleanDomain.match(/(\w+)of(\w+)/i);
   if (brandOfCityMatch) {
     const [, brand, city] = brandOfCityMatch;
@@ -841,7 +840,6 @@ export function extractBrandOfCityFromDomain(domain) {
     }
   }
 
-  // Fallback to token-based extraction
   const tokens = extractTokens(cleanDomain);
   const brand = tokens.find(t => CAR_BRANDS.includes(t.toLowerCase()));
   const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
@@ -864,31 +862,28 @@ function tryBrandCityPattern(tokens, meta) {
   const flags = new Set();
   log('info', 'tryBrandCityPattern started', { tokens });
 
-  // Normalize tokens
   const normalizedTokens = tokens.map(t => t.toLowerCase());
-
-  // Find brand and city pair
   let brand = null;
   let city = null;
+
   for (let i = 0; i < normalizedTokens.length; i++) {
     if (CAR_BRANDS.includes(normalizedTokens[i])) {
       brand = normalizedTokens[i];
       city = normalizedTokens.find((t, j) => j !== i && KNOWN_CITIES_SET.has(t.toLowerCase()));
-      if (city) break;
+      if (city && brand.toLowerCase() !== city.toLowerCase()) break;
+      city = null;
     }
   }
 
-  if (brand && city && brand.toLowerCase() !== city.toLowerCase()) {
+  if (brand && city) {
     const formattedBrand = BRAND_MAPPING[brand] || capitalizeName(brand).name;
     const formattedCity = capitalizeName(city).name;
-    // Reorder to City Brand unless brand ends in 's'
     const output = brand.toLowerCase().endsWith('s') ? `${formattedBrand} ${formattedCity}` : `${formattedCity} ${formattedBrand}`;
     flags.add("FormattingApplied");
     log('info', 'BrandCity pattern matched', { tokens, output });
-    return { name: output, confidenceScore: 125, flags: Array.from(flags) }; // 125a
+    return { name: output, confidenceScore: 125, flags: Array.from(flags) };
   }
 
-  // Fallback: city-only with meta title brand
   city = normalizedTokens.find(t => KNOWN_CITIES_SET.has(t));
   if (city) {
     const formattedCity = capitalizeName(city).name;
@@ -926,7 +921,7 @@ function tryHumanNamePattern(tokens, meta) {
     }
     flags.add("BrandDropped");
     log('info', 'Human name detected', { tokens, name: fullName });
-    return { name: fullName, confidenceScore: 125, flags: Array.from(flags) }; // 125b
+    return { name: fullName, confidenceScore: 125, flags: Array.from(flags) };
   }
 
   if (tokens.length >= 1 && !CAR_BRANDS.includes(tokens[0].toLowerCase()) && !KNOWN_CITIES_SET.has(tokens[0].toLowerCase())) {
@@ -949,7 +944,7 @@ function tryProperNounPattern(tokens) {
   const flags = new Set();
   if (tokens.length === 1 && KNOWN_PROPER_NOUNS.has(tokens[0])) {
     log('info', 'Proper noun pattern matched', { tokens, name: tokens[0] });
-    return { name: tokens[0], confidenceScore: 125, flags: Array.from(flags) }; // 125
+    return { name: tokens[0], confidenceScore: 125, flags: Array.from(flags) };
   }
   log('info', 'No proper noun pattern matched', { tokens });
   return { name: "", confidenceScore: 0, flags: Array.from(flags) };
@@ -965,7 +960,6 @@ function tryGenericPattern(tokens, meta) {
   const flags = new Set();
   log('info', 'tryGenericPattern started', { tokens });
 
-  // Handle abbreviations (e.g., NP Lincoln)
   const abbreviation = tokens.find(t => /^[A-Z]{2,3}$/.test(t) && !COMMON_WORDS.includes(t.toLowerCase()));
   if (abbreviation) {
     const brand = tokens.find(t => CAR_BRANDS.includes(t.toLowerCase())) || getMetaTitleBrand(meta) || "Auto";
@@ -975,7 +969,6 @@ function tryGenericPattern(tokens, meta) {
     return { name: `${abbreviation} ${brand}`, confidenceScore: 95, flags: Array.from(flags) };
   }
 
-  // Clean tokens
   const cleanedTokens = tokens.filter(t => !["cars", "sales", "autogroup"].includes(t.toLowerCase()));
   if (cleanedTokens.length === 0) {
     const brand = getMetaTitleBrand(meta) || "Auto";
@@ -987,7 +980,6 @@ function tryGenericPattern(tokens, meta) {
 
   let name = cleanedTokens[0];
   const brand = getMetaTitleBrand(meta) || "Auto";
-  // Sanity check for duplicate tokens (e.g., "Ford Ford")
   const proposedName = `${name} ${brand}`;
   if (proposedName.split(" ").every((w, _, arr) => w.toLowerCase() === arr[0].toLowerCase())) {
     flags.add("DuplicateTokenSanitized");
