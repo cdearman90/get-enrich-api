@@ -7,7 +7,7 @@ import winston from "winston";
 import path from "path";
 
 const logger = winston.createLogger({
-  level: "info",
+  level: "debug",
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.json()
@@ -84,7 +84,7 @@ class FallbackError extends Error {
  * @param {Object} meta - Meta data
  * @returns {Object} - Enriched result
  */
-export async function fallbackName(domain, meta = {}) {
+async function fallbackName(domain, meta = {}) {
   const normalizedDomain = domain?.toLowerCase().trim() || "";
   let companyName = "";
   let confidenceScore = 80;
@@ -254,6 +254,76 @@ export async function fallbackName(domain, meta = {}) {
   }
 }
 
-// [clearOpenAICache, handler unchanged]
+/**
+ * Clears OpenAI cache
+ */
+function clearOpenAICache() {
+  openAICache.clear();
+  log("info", "OpenAI cache cleared", {});
+}
 
+/**
+ * Handler for fallback API endpoint
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<Object>} - JSON response
+ */
+async function handler(req, res) {
+  let body = null;
+  try {
+    logger.info("Received body", { bodyLength: req.body ? JSON.stringify(req.body).length : 0 });
+    body = req.body;
+
+    const leads = body.leads || body.leadList || body.domains || body;
+    if (!Array.isArray(leads)) {
+      log("warn", "Leads is not an array", { leads });
+      return res.status(400).json({ error: "Leads must be an array" });
+    }
+
+    const validatedLeads = leads.map((lead, i) => ({
+      domain: (lead.domain || "").trim().toLowerCase(),
+      rowNum: lead.rowNum || i + 1,
+      metaTitle: lead.metaTitle || undefined
+    })).filter(lead => lead.domain);
+
+    const successful = await Promise.all(validatedLeads.map(async (lead) => {
+      const result = await fallbackName(lead.domain, { title: lead.metaTitle });
+      return {
+        domain: lead.domain,
+        companyName: result.companyName,
+        confidenceScore: result.confidenceScore,
+        flags: result.flags,
+        tokens: result.tokens,
+        rowNum: lead.rowNum
+      };
+    }));
+
+    const manualReviewQueue = successful.filter(r => r.flags.includes("ManualReviewRecommended"));
+    const fallbackTriggers = successful.filter(r => r.flags.includes("OpenAIFallback") || r.flags.includes("LocalFallbackUsed"));
+    const totalTokens = successful.reduce((sum, r) => sum + (r.tokens || 0), 0);
+
+    return res.status(200).json({
+      successful,
+      manualReviewQueue,
+      fallbackTriggers,
+      totalTokens,
+      partial: false,
+      fromFallback: fallbackTriggers.length > 0
+    });
+  } catch (error) {
+    log("error", "Handler error", {
+      error: error.message,
+      stack: error.stack,
+      body: body ? JSON.stringify(body).slice(0, 1000) : "null"
+    });
+    return res.status(500).json({
+      error: "Internal server error",
+      confidenceScore: 80,
+      flags: Array.from(new Set(["FallbackHandlerFailed", "ManualReviewRecommended"])),
+      tokens: 0
+    });
+  }
+}
+
+// Consolidated export statement
 export { fallbackName, clearOpenAICache, handler };
