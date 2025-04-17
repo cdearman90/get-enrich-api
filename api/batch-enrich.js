@@ -1,7 +1,7 @@
 // api/batch-enrich.js v4.2.31
 // Orchestrates lead enrichment with humanize.js and company-name-fallback.js
 
-import { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } from './lib/humanize.js';
+import { humanizeName, extractBrandOfCityFromDomain, capitalizeName, expandInitials, earlyCompoundSplit } from './lib/humanize.js';
 import { clearOpenAICache } from './company-name-fallback.js';
 import winston from 'winston';
 
@@ -42,12 +42,12 @@ const pLimit = (concurrency) => {
   });
 };
 
-const limit = pLimit(5); // Limit to 5 concurrent requests
+const limit = pLimit(5);
 const domainCache = new Map();
 const processedDomains = new Set();
 
 const FALLBACK_API_URL = '/api/company-name-fallback';
-const FALLBACK_API_TIMEOUT_MS = parseInt(process.env.FALLBACK_API_TIMEOUT_MS, 10) || 10000; // Increased to 10s
+const FALLBACK_API_TIMEOUT_MS = parseInt(process.env.FALLBACK_API_TIMEOUT_MS, 10) || 10000;
 const RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 1000;
 
@@ -76,6 +76,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
     };
   }
 
+  let lastError;
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     try {
       log('info', `Attempt ${attempt} to fetch from fallback API: ${FALLBACK_API_URL}`, { domain });
@@ -115,45 +116,47 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
         rowNum
       };
     } catch (error) {
+      lastError = error;
       log('warn', `Fallback API attempt ${attempt} failed`, { domain, error: error.message });
-      if (attempt === RETRY_ATTEMPTS) {
-        log('error', 'Fallback API exhausted retries', { domain, error: error.message });
-        let local;
-        try {
-          log('info', 'Attempting local humanizeName', { domain });
-          local = await humanizeName(domain, domain, true);
-          log('info', 'Local humanizeName result', { domain, result: local });
-        } catch (humanizeError) {
-          log('error', 'Local humanizeName failed', { domain, error: humanizeError.message });
-          local = { name: '', confidenceScore: 0, flags: ['InvalidHumanizeResponse'], tokens: 0 };
-        }
-
-        if (!local.name || typeof local.name !== 'string') {
-          local.name = '';
-          local.flags = [...(local.flags || []), 'InvalidHumanizeResponse'];
-        }
-
-        if (!local.name || local.confidenceScore < 75) {
-          const splitName = earlyCompoundSplit(domain.split('.')[0]);
-          local.name = capitalizeName(splitName).name || '';
-          local.confidenceScore = 80;
-          local.flags = [...(local.flags || []), 'LocalCompoundSplit'];
-          log('info', 'Local compound split result', { domain, result: local });
-        }
-
-        return {
-          domain,
-          companyName: local.name,
-          confidenceScore: local.confidenceScore,
-          flags: Array.from(new Set([...(local.flags || []), 'FallbackAPIFailed', 'LocalFallbackUsed'])),
-          tokens: local.tokens || 0,
-          rowNum,
-          error: error.message
-        };
+      if (attempt < RETRY_ATTEMPTS) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
       }
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
     }
   }
+
+  log('error', 'Fallback API exhausted retries', { domain, error: lastError.message });
+  let local;
+  try {
+    log('info', 'Attempting local humanizeName', { domain });
+    local = await humanizeName(domain, domain, true);
+    log('info', 'Local humanizeName result', { domain, result: local });
+  } catch (humanizeError) {
+    log('error', 'Local humanizeName failed', { domain, error: humanizeError.message });
+    local = { name: '', confidenceScore: 0, flags: ['InvalidHumanizeResponse'], tokens: 0 };
+  }
+
+  if (!local.name || typeof local.name !== 'string') {
+    local.name = '';
+    local.flags = [...(local.flags || []), 'InvalidHumanizeResponse'];
+  }
+
+  if (!local.name || local.confidenceScore < 75) {
+    const splitName = earlyCompoundSplit(domain.split('.')[0]);
+    local.name = capitalizeName(splitName).name || '';
+    local.confidenceScore = 80;
+    local.flags = [...(local.flags || []), 'LocalCompoundSplit'];
+    log('info', 'Local compound split result', { domain, result: local });
+  }
+
+  return {
+    domain,
+    companyName: local.name,
+    confidenceScore: local.confidenceScore,
+    flags: Array.from(new Set([...(local.flags || []), 'FallbackAPIFailed', 'LocalFallbackUsed'])),
+    tokens: local.tokens || 0,
+    rowNum,
+    error: lastError.message
+  };
 }
 
 export default async function handler(req, res) {
