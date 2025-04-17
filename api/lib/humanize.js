@@ -626,12 +626,48 @@ export async function humanizeName(domain, originalDomain, useMeta = false) {
  * @returns {string[]} - Tokens
  */
 function extractTokens(domain) {
+  console.warn(`extractTokens started for domain: ${domain}`);
   let tokens = earlyCompoundSplit(domain).split(' ');
+  console.warn(`After earlyCompoundSplit:`, tokens);
   tokens = tokens.flatMap(splitCamelCase);
+  console.warn(`After splitCamelCase:`, tokens);
   tokens = tokens.flatMap(blobSplit);
-  return tokens
+  console.warn(`After blobSplit:`, tokens);
+  // Additional splitting for compound words
+  tokens = tokens.flatMap(token => {
+    // Split common compound patterns (e.g., "donjacobs" -> "don jacobs")
+    if (token.length > 4 && !CAR_BRANDS.includes(token.toLowerCase()) && !KNOWN_CITIES_SET.has(token.toLowerCase())) {
+      // Look for known proper nouns or split at likely boundaries
+      let splitTokens = [];
+      let current = token.toLowerCase();
+      for (const noun of KNOWN_PROPER_NOUNS) {
+        const nounLower = noun.toLowerCase();
+        if (current.includes(nounLower)) {
+          splitTokens.push(noun);
+          current = current.replace(nounLower, '');
+          if (current) splitTokens.push(current);
+          break;
+        }
+      }
+      if (splitTokens.length === 0) {
+        // Fallback splitting (e.g., "donjacobs" -> "don jacobs")
+        const splitPoint = Math.floor(token.length / 2);
+        if (token.length > 6) {
+          splitTokens = [token.slice(0, splitPoint), token.slice(splitPoint)];
+        } else {
+          splitTokens = [token];
+        }
+      }
+      return splitTokens;
+    }
+    return [token];
+  });
+  console.warn(`After compound splitting:`, tokens);
+  const result = tokens
     .map(t => capitalizeName(t).name)
     .filter(t => !COMMON_WORDS.includes(t.toLowerCase()));
+  console.warn(`extractTokens result:`, result);
+  return result;
 }
 
 /**
@@ -707,19 +743,23 @@ export function extractBrandOfCityFromDomain(domain) {
  */
 function tryHumanNamePattern(tokens, meta) {
   const flags = [];
-  if (tokens.length >= 2 && !CAR_BRANDS.includes(tokens[0]) && !CAR_BRANDS.includes(tokens[1])) {
+  console.warn(`tryHumanNamePattern tokens:`, tokens);
+  if (tokens.length >= 2 && !CAR_BRANDS.includes(tokens[0].toLowerCase()) && !CAR_BRANDS.includes(tokens[1].toLowerCase())) {
     const fullName = `${tokens[0]} ${tokens[1]}`;
     if (tokens[1].toLowerCase().endsWith('s')) {
       const brand = getMetaTitleBrand(meta) || "Auto";
       flags.push("PossessiveFriendlyAdjustment", "MetaTitleBrandAppended");
+      console.warn(`Human name with possessive: ${fullName} ${brand}`);
       return { name: `${fullName} ${brand}`, confidenceScore: 95, flags };
     }
     flags.push("BrandDropped");
+    console.warn(`Human name detected: ${fullName}`);
     return { name: fullName, confidenceScore: 125, flags };
   }
 
-  if (tokens.length >= 1 && !CAR_BRANDS.includes(tokens[0]) && !KNOWN_CITIES_SET.has(tokens[0])) {
+  if (tokens.length >= 1 && !CAR_BRANDS.includes(tokens[0].toLowerCase()) && !KNOWN_CITIES_SET.has(tokens[0].toLowerCase())) {
     flags.push("ManualReviewRecommended", "BrandOmitted");
+    console.warn(`Single token human name: ${tokens[0]}`);
     return { name: tokens[0], confidenceScore: 85, flags };
   }
 
@@ -734,22 +774,26 @@ function tryHumanNamePattern(tokens, meta) {
  */
 function tryBrandCityPattern(tokens, meta) {
   const flags = [];
+  console.warn(`tryBrandCityPattern tokens:`, tokens);
   for (let i = 0; i < tokens.length; i++) {
     const brand = tokens[i].toLowerCase();
     if (CAR_BRANDS.map(b => b.toLowerCase()).includes(brand)) {
-      let city = tokens.find((t, j) => j !== i && KNOWN_CITIES_SET.has(t));
+      let city = tokens.find((t, j) => j !== i && KNOWN_CITIES_SET.has(t.toLowerCase()));
       if (city) {
         const formattedBrand = BRAND_MAPPING[CAR_BRANDS.find(b => b.toLowerCase() === brand)] || CAR_BRANDS.find(b => b.toLowerCase() === brand);
+        const formattedCity = capitalizeName(city).name;
         flags.push("FormattingApplied");
-        return { name: `${city} ${formattedBrand}`, confidenceScore: 125, flags };
+        console.warn(`BrandCity pattern matched: ${formattedCity} ${formattedBrand}`);
+        return { name: `${formattedCity} ${formattedBrand}`, confidenceScore: 125, flags };
       }
     }
   }
 
-  if (tokens.length >= 1 && KNOWN_CITIES_SET.has(tokens[0])) {
-    const city = tokens[0];
+  if (tokens.length >= 1 && KNOWN_CITIES_SET.has(tokens[0].toLowerCase())) {
+    const city = capitalizeName(tokens[0]).name;
     const brand = getMetaTitleBrand(meta) || "Auto";
     flags.push("CityOnlyEnhanced", "MetaTitleBrandAppended", "ManualReviewRecommended");
+    console.warn(`City-only pattern matched: ${city} ${brand}`);
     return { name: `${city} ${brand}`, confidenceScore: 95, flags };
   }
 
