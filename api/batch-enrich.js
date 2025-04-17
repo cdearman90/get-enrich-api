@@ -71,27 +71,31 @@ const callFallbackAPI = async (domain, rowNum) => {
     let local = await humanizeName(domain, domain, true);
     let tokensUsed = local.tokens || 0;
 
+    // Ensure local.name is always a string
+    if (!local.name || typeof local.name !== 'string') {
+      local.name = '';
+      console.error(`humanizeName returned invalid name for ${domain}: ${JSON.stringify(local)}`);
+    }
+
     if (!local.name || local.confidenceScore < 75 || local.name.toLowerCase() === domain.replace(/\.(com|net|org|co\.uk)$/, "")) {
       const splitName = earlyCompoundSplit(domain.split(".")[0]);
-      local = {
-        name: capitalizeName(splitName),
-        confidenceScore: 80,
-        flags: [...(local.flags || []), "LocalCompoundSplit"],
-        tokens: 0
-      };
+      local.name = capitalizeName(splitName.name || splitName).name || ''; // Ensure string
+      local.confidenceScore = 80;
+      local.flags = [...(local.flags || []), "LocalCompoundSplit"];
+      local.tokens = 0;
     }
 
     const brandMatch = domain.match(/(chevy|ford|toyota|lincoln|bmw)/i);
     if (brandMatch && (local.name || "").split(" ").length < 3) {
       const prefix = (local.name || "").split(" ")[0] || local.name || domain.split(".")[0];
-      local.name = `${prefix} ${capitalizeName(brandMatch[0])}`;
+      local.name = `${prefix} ${capitalizeName(brandMatch[0]).name}`;
       local.confidenceScore = (local.confidenceScore || 0) + 5;
       local.flags = [...(local.flags || []), "BrandAppended"];
     }
 
     if (!brandMatch && !local.name.includes("Auto") && domain.match(/realty|exp|group/i)) {
       const baseName = domain.split(".")[0].replace(/realty|exp|group/i, "").trim();
-      local.name = `${capitalizeName(baseName)} Realty`;
+      local.name = `${capitalizeName(baseName).name} Realty`;
       local.confidenceScore = Math.max(local.confidenceScore, 70);
       local.flags = [...(local.flags || []), "NonDealershipFallback"];
     }
@@ -358,7 +362,7 @@ export default async function handler(req, res) {
           if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
             const expandedName = expandInitials(finalResult.companyName, domain, brandDetected, cityDetected);
             if (expandedName && expandedName !== finalResult.companyName) {
-              finalResult.companyName = expandedName;
+              finalResult.companyName = expandedName.name || expandedName; // Handle object or string
               finalResult.flags.push("InitialsExpandedLocally");
               finalResult.confidenceScore -= 5;
             }
