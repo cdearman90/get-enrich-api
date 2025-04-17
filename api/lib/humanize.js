@@ -557,7 +557,7 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
   }
 }
 
-export function extractTokens(domain) {
+function extractTokens(domain) {
   log('info', 'extractTokens started', { domain });
 
   // Validate input
@@ -732,7 +732,7 @@ export function extractTokens(domain) {
   return result;
 }
 
-export function earlyCompoundSplit(text) {
+function earlyCompoundSplit(text) {
   try {
     if (!text || typeof text !== 'string') {
       log('error', 'Invalid text in earlyCompoundSplit', { text });
@@ -752,7 +752,7 @@ export function earlyCompoundSplit(text) {
   }
 }
 
-export function splitCamelCase(text) {
+function splitCamelCase(text) {
   try {
     if (!text || typeof text !== 'string') {
       log('error', 'Invalid text in splitCamelCase', { text });
@@ -765,7 +765,7 @@ export function splitCamelCase(text) {
   }
 }
 
-export function blobSplit(text) {
+function blobSplit(text) {
   try {
     if (!text || typeof text !== 'string') {
       log('error', 'Invalid text in blobSplit', { text });
@@ -786,7 +786,7 @@ export function blobSplit(text) {
   }
 }
 
-export function capitalizeName(name) {
+function capitalizeName(name) {
   try {
     if (!name || typeof name !== 'string') {
       log('error', 'Invalid name in capitalizeName', { name });
@@ -799,7 +799,7 @@ export function capitalizeName(name) {
   }
 }
 
-export function expandInitials(name) {
+function expandInitials(name) {
   try {
     if (!name || typeof name !== 'string') {
       log('error', 'Invalid name in expandInitials', { name });
@@ -815,7 +815,7 @@ export function expandInitials(name) {
   }
 }
 
-export function extractBrandOfCityFromDomain(domain) {
+function extractBrandOfCityFromDomain(domain) {
   const flags = new Set();
   log('info', 'extractBrandOfCityFromDomain started', { domain });
 
