@@ -30,7 +30,7 @@ const BRAND_MAPPING = {
   "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram", "rivian": "Rivian",
   "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion", "smart": "Smart",
   "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
-  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW", "chevy": "Chevy"
+  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW"
 };
 
 const BRAND_ONLY_DOMAINS = [
