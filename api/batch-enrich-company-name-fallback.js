@@ -1,8 +1,9 @@
 // api/company-name-fallback.js
 // Fallback logic using OpenAI with caching
 
-import { humanizeName } from "./lib/humanize.js";
+import { humanizeName, getMetaTitleBrand, KNOWN_CITIES_SET } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
+import winston from 'winston';
 
 const CAR_BRANDS = [
   "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
@@ -43,12 +44,8 @@ const BRAND_ONLY_DOMAINS = [
   "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
 ];
 
-// Cache for OpenAI responses
 const openAICache = new Map();
 
-/**
- * Custom error for fallback failures
- */
 class FallbackError extends Error {
   constructor(message, details = {}) {
     super(message);
@@ -57,63 +54,31 @@ class FallbackError extends Error {
   }
 }
 
-/**
- * Structured logger
- * @param {string} level - Log level (info, warn, error)
- * @param {string} message - Log message
- * @param {object} context - Additional context
- */
+const logger = winston.createLogger({
+  level: 'info',
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({ filename: 'logs/enrich.log' }),
+    new winston.transports.Console()
+  ]
+});
+
 function log(level, message, context = {}) {
-  const logEntry = {
-    timestamp: new Date().toISOString(),
-    level,
-    message,
-    domain: context.domain || null,
-    ...context
-  };
-  console[level](JSON.stringify(logEntry, null, 2));
+  logger[level]({ message, domain: context.domain || null, ...context });
 }
 
-/**
- * Fallback function for unresolved names
- * @param {string} domain - Dealership domain
- * @param {object} meta - Metadata
- * @returns {object} - { companyName: string, confidenceScore: number, flags: string[], tokens: number }
- */
 export async function fallbackName(domain, meta = {}) {
   const flags = new Set();
   let tokens = 0;
 
   log('info', 'Starting fallback processing', { domain });
 
-  // Try humanize.js first
-  let initialResult;
-  try {
-    initialResult = await humanizeName(domain, domain, true);
-    flags.add(...initialResult.flags);
-    log('info', 'humanizeName completed', { domain, result: initialResult });
-  } catch (error) {
-    log('error', 'humanizeName failed', { domain, error: error.message });
-    flags.add("HumanizeNameError");
-    initialResult = { name: "", confidenceScore: 0, flags: [], tokens: 0 };
-  }
-
-  // Return early if humanizeName produced a high-confidence result
-  if (initialResult.confidenceScore >= 95 && !initialResult.flags.includes("ManualReviewRecommended")) {
-    log('info', 'Using humanizeName result', { domain, name: initialResult.name });
-    return {
-      companyName: initialResult.name,
-      confidenceScore: initialResult.confidenceScore,
-      flags: Array.from(flags),
-      tokens: initialResult.tokens
-    };
-  }
-
-  // Skip OpenAI for brand-only domains
-  if (initialResult.flags.includes("BrandOnlyDomainSkipped") || BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
-    log('warn', 'Skipping OpenAI for brand-only domain', { domain });
+  if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
+    log('warn', 'Skipping fallback for brand-only domain', { domain });
     flags.add("BrandOnlyDomainSkipped");
-    flags.add("FallbackSkipped");
     return {
       companyName: "",
       confidenceScore: 0,
@@ -122,25 +87,61 @@ export async function fallbackName(domain, meta = {}) {
     };
   }
 
-  // Local fallback: use meta title brand
+  let initialResult;
+  try {
+    initialResult = await humanizeName(domain, domain, true);
+    flags.add(...initialResult.flags);
+    log('info', 'humanizeName completed', { domain, result: initialResult });
+    if (initialResult.confidenceScore >= 95 && !initialResult.flags.includes("ManualReviewRecommended")) {
+      log('info', 'Using humanizeName result', { domain, name: initialResult.name });
+      return {
+        companyName: initialResult.name,
+        confidenceScore: initialResult.confidenceScore,
+        flags: Array.from(flags),
+        tokens: initialResult.tokens
+      };
+    }
+  } catch (error) {
+    log('error', 'humanizeName failed', { domain, error: error.message });
+    flags.add("HumanizeNameError");
+    initialResult = { name: "", confidenceScore: 0, flags: [], tokens: 0 };
+  }
+
   try {
     const metaBrand = getMetaTitleBrand(meta);
-    if (metaBrand) {
-      log('info', 'Local fallback used', { domain, metaBrand });
+    const cleanDomain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, '');
+    const tokens = (initialResult.name ? initialResult.name.split(' ') : cleanDomain.split(/(?=[A-Z])/))
+      .map(t => t.toLowerCase())
+      .filter(t => !["of", "cars", "sales", "autogroup"].includes(t));
+    const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+
+    if (metaBrand && city) {
+      const name = `${city.charAt(0).toUpperCase() + city.slice(1)} ${metaBrand}`;
+      log('info', 'Meta title with city applied', { domain, name });
+      flags.add("MetaTitleBrandAppended");
+      flags.add("ManualReviewRecommended");
+      return {
+        companyName: name,
+        confidenceScore: 95,
+        flags: Array.from(flags),
+        tokens: 0
+      };
+    } else if (metaBrand) {
+      log('info', 'Meta title brand fallback', { domain, metaBrand });
       flags.add("LocalFallbackUsed");
+      flags.add("ManualReviewRecommended");
       return {
         companyName: metaBrand,
-        confidenceScore: 80,
+        confidenceScore: 85,
         flags: Array.from(flags),
         tokens: 0
       };
     }
   } catch (error) {
-    log('error', 'Local fallback failed', { domain, error: error.message });
+    log('error', 'Meta title fallback failed', { domain, error: error.message });
     flags.add("LocalFallbackFailed");
   }
 
-  // Check OpenAI cache
   const cacheKey = `${domain}:${meta.title || ''}`;
   if (openAICache.has(cacheKey)) {
     const cached = openAICache.get(cacheKey);
@@ -154,24 +155,24 @@ export async function fallbackName(domain, meta = {}) {
     };
   }
 
-  // OpenAI prompt
   const prompt = `
     Format the dealership domain into a natural company name for an email: ${domain}.
     Only output the name. Follow these rules:
-    - Prioritize human names (e.g., donjacobs.com → "Don Jacobs").
+    - Use 1–3 words, prioritizing human names (e.g., donjacobs.com → "Don Jacobs").
     - Remove 's' for possessive-friendliness (e.g., crossroadscars.com → "Crossroad").
     - Append a single car brand if needed, validated against: ${CAR_BRANDS.join(", ")}.
-    - Never output city-only names (e.g., chicagocars.com → "Chicago Toyota").
-    - Drop 'cars', 'sales', 'Auto Group'.
-    - Format: "Mercedes-Benz" → "M.B.", "Volkswagen" → "VW", remove "of".
+    - Never output city-only names; use meta title brand if available: ${meta.title || "none"}.
+    - Drop 'cars', 'sales', 'autogroup', 'of'.
+    - Format: "Mercedes-Benz" → "Mercedes", "Volkswagen" → "VW".
+    - Do not invent brands or words not in domain or meta.
   `;
 
   try {
     log('info', 'Calling OpenAI', { domain });
     const response = await callOpenAI(prompt, {
       model: "gpt-4-turbo",
-      max_tokens: 50,
-      temperature: 0.3,
+      max_tokens: 20,
+      temperature: 0.2,
       systemMessage: "You are a precise assistant for formatting dealership names."
     });
 
@@ -182,18 +183,14 @@ export async function fallbackName(domain, meta = {}) {
       throw new FallbackError('OpenAI returned empty name', { domain });
     }
 
-    // Post-process
-    name = name.replace(/['’]s\b/g, '');
-    name = name.replace(/\b(cars|sales|autogroup)\b/gi, '');
-    name = name.replace(/\bof\b/gi, '');
-
+    name = name.replace(/['’]s\b/g, '').replace(/\b(cars|sales|autogroup|of)\b/gi, '').replace(/\s+/g, ' ').trim();
     const brandsInName = CAR_BRANDS.filter(b => name.toLowerCase().includes(b.toLowerCase()));
     if (brandsInName.length > 1) {
       const firstBrand = BRAND_MAPPING[brandsInName[0]] || brandsInName[0];
       name = name.replace(new RegExp(brandsInName.slice(1).join('|'), 'gi'), '').replace(/\s+/g, ' ').trim();
       name = `${name} ${firstBrand}`.trim();
     } else if (brandsInName.length === 0 && !initialResult.flags.includes("HumanNameDetected")) {
-      const fallbackBrand = metaBrand || "Auto";
+      const fallbackBrand = getMetaTitleBrand(meta) || "Auto";
       name = `${name} ${fallbackBrand}`.trim();
     }
 
@@ -204,14 +201,13 @@ export async function fallbackName(domain, meta = {}) {
       tokens
     };
 
-    // Cache result
     openAICache.set(cacheKey, result);
     log('info', 'OpenAI result cached', { domain, name });
     return result;
   } catch (error) {
     const errorDetails = error instanceof FallbackError ? error.details : { error: error.message };
     log('error', 'OpenAI fallback failed', { domain, ...errorDetails });
-    const fallbackName = initialResult.name || `${domain.split('.')[0]} Auto`;
+    const fallbackName = initialResult.name || `${cleanDomain.split(/(?=[A-Z])/)[0]} Auto`;
     const result = {
       companyName: fallbackName,
       confidenceScore: 80,
@@ -223,33 +219,11 @@ export async function fallbackName(domain, meta = {}) {
   }
 }
 
-/**
- * Extracts brand from meta title
- * @param {object} meta - Metadata
- * @returns {string|null} - Formatted brand
- */
-function getMetaTitleBrand(meta) {
-  if (!meta.title) return null;
-  const title = meta.title.toLowerCase();
-  for (const brand of CAR_BRANDS) {
-    if (title.includes(brand.toLowerCase())) {
-      return BRAND_MAPPING[brand] || brand;
-    }
-  }
-  return null;
-}
-
-/**
- * Clears OpenAI cache
- */
 export function clearOpenAICache() {
   openAICache.clear();
   log('info', 'OpenAI cache cleared', {});
 }
 
-/**
- * API handler (stub for Vercel)
- */
 export default async function handler(req, res) {
   return res.status(200).json({
     successful: [],
