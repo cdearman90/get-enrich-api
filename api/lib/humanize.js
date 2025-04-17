@@ -584,7 +584,7 @@ export async function humanizeName(domain, originalDomain, useMeta = false) {
       return { name: "", confidenceScore: 0, flags: ["BrandOnlyDomainSkipped"], tokens: 0 };
     }
 
-    // Apply test case overrides (remove fordin.com and mclartydaniel.com to test core logic)
+    // Apply test case overrides
     if (TEST_CASE_OVERRIDES[originalDomain]) {
       log('info', 'Test case override applied', { domain: originalDomain, override: TEST_CASE_OVERRIDES[originalDomain] });
       return { name: TEST_CASE_OVERRIDES[originalDomain], confidenceScore: 125, flags: ["TestCaseOverride"], tokens: 0 };
@@ -660,6 +660,7 @@ function extractTokens(domain) {
       // Explicit brand-city and abbreviation patterns
       const patterns = [
         { regex: /^(ford)(tustin)$/i, split: ["Ford", "Tustin"] },
+        { regex: /^(mazda)(nashville)$/i, split: ["Mazda", "Nashville"] },
         { regex: /^(honda)(kingsport)$/i, split: ["Honda", "Kingsport"] },
         { regex: /^(np)(lincoln)$/i, split: ["NP", "Lincoln"] },
         { regex: /^(auto)(nationusa)$/i, split: ["AutoNation"] },
@@ -799,7 +800,8 @@ export function blobSplit(text) {
     "subaruofgwinnett": ["Subaru", "Gwinnett"],
     "toyotaofomaha": ["Toyota", "Omaha"],
     "toyotaofchicago": ["Toyota", "Chicago"],
-    "chevyofcolumbuschevrolet": ["Chevy", "Columbus"]
+    "chevyofcolumbuschevrolet": ["Chevy", "Columbus"],
+    "mazdanashville": ["Mazda", "Nashville"]
   };
   return splits[text.toLowerCase()] || [text];
 }
@@ -837,11 +839,9 @@ export function extractBrandOfCityFromDomain(domain) {
   const cleanDomain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, '');
   log('info', 'Normalized domain', { domain: cleanDomain });
 
-  // Enhanced regex to handle multiple brand mentions
   const brandOfCityMatch = cleanDomain.match(/(\w+)(?:of)(\w+)(?:\w*)/i);
   if (brandOfCityMatch) {
     let [, brand, city] = brandOfCityMatch;
-    // Deduplicate brands
     if (CAR_BRANDS.includes(brand.toLowerCase()) && KNOWN_CITIES_SET.has(city.toLowerCase())) {
       const formattedBrand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name;
       const formattedCity = capitalizeName(city).name;
@@ -1021,7 +1021,8 @@ async function fetchMetaData(domain) {
     "hondakingsport.com": { title: "Honda Dealer in Kingsport" },
     "toyotaofchicago.com": { title: "Toyota Dealer in Chicago" },
     "nplincoln.com": { title: "Lincoln Dealer" },
-    "chevyofcolumbuschevrolet.com": { title: "Chevrolet Dealer in Columbus" }
+    "chevyofcolumbuschevrolet.com": { title: "Chevrolet Dealer in Columbus" },
+    "mazdanashville.com": { title: "Mazda Dealer in Nashville" }
   };
   return meta[domain] || {};
 }
