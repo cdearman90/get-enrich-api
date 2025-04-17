@@ -617,10 +617,6 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
   }
 }
 
-function log(level, message, context = {}) {
-  logger[level]({ message, ...context });
-}
-
 function extractTokens(domain) {
   log("info", "extractTokens started", { domain });
 
