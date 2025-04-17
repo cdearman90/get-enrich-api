@@ -575,7 +575,7 @@ export async function humanizeName(domain, originalDomain, useMeta = false) {
     return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
   }
 
-  result = tryProperNounPattern(tokens, meta);
+  result = tryProperNounPattern(tokens);
   if (result.name) {
     flags.push("ProperNounDetected");
     return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
@@ -644,12 +644,9 @@ export function capitalizeName(name) {
 /**
  * Expands initials
  * @param {string} name - Name to expand
- * @param {string} domain - Domain
- * @param {string} brand - Detected brand
- * @param {string} city - Detected city
  * @returns {object} - { name: string }
  */
-export function expandInitials(name, domain, brand, city) {
+export function expandInitials(name) {
   if (/^[A-Z]{2,3}$/.test(name)) {
     return { name: name.toUpperCase() };
   }
@@ -728,10 +725,9 @@ function tryBrandCityPattern(tokens, meta) {
 /**
  * Tries proper noun pattern
  * @param {string[]} tokens - Tokens
- * @param {object} meta - Metadata
  * @returns {object} - { name: string, confidenceScore: number, flags: string[] }
  */
-function tryProperNounPattern(tokens, meta) {
+function tryProperNounPattern(tokens) {
   if (tokens.length === 1 && KNOWN_PROPER_NOUNS.has(tokens[0])) {
     return { name: tokens[0], confidenceScore: 125, flags: [] };
   }
@@ -797,3 +793,5 @@ function getMetaTitleBrand(meta) {
   }
   return null;
 }
+
+export { TEST_CASE_OVERRIDES };
