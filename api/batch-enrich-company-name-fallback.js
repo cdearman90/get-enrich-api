@@ -485,7 +485,6 @@ async function processLead(lead, fallbackTriggers) {
   // Handle non-dealership domains with keyword expansion
   if (!result.flags.has('OverrideApplied') && !result.flags.has('NonDealership')) {
     const match = extractBrandOfCityFromDomain(domain);
-    const brandDetected = match.brand || null;
     const cityDetected = match.city || null;
     const isProperNoun = KNOWN_PROPER_NOUNS.has(result.name);
     const isCityOnly = words.length === 1 && (cityDetected === words[0].toLowerCase() || KNOWN_CITY_SHORT_NAMES[words[0].toLowerCase()]);
