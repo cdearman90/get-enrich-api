@@ -1,4 +1,4 @@
-// api/batch-enrich.js v4.2.28 (debugging step 4)
+// api/batch-enrich.js v4.2.29 (debugging step 5)
 console.warn("Module loading started at:", new Date().toISOString());
 
 import { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } from "./lib/humanize.js";
@@ -45,7 +45,7 @@ const BRAND_ONLY_DOMAINS = [
 const callFallbackAPI = async (domain, rowNum) => {
   console.warn(`callFallbackAPI started for domain: ${domain}`);
   if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
-    console.warn(`Brand-only domain skipped: ${domain}`);
+    console.warn(`Brand-only domain skipped in callFallbackAPI: ${domain}`);
     return {
       domain,
       companyName: "",
