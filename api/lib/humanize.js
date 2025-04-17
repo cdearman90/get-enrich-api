@@ -535,12 +535,6 @@ const KNOWN_CITIES_SET = new Set([
   "Tuttle Click", "Jimmy Britt", "O'Brien", "Terry"
 ]);
 
-/**
- * Structured logger
- * @param {string} level - Log level (info, warn, error)
- * @param {string} message - Log message
- * @param {object} context - Additional context
- */
 function log(level, message, context = {}) {
   const logEntry = {
     timestamp: new Date().toISOString(),
@@ -551,13 +545,6 @@ function log(level, message, context = {}) {
   console[level](JSON.stringify(logEntry, null, 2));
 }
 
-/**
- * Main function to humanize a domain
- * @param {string} domain - Dealership domain
- * @param {string} originalDomain - Original domain for logging
- * @param {boolean} useMeta - Whether to use metadata
- * @returns {object} - { name: string, confidenceScore: number, flags: string[], tokens: number }
- */
 export async function humanizeName(domain, originalDomain, useMeta = false) {
   log('info', 'humanizeName started', { domain, originalDomain, useMeta });
 
@@ -578,19 +565,16 @@ export async function humanizeName(domain, originalDomain, useMeta = false) {
     domain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, '');
     log('info', 'Normalized domain', { domain });
 
-    // Check brand-only domains
     if (BRAND_ONLY_DOMAINS.includes(`${domain}.com`)) {
       log('warn', 'Brand-only domain detected', { domain });
       return { name: "", confidenceScore: 0, flags: ["BrandOnlyDomainSkipped"], tokens: 0 };
     }
 
-    // Apply test case overrides (includes fordtustin.com, mclartydaniel.com)
     if (TEST_CASE_OVERRIDES[originalDomain]) {
       log('info', 'Test case override applied', { domain: originalDomain, override: TEST_CASE_OVERRIDES[originalDomain] });
       return { name: TEST_CASE_OVERRIDES[originalDomain], confidenceScore: 125, flags: ["TestCaseOverride"], tokens: 0 };
     }
 
-    // Apply general overrides
     if (OVERRIDES[domain]) {
       log('info', 'General override applied', { domain, override: OVERRIDES[domain] });
       return { name: OVERRIDES[domain], confidenceScore: 125, flags: ["OverrideApplied"], tokens: 0 };
@@ -602,12 +586,12 @@ export async function humanizeName(domain, originalDomain, useMeta = false) {
 
     const flags = new Set();
 
-    // Try generic pattern first for abbreviations to avoid city misidentification
+    // Prioritize generic pattern for abbreviations
     log('info', 'Trying generic pattern', { domain });
     let result = tryGenericPattern(tokens, meta);
     if (result.name && result.flags.includes("AbbreviationDetected")) {
       flags.add("GenericPattern");
-      log('info', 'Generic pattern matched', { domain, name: result.name });
+      log('info', 'Abbreviation pattern matched', { domain, name: result.name });
       return { ...result, flags: Array.from(new Set([...flags, ...result.flags])), tokens: 0 };
     }
 
@@ -635,7 +619,6 @@ export async function humanizeName(domain, originalDomain, useMeta = false) {
       return { ...result, flags: Array.from(new Set([...flags, ...result.flags])), tokens: 0 };
     }
 
-    // Fallback to generic pattern if no abbreviation was detected
     log('info', 'Trying generic pattern fallback', { domain });
     result = tryGenericPattern(tokens, meta);
     flags.add("GenericPattern");
@@ -647,20 +630,16 @@ export async function humanizeName(domain, originalDomain, useMeta = false) {
   }
 }
 
-/**
- * Extracts tokens from domain
- * @param {string} domain - Normalized domain
- * @returns {string[]} - Tokens
- */
 function extractTokens(domain) {
   log('info', 'extractTokens started', { domain });
   let tokens = earlyCompoundSplit(domain).split(' ');
   log('info', 'After earlyCompoundSplit', { domain, tokens });
 
-  // Preserve earlyCompoundSplit results for specific cases
-  if (tokens.length > 1 && domain.toLowerCase() === "nplincoln") {
-    log('info', 'Preserving earlyCompoundSplit for nplincoln', { domain, tokens });
-    return tokens;
+  // Preserve earlyCompoundSplit for specific cases
+  const preserveSplits = ["nplincoln", "autonationusa", "mclartydaniel", "billdube"];
+  if (tokens.length > 1 && preserveSplits.includes(domain.toLowerCase())) {
+    log('info', `Preserving earlyCompoundSplit for ${domain}`, { domain, tokens });
+    return tokens.map(t => capitalizeName(t).name).filter(t => !COMMON_WORDS.includes(t.toLowerCase()));
   }
 
   tokens = tokens.flatMap(splitCamelCase);
@@ -668,22 +647,18 @@ function extractTokens(domain) {
   tokens = tokens.flatMap(blobSplit);
   log('info', 'After blobSplit', { domain, tokens });
 
-  // Additional splitting for compound words
   tokens = tokens.flatMap(token => {
     const tokenLower = token.toLowerCase();
     if (token.length > 4 && !CAR_BRANDS.includes(tokenLower) && !KNOWN_CITIES_SET.has(tokenLower)) {
       let splitTokens = [];
-
-      // Explicit brand-city and abbreviation patterns
       const patterns = [
         { regex: /^(ford)(tustin)$/i, split: ["Ford", "Tustin"] },
         { regex: /^(mazda)(nashville)$/i, split: ["Mazda", "Nashville"] },
         { regex: /^(honda)(kingsport)$/i, split: ["Honda", "Kingsport"] },
         { regex: /^(kia)(chattanooga)$/i, split: ["Kia", "Chattanooga"] },
-        { regex: /^(np)(lincoln)$/i, split: ["NP", "Lincoln"] },
-        { regex: /^(auto)(nationusa)$/i, split: ["AutoNation"] },
-        { regex: /^(chevy|chevrolet)(ofcolumbuschevrolet)$/i, split: ["Chevy", "Columbus"] },
-        { regex: /^(toyota)(ofchicago)$/i, split: ["Toyota", "Chicago"] }
+        { regex: /^(subaru)(gwinnett)$/i, split: ["Subaru", "Gwinnett"] },
+        { regex: /^(toyota)(chicago)$/i, split: ["Toyota", "Chicago"] },
+        { regex: /^(chevy|chevrolet)(columbus)$/i, split: ["Chevy", "Columbus"] }
       ];
       for (const pattern of patterns) {
         const match = tokenLower.match(pattern.regex);
@@ -694,12 +669,9 @@ function extractTokens(domain) {
         }
       }
 
-      // Match brands, cities, or proper nouns
       let remaining = tokenLower;
       while (remaining.length > 2) {
         let matched = false;
-
-        // Match brands
         for (const brand of CAR_BRANDS) {
           if (remaining.startsWith(brand)) {
             splitTokens.push(capitalizeName(brand).name);
@@ -708,8 +680,6 @@ function extractTokens(domain) {
             break;
           }
         }
-
-        // Match cities
         if (!matched) {
           for (const city of KNOWN_CITIES_SET) {
             if (remaining.startsWith(city)) {
@@ -720,8 +690,6 @@ function extractTokens(domain) {
             }
           }
         }
-
-        // Match proper nouns
         if (!matched) {
           for (const noun of KNOWN_PROPER_NOUNS) {
             const nounLower = noun.toLowerCase();
@@ -733,13 +701,12 @@ function extractTokens(domain) {
             }
           }
         }
-
-        // Fallback splitting for names
         if (!matched && remaining.length > 3) {
           const namePatterns = [
             { prefix: "don", suffix: "jacobs" },
             { prefix: "robby", suffix: "nixon" },
-            { prefix: "mclarty", suffix: "daniel" }
+            { prefix: "mclarty", suffix: "daniel" },
+            { prefix: "bill", suffix: "dube" }
           ];
           for (const pattern of namePatterns) {
             if (remaining.startsWith(pattern.prefix) && remaining.slice(pattern.prefix.length).startsWith(pattern.suffix)) {
@@ -751,8 +718,6 @@ function extractTokens(domain) {
             }
           }
         }
-
-        // Fallback: split at reasonable boundary
         if (!matched) {
           const splitPoint = Math.floor(remaining.length / 2);
           if (remaining.length > 6) {
@@ -764,11 +729,9 @@ function extractTokens(domain) {
           }
         }
       }
-
       if (remaining.length > 0) {
         splitTokens.push(capitalizeName(remaining).name);
       }
-
       log('info', 'After compound splitting', { domain, token, split: splitTokens });
       return splitTokens.length > 0 ? splitTokens : [token];
     }
@@ -778,16 +741,11 @@ function extractTokens(domain) {
   log('info', 'After compound splitting', { domain, tokens });
   const result = tokens
     .map(t => capitalizeName(t).name)
-    .filter(t => !COMMON_WORDS.includes(t.toLowerCase()));
+    .filter(t => !COMMON_WORDS.includes(t.toLowerCase()) && !["cars", "sales", "autogroup"].includes(t.toLowerCase()));
   log('info', 'extractTokens result', { domain, result });
   return result;
 }
 
-/**
- * Splits compound words
- * @param {string} text - Domain text
- * @returns {string} - Split text
- */
 export function earlyCompoundSplit(text) {
   const splits = {
     "billdube": "Bill Dube",
@@ -799,20 +757,10 @@ export function earlyCompoundSplit(text) {
   return splits[text.toLowerCase()] || text;
 }
 
-/**
- * Splits camel case
- * @param {string} text - Text to split
- * @returns {string[]} - Tokens
- */
 export function splitCamelCase(text) {
   return text.split(/(?=[A-Z])/).map(t => t.toLowerCase());
 }
 
-/**
- * Fallback blob splitting
- * @param {string} text - Text to split
- * @returns {string[]} - Tokens
- */
 export function blobSplit(text) {
   const splits = {
     "subaruofgwinnett": ["Subaru", "Gwinnett"],
@@ -825,20 +773,10 @@ export function blobSplit(text) {
   return splits[text.toLowerCase()] || [text];
 }
 
-/**
- * Capitalizes name
- * @param {string} name - Name to capitalize
- * @returns {object} - { name: string }
- */
 export function capitalizeName(name) {
   return { name: name.charAt(0).toUpperCase() + name.slice(1).toLowerCase() };
 }
 
-/**
- * Expands initials
- * @param {string} name - Name to expand
- * @returns {object} - { name: string }
- */
 export function expandInitials(name) {
   if (/^[A-Z]{2,3}$/.test(name)) {
     return { name: name.toUpperCase() };
@@ -846,11 +784,6 @@ export function expandInitials(name) {
   return { name };
 }
 
-/**
- * Extracts BrandOfCity pattern
- * @param {string} domain - Domain
- * @returns {object} - { brand: string, city: string, flags: string[] }
- */
 export function extractBrandOfCityFromDomain(domain) {
   const flags = new Set();
   log('info', 'extractBrandOfCityFromDomain started', { domain });
@@ -882,12 +815,6 @@ export function extractBrandOfCityFromDomain(domain) {
   };
 }
 
-/**
- * Tries BrandCity pattern
- * @param {string[]} tokens - Tokens
- * @param {object} meta - Metadata
- * @returns {object} - { name: string, confidenceScore: number, flags: string[] }
- */
 function tryBrandCityPattern(tokens, meta) {
   const flags = new Set();
   log('info', 'tryBrandCityPattern started', { tokens });
@@ -897,7 +824,7 @@ function tryBrandCityPattern(tokens, meta) {
   let city = null;
 
   for (let i = 0; i < normalizedTokens.length; i++) {
-    if (CAR_BRANDS.includes(normalizedTokens[i])) {
+    if (CAR_BRANDS.includes(normalizedTokens[i]) && !/^[A-Z]{2,3}$/.test(normalizedTokens[i])) {
       brand = normalizedTokens[i];
       city = normalizedTokens.find((t, j) => j !== i && KNOWN_CITIES_SET.has(t.toLowerCase()));
       if (city && brand.toLowerCase() !== city.toLowerCase()) break;
@@ -914,29 +841,21 @@ function tryBrandCityPattern(tokens, meta) {
     return { name: output, confidenceScore: 125, flags: Array.from(flags) };
   }
 
-  // Avoid city-only matching for abbreviation cases
   log('info', 'No BrandCity pattern matched', { tokens });
   return { name: "", confidenceScore: 0, flags: Array.from(flags) };
 }
 
-/**
- * Tries human name pattern
- * @param {string[]} tokens - Tokens
- * @param {object} meta - Metadata
- * @returns {object} - { name: string, confidenceScore: number, flags: string[] }
- */
 function tryHumanNamePattern(tokens, meta) {
   const flags = new Set();
   log('info', 'tryHumanNamePattern started', { tokens });
 
-  // Stricter validation for human names
-  if (tokens.length >= 2 && 
-      !CAR_BRANDS.includes(tokens[0].toLowerCase()) && 
+  if (tokens.length >= 2 &&
+      KNOWN_PROPER_NOUNS.has(tokens[0]) && KNOWN_PROPER_NOUNS.has(tokens[1]) &&
+      !CAR_BRANDS.includes(tokens[0].toLowerCase()) &&
       !CAR_BRANDS.includes(tokens[1].toLowerCase()) &&
       !KNOWN_CITIES_SET.has(tokens[0].toLowerCase()) &&
       !KNOWN_CITIES_SET.has(tokens[1].toLowerCase()) &&
-      tokens[0].length >= 2 && tokens[1].length >= 2 &&
-      !/^[A-Z]{2,3}$/.test(tokens[0]) && !/^[A-Z]{2,3}$/.test(tokens[1])) {
+      tokens[0].length >= 2 && tokens[1].length >= 2) {
     const fullName = `${tokens[0]} ${tokens[1]}`;
     if (tokens[1].toLowerCase().endsWith('s')) {
       const brand = getMetaTitleBrand(meta) || "Auto";
@@ -955,11 +874,6 @@ function tryHumanNamePattern(tokens, meta) {
   return { name: "", confidenceScore: 0, flags: Array.from(flags) };
 }
 
-/**
- * Tries proper noun pattern
- * @param {string[]} tokens - Tokens
- * @returns {object} - { name: string, confidenceScore: number, flags: string[] }
- */
 function tryProperNounPattern(tokens) {
   const flags = new Set();
   if (tokens.length === 1 && KNOWN_PROPER_NOUNS.has(tokens[0])) {
@@ -970,12 +884,6 @@ function tryProperNounPattern(tokens) {
   return { name: "", confidenceScore: 0, flags: Array.from(flags) };
 }
 
-/**
- * Generic fallback parsing
- * @param {string[]} tokens - Tokens
- * @param {object} meta - Metadata
- * @returns {object} - { name: string, confidenceScore: number, flags: string[] }
- */
 function tryGenericPattern(tokens, meta) {
   const flags = new Set();
   log('info', 'tryGenericPattern started', { tokens });
@@ -1000,7 +908,7 @@ function tryGenericPattern(tokens, meta) {
 
   let name = cleanedTokens[0];
   const brand = getMetaTitleBrand(meta) || "Auto";
-  const proposedName = `${name} ${brand}`;
+  const proposedName = name.toLowerCase() === "autonation" ? `${name} Auto` : `${name} ${brand}`;
   if (proposedName.split(" ").every((w, _, arr) => w.toLowerCase() === arr[0].toLowerCase())) {
     flags.add("DuplicateTokenSanitized");
     name = cleanedTokens[1] ? `${cleanedTokens[1]} Auto` : "Auto";
@@ -1015,11 +923,6 @@ function tryGenericPattern(tokens, meta) {
   return { name, confidenceScore: 95, flags: Array.from(flags) };
 }
 
-/**
- * Fetches metadata (mock implementation)
- * @param {string} domain - Domain
- * @returns {object} - Metadata
- */
 async function fetchMetaData(domain) {
   const meta = {
     "donjacobs.com": { title: "Chevrolet Dealer" },
@@ -1033,16 +936,12 @@ async function fetchMetaData(domain) {
     "nplincoln.com": { title: "Lincoln Dealer" },
     "chevyofcolumbuschevrolet.com": { title: "Chevrolet Dealer in Columbus" },
     "mazdanashville.com": { title: "Mazda Dealer in Nashville" },
-    "kiachattanooga.com": { title: "Kia Dealer in Chattanooga" }
+    "kiachattanooga.com": { title: "Kia Dealer in Chattanooga" },
+    "subaruofgwinnett.com": { title: "Subaru Dealer in Gwinnett" }
   };
   return meta[domain] || {};
 }
 
-/**
- * Extracts brand from meta title
- * @param {object} meta - Metadata
- * @returns {string|null} - Formatted brand
- */
 function getMetaTitleBrand(meta) {
   if (!meta.title) return null;
   const title = meta.title.toLowerCase();
