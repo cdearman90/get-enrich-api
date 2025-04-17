@@ -476,7 +476,7 @@ export async function humanizeName(domain, originalDomain, useMeta = false) {
     }
 
     log('info', 'Trying brand city pattern', { domain });
-    result = tryBrandCityPattern(tokens, meta);
+    result = tryBrandCityPattern(tokens);
     if (result.name) {
       flags.add('BrandCityPattern');
       log('info', 'Brand city pattern matched', { domain, name: result.name });
