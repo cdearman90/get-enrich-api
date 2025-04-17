@@ -132,7 +132,7 @@ const NON_DEALERSHIP_KEYWORDS = [
 ];
 
 // eslint-disable-next-line no-unused-vars
-let KNOWN_CITIES_SET = new Set([
+const KNOWN_CITIES_SET = new Set([
   "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "hoover", "dothan", "auburn", "decatur", "madison",
   "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "alabaster", "opelika", "northport", "enterprise", "daphne",
   "homewood", "bessemer", "athens", "pelham", "fairhope", "anniston", "mountain brook", "troy", "trussville", "talladega",
@@ -388,7 +388,7 @@ let KNOWN_CITIES_SET = new Set([
 ]);
 
 // Known city short names
-const KNOWN_CITY_SHORT_NAMES = {
+const KNOWN_CITY_SHORT_NAMES = new Set([
   "las vegas": "Vegas",
   "los angeles": "LA",
   "new york": "NY",
@@ -519,7 +519,7 @@ const KNOWN_CITY_SHORT_NAMES = {
   "camino real": "Camino Real",
   "birmingham": "Birmingham",
   "cookeville": "Cookeville"
-};
+});
 
 // Updated abbreviation expansions
 const ABBREVIATION_EXPANSIONS = {
@@ -849,9 +849,27 @@ function extractBrandOfCityFromDomain(domain, flags = []) {
   let brand = null;
   let city = null;
 
-  for (const genericWord of GENERIC_WORDS) {
-    const regex = new RegExp(genericWord, 'i');
-    name = name.replace(regex, "").trim();
+  // Check for cities in KNOWN_CITIES_SET first
+  for (const cityName of KNOWN_CITIES_SET) {
+    const cityLower = cityName.toLowerCase();
+    if (domainLower.includes(cityLower)) {
+      city = cityName;
+      name = name.replace(cityLower, "").trim();
+      flags.push("CityMatched");
+      break;
+    }
+  }
+
+  // Fallback to KNOWN_CITY_SHORT_NAMES if no match
+  if (!city) {
+    for (const shortCity in KNOWN_CITY_SHORT_NAMES) {
+      if (domainLower.includes(shortCity)) {
+        city = KNOWN_CITY_SHORT_NAMES[shortCity];
+        name = name.replace(shortCity, "").trim();
+        flags.push("CityMatched");
+        break;
+      }
+    }
   }
 
   for (const carBrand of CAR_BRANDS) {
@@ -1417,6 +1435,7 @@ process.on("unhandledRejection", (reason, p) => {
 export {
   CAR_BRANDS,
   BRAND_MAPPING,
+  KNOWN_CITIES_SET,
   NON_DEALERSHIP_KEYWORDS,
   KNOWN_CITY_SHORT_NAMES,
   ABBREVIATION_EXPANSIONS,
