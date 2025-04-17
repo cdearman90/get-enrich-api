@@ -425,137 +425,167 @@ const KNOWN_CITIES_SET = new Set([
   "Tuttle Click", "Jimmy Britt", "O'Brien", "Terry"
 ]);
 
-async function humanizeName(domain, originalDomain, useMeta = false) {
-  log('info', 'humanizeName started', { domain, originalDomain, useMeta });
+export async function humanizeName(domain, originalDomain, useMeta = false) {
+  log("info", "humanizeName started", { domain, originalDomain, useMeta });
 
-  // Validate inputs
-  if (!domain || typeof domain !== 'string') {
-    log('error', 'Invalid domain input', { domain, originalDomain });
-    return { name: '', confidenceScore: 0, flags: ['InvalidDomainInput'], tokens: 0 };
+  if (!domain || typeof domain !== "string") {
+    log("error", "Invalid domain input", { domain, originalDomain });
+    return { name: "", confidenceScore: 0, flags: ["InvalidDomainInput"], tokens: 0 };
   }
-  if (!originalDomain || typeof originalDomain !== 'string') {
-    log('warn', 'Invalid originalDomain, using domain as fallback', { originalDomain, domain });
+  if (!originalDomain || typeof originalDomain !== "string") {
+    log("warn", "Invalid originalDomain, using domain as fallback", { originalDomain, domain });
     originalDomain = domain;
   }
 
   let meta = {};
+  let normalizedDomain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
+
   if (useMeta) {
     try {
-      log('info', 'Calling fetchMetaData', { domain });
+      log("info", "Calling fetchMetaData", { domain });
       meta = await fetchMetaData(domain);
-      log('info', 'fetchMetaData result', { domain, meta });
+      log("info", "fetchMetaData result", { domain, meta });
     } catch (e) {
-      log('error', 'fetchMetaData failed', { domain, error: e.message, stack: e.stack });
+      log("error", "fetchMetaData failed", { domain, error: e.message, stack: e.stack });
       meta = {};
     }
   }
 
   try {
-    log('info', 'Normalizing domain', { domain });
-    const normalizedDomain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, '');
-    log('info', 'Normalized domain', { domain: normalizedDomain });
+    log("info", "Normalizing domain", { domain });
+    log("info", "Normalized domain", { domain: normalizedDomain });
 
     if (BRAND_ONLY_DOMAINS.includes(`${normalizedDomain}.com`)) {
-      log('warn', 'Brand-only domain detected', { domain: normalizedDomain });
-      return { name: '', confidenceScore: 0, flags: ['BrandOnlyDomainSkipped'], tokens: 0 };
+      log("warn", "Brand-only domain detected", { domain: normalizedDomain });
+      return { name: "", confidenceScore: 0, flags: ["BrandOnlyDomainSkipped"], tokens: 0 };
     }
 
     if (TEST_CASE_OVERRIDES[originalDomain]) {
-      log('info', 'Test case override applied', { domain: originalDomain, override: TEST_CASE_OVERRIDES[originalDomain] });
-      return { name: TEST_CASE_OVERRIDES[originalDomain], confidenceScore: 125, flags: ['TestCaseOverride'], tokens: 0 };
+      log("info", "Test case override applied", {
+        domain: originalDomain,
+        override: TEST_CASE_OVERRIDES[originalDomain]
+      });
+      return {
+        name: TEST_CASE_OVERRIDES[originalDomain],
+        confidenceScore: 125,
+        flags: ["TestCaseOverride"],
+        tokens: 0
+      };
     }
 
     if (OVERRIDES[normalizedDomain]) {
-      log('info', 'General override applied', { domain: normalizedDomain, override: OVERRIDES[normalizedDomain] });
-      return { name: OVERRIDES[normalizedDomain], confidenceScore: 125, flags: ['OverrideApplied'], tokens: 0 };
+      log("info", "General override applied", {
+        domain: normalizedDomain,
+        override: OVERRIDES[normalizedDomain]
+      });
+      return {
+        name: OVERRIDES[normalizedDomain],
+        confidenceScore: 125,
+        flags: ["OverrideApplied"],
+        tokens: 0
+      };
     }
 
-    log('info', 'Extracting tokens', { domain: normalizedDomain });
+    log("info", "Extracting tokens", { domain: normalizedDomain });
     let tokens;
     try {
       tokens = extractTokens(normalizedDomain);
     } catch (e) {
-      log('error', 'extractTokens failed', { domain: normalizedDomain, error: e.message, stack: e.stack });
-      return { name: '', confidenceScore: 0, flags: ['ExtractTokensError'], tokens: 0 };
+      log("error", "extractTokens failed", { domain: normalizedDomain, error: e.message, stack: e.stack });
+      return { name: "", confidenceScore: 0, flags: ["ExtractTokensError"], tokens: 0 };
     }
-    log('info', 'Tokens extracted', { domain: normalizedDomain, tokens });
 
+    log("info", "Tokens extracted", { domain: normalizedDomain, tokens });
     if (!tokens || tokens.length === 0) {
-      log('warn', 'No tokens extracted', { domain: normalizedDomain });
-      return { name: '', confidenceScore: 0, flags: ['NoTokensExtracted'], tokens: 0 };
+      log("warn", "No tokens extracted", { domain: normalizedDomain });
+      return { name: "", confidenceScore: 0, flags: ["NoTokensExtracted"], tokens: 0 };
     }
 
     const flags = new Set();
-
-    // Prioritize generic pattern for abbreviations
-    log('info', 'Trying generic pattern', { domain: normalizedDomain });
     let result;
+
+    // Check Abbreviation Generic Pattern
+    log("info", "Trying generic pattern", { domain: normalizedDomain });
     try {
       result = tryGenericPattern(tokens, meta);
     } catch (e) {
-      log('error', 'tryGenericPattern failed', { domain: normalizedDomain, error: e.message, stack: e.stack });
-      return { name: '', confidenceScore: 0, flags: ['GenericPatternError'], tokens: 0 };
+      log("error", "tryGenericPattern failed", { domain: normalizedDomain, error: e.message, stack: e.stack });
+      return { name: "", confidenceScore: 0, flags: ["GenericPatternError"], tokens: 0 };
     }
-    if (result.name && result.flags.includes('AbbreviationDetected')) {
-      flags.add('GenericPattern');
-      log('info', 'Abbreviation pattern matched', { domain: normalizedDomain, name: result.name });
+
+    if (result.name && result.flags.includes("AbbreviationDetected")) {
+      flags.add("GenericPattern");
+      log("info", "Abbreviation pattern matched", { domain: normalizedDomain, name: result.name });
       return { ...result, flags: Array.from(new Set([...flags, ...result.flags])), tokens: 0 };
     }
 
-    log('info', 'Trying brand city pattern', { domain: normalizedDomain });
+    // Check Brand + City pattern
+    log("info", "Trying brand city pattern", { domain: normalizedDomain });
     try {
       result = tryBrandCityPattern(tokens);
     } catch (e) {
-      log('error', 'tryBrandCityPattern failed', { domain: normalizedDomain, error: e.message, stack: e.stack });
-      return { name: '', confidenceScore: 0, flags: ['BrandCityPatternError'], tokens: 0 };
+      log("error", "tryBrandCityPattern failed", { domain: normalizedDomain, error: e.message, stack: e.stack });
+      return { name: "", confidenceScore: 0, flags: ["BrandCityPatternError"], tokens: 0 };
     }
+
     if (result.name) {
-      flags.add('BrandCityPattern');
-      log('info', 'Brand city pattern matched', { domain: normalizedDomain, name: result.name });
+      flags.add("BrandCityPattern");
+      log("info", "Brand city pattern matched", { domain: normalizedDomain, name: result.name });
       return { ...result, flags: Array.from(new Set([...flags, ...result.flags])), tokens: 0 };
     }
 
-    log('info', 'Trying human name pattern', { domain: normalizedDomain });
+    // Check Human Name pattern
+    log("info", "Trying human name pattern", { domain: normalizedDomain });
     try {
       result = tryHumanNamePattern(tokens, meta);
     } catch (e) {
-      log('error', 'tryHumanNamePattern failed', { domain: normalizedDomain, error: e.message, stack: e.stack });
-      return { name: '', confidenceScore: 0, flags: ['HumanNamePatternError'], tokens: 0 };
+      log("error", "tryHumanNamePattern failed", { domain: normalizedDomain, error: e.message, stack: e.stack });
+      return { name: "", confidenceScore: 0, flags: ["HumanNamePatternError"], tokens: 0 };
     }
+
     if (result.name) {
-      flags.add('HumanNameDetected');
-      log('info', 'Human name pattern matched', { domain: normalizedDomain, name: result.name });
+      flags.add("HumanNameDetected");
+      log("info", "Human name pattern matched", { domain: normalizedDomain, name: result.name });
       return { ...result, flags: Array.from(new Set([...flags, ...result.flags])), tokens: 0 };
     }
 
-    log('info', 'Trying proper noun pattern', { domain: normalizedDomain });
+    // Check Proper Noun
+    log("info", "Trying proper noun pattern", { domain: normalizedDomain });
     try {
       result = tryProperNounPattern(tokens);
     } catch (e) {
-      log('error', 'tryProperNounPattern failed', { domain: normalizedDomain, error: e.message, stack: e.stack });
-      return { name: '', confidenceScore: 0, flags: ['ProperNounPatternError'], tokens: 0 };
+      log("error", "tryProperNounPattern failed", { domain: normalizedDomain, error: e.message, stack: e.stack });
+      return { name: "", confidenceScore: 0, flags: ["ProperNounPatternError"], tokens: 0 };
     }
+
     if (result.name) {
-      flags.add('ProperNounDetected');
-      log('info', 'Proper noun pattern matched', { domain: normalizedDomain, name: result.name });
+      flags.add("ProperNounDetected");
+      log("info", "Proper noun pattern matched", { domain: normalizedDomain, name: result.name });
       return { ...result, flags: Array.from(new Set([...flags, ...result.flags])), tokens: 0 };
     }
 
-    log('info', 'Trying generic pattern fallback', { domain: normalizedDomain });
+    // Fallback Generic Pattern
+    log("info", "Trying generic pattern fallback", { domain: normalizedDomain });
     try {
       result = tryGenericPattern(tokens, meta);
     } catch (e) {
-      log('error', 'tryGenericPattern (fallback) failed', { domain: normalizedDomain, error: e.message, stack: e.stack });
-      return { name: '', confidenceScore: 0, flags: ['GenericPatternFallbackError'], tokens: 0 };
+      log("error", "tryGenericPattern (fallback) failed", { domain: normalizedDomain, error: e.message, stack: e.stack });
+      return { name: "", confidenceScore: 0, flags: ["GenericPatternFallbackError"], tokens: 0 };
     }
-    flags.add('GenericPattern');
-    log('info', 'Generic pattern applied', { domain: normalizedDomain, name: result.name });
+
+    flags.add("GenericPattern");
+    log("info", "Generic pattern applied", { domain: normalizedDomain, name: result.name });
     return { ...result, flags: Array.from(new Set([...flags, ...result.flags])), tokens: 0 };
   } catch (error) {
-    log('error', 'humanizeName error', { domain: normalizedDomain, error: error.message, stack: error.stack });
-    return { name: '', confidenceScore: 0, flags: ['HumanizeNameError'], tokens: 0 };
+    log("error", "humanizeName error", {
+      domain: normalizedDomain,
+      error: error.message,
+      stack: error.stack
+    });
+    return { name: "", confidenceScore: 0, flags: ["HumanizeNameError"], tokens: 0 };
   }
 }
+
 
 function extractTokens(domain) {
   log('info', 'extractTokens started', { domain });
