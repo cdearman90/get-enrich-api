@@ -1053,3 +1053,21 @@ function getMetaTitleBrand(meta) {
     return null;
   }
 }
+
+export {
+  humanizeName,
+  extractTokens,
+  earlyCompoundSplit,
+  splitCamelCase,
+  blobSplit,
+  capitalizeName,
+  expandInitials,
+  extractBrandOfCityFromDomain,
+  CAR_BRANDS,
+  BRAND_MAPPING,
+  COMMON_WORDS,
+  TEST_CASE_OVERRIDES,
+  BRAND_ONLY_DOMAINS,
+  KNOWN_PROPER_NOUNS,
+  KNOWN_CITIES_SET
+};
