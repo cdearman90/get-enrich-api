@@ -53,23 +53,46 @@ const openAICache = new Map();
  * @returns {object} - { companyName: string, confidenceScore: number, flags: string[], tokens: number }
  */
 export async function fallbackName(domain, meta = {}) {
+  const flags = new Set();
+  let tokens = 0;
+
   // Try humanize.js first
   const initialResult = await humanizeName(domain, domain, true);
+  flags.add(...initialResult.flags);
+
+  // Return early if humanizeName produced a high-confidence result
   if (initialResult.confidenceScore >= 95 && !initialResult.flags.includes("ManualReviewRecommended")) {
+    console.warn(`Using humanizeName result for ${domain}: ${initialResult.name}`);
     return {
       companyName: initialResult.name,
       confidenceScore: initialResult.confidenceScore,
-      flags: initialResult.flags,
+      flags: Array.from(flags),
       tokens: initialResult.tokens
     };
   }
 
   // Skip OpenAI for brand-only domains
-  if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
+  if (initialResult.flags.includes("BrandOnlyDomainSkipped") || BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
+    console.warn(`Skipping OpenAI for brand-only domain: ${domain}`);
+    flags.add("BrandOnlyDomainSkipped");
+    flags.add("FallbackSkipped");
     return {
       companyName: "",
       confidenceScore: 0,
-      flags: ["BrandOnlyDomainSkipped"],
+      flags: Array.from(flags),
+      tokens: 0
+    };
+  }
+
+  // Local fallback: use meta title brand
+  const metaBrand = getMetaTitleBrand(meta);
+  if (metaBrand) {
+    console.warn(`Local fallback used for ${domain}: ${metaBrand}`);
+    flags.add("LocalFallbackUsed");
+    return {
+      companyName: metaBrand,
+      confidenceScore: 80,
+      flags: Array.from(flags),
       tokens: 0
     };
   }
@@ -78,10 +101,12 @@ export async function fallbackName(domain, meta = {}) {
   const cacheKey = `${domain}:${meta.title || ''}`;
   if (openAICache.has(cacheKey)) {
     const cached = openAICache.get(cacheKey);
+    console.warn(`Cache hit for ${domain}: ${cached.companyName}`);
+    flags.add("OpenAICacheHit");
     return {
       companyName: cached.companyName,
       confidenceScore: cached.confidenceScore,
-      flags: [...cached.flags, "OpenAICacheHit"],
+      flags: Array.from(flags.add(...cached.flags)),
       tokens: 0
     };
   }
@@ -99,6 +124,7 @@ export async function fallbackName(domain, meta = {}) {
   `;
 
   try {
+    console.warn(`Calling OpenAI for ${domain}`);
     const response = await callOpenAI(prompt, {
       model: "gpt-4-turbo",
       max_tokens: 50,
@@ -107,7 +133,7 @@ export async function fallbackName(domain, meta = {}) {
     });
 
     let name = response.output.trim();
-    let tokens = response.tokens;
+    tokens = response.tokens;
 
     // Post-process
     name = name.replace(/['’]s\b/g, '');
@@ -120,27 +146,28 @@ export async function fallbackName(domain, meta = {}) {
       name = name.replace(new RegExp(brandsInName.slice(1).join('|'), 'gi'), '').replace(/\s+/g, ' ').trim();
       name = `${name} ${firstBrand}`.trim();
     } else if (brandsInName.length === 0 && !initialResult.flags.includes("HumanNameDetected")) {
-      const metaBrand = getMetaTitleBrand(meta) || "Auto";
-      name = `${name} ${metaBrand}`.trim();
+      const fallbackBrand = metaBrand || "Auto";
+      name = `${name} ${fallbackBrand}`.trim();
     }
 
     const result = {
       companyName: name,
       confidenceScore: 85,
-      flags: ["OpenAIFallback", "ManualReviewRecommended"],
+      flags: Array.from(flags.add("OpenAIFallback").add("ManualReviewRecommended")),
       tokens
     };
 
     // Cache result
     openAICache.set(cacheKey, result);
-
+    console.warn(`OpenAI result cached for ${domain}: ${name}`);
     return result;
   } catch (error) {
     console.error(`OpenAI fallback failed for ${domain}: ${error.message}`);
+    const fallbackName = initialResult.name || `${domain.split('.')[0]} Auto`;
     const result = {
-      companyName: initialResult.name || domain.split('.')[0] + " Auto",
-      confidenceScore: 85,
-      flags: ["OpenAIFallbackFailed", "ManualReviewRecommended"],
+      companyName: fallbackName,
+      confidenceScore: 80,
+      flags: Array.from(flags.add("OpenAIFallbackFailed").add("ManualReviewRecommended")),
       tokens: 0
     };
     openAICache.set(cacheKey, result);
