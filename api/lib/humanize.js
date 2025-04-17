@@ -695,7 +695,7 @@ export function extractBrandOfCityFromDomain(domain) {
   };
 }
 
-function tryBrandCityPattern(tokens, meta) {
+function tryBrandCityPattern(tokens) {
   const flags = new Set();
   log('info', 'tryBrandCityPattern started', { tokens });
 
