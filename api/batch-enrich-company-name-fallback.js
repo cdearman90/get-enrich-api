@@ -65,7 +65,7 @@ export async function fallbackName(domain, meta = {}) {
   }
 
   // Skip OpenAI for brand-only domains
-  if (initialResult.flags.includes("BrandOnlyDomainSkipped")) {
+  if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
     return {
       companyName: "",
       confidenceScore: 0,
@@ -169,4 +169,4 @@ function getMetaTitleBrand(meta) {
  */
 export function clearOpenAICache() {
   openAICache.clear();
-}*/
+}
