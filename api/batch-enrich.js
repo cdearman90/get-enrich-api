@@ -1,5 +1,5 @@
-// api/batch-enrich.js v4.2.31
-// Orchestrates lead enrichment with humanize.js and company-name-fallback.js
+// api/batch-enrich.js v4.2.32
+// Batch orchestration for domain enrichment
 
 import { humanizeName, extractBrandOfCityFromDomain, capitalizeName, expandInitials, earlyCompoundSplit } from './lib/humanize.js';
 import { clearOpenAICache } from './company-name-fallback.js';
