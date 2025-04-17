@@ -170,7 +170,7 @@ const KNOWN_PROPER_NOUNS = new Set([
 ]);
 
 // eslint-disable-next-line no-unused-vars
-const KNOWN_CITIES_SET = new Set([
+export const KNOWN_CITIES_SET = new Set([
   "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "hoover", "dothan", "auburn", "decatur", "madison",
   "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "alabaster", "opelika", "northport", "enterprise", "daphne",
   "homewood", "bessemer", "athens", "pelham", "fairhope", "anniston", "mountain brook", "troy", "trussville", "talladega",
