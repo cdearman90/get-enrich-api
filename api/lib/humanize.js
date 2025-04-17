@@ -616,7 +616,7 @@ export const TEST_CASE_OVERRIDES = {
   "steponeauto.com": "Step One Auto",
   "capital-honda.com": "Capital Honda",
   "tituswill.com": "Titus-Will",
-  "galeanasc.com": "Galeana"
+  "galeanasc.com": "Galeana",
   "mccarthyautogroup.com": "McCarthy Auto Group",
   "dyerauto.com": "Dyer Auto",
   "edwardsautogroup.com": "Edwards Auto Group",
