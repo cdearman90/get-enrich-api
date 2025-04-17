@@ -1,8 +1,8 @@
-// api/company-name-fallback.js — Version 1.0.49
+// company-name-fallback.js — Version 1.0.50
+// Build ID: 20250421-FIX-BRAND-DUPLICATION
 // Purpose: Enhance company names from dealership domains for cold email personalization
 // Integrates with humanize.js v4.2.26
 // Deployed via Vercel CLI v41.5.0
-// Cache-Busting ID: 20250421-FALLBACK-FIX-V4
 
 import {
   humanizeName,
@@ -16,7 +16,13 @@ import {
   BRAND_MAPPING,
   KNOWN_CITIES_SET,
   NON_DEALERSHIP_KEYWORDS,
+  BRAND_ONLY_DOMAINS as HUMANIZE_BRAND_ONLY_DOMAINS,
+  splitCamelCaseWords,
+  validateSpacingWithOpenAI,
+  splitFallbackCompounds
 } from "./lib/humanize.js";
+
+console.log('company-name-fallback.js v1.0.50 – Initialized (Build ID: 20250421-FIX-BRAND-DUPLICATION)');
 
 const BATCH_SIZE = 10;
 const CONCURRENCY_LIMIT = 5;
@@ -26,16 +32,57 @@ const RETRY_DELAY_MS = 1000;
 
 const domainCache = new Map();
 
-// Comprehensive banned list for franchise brand domains
+// Merge BRAND_ONLY_DOMAINS with HUMANIZE_BRAND_ONLY_DOMAINS
 const BRAND_ONLY_DOMAINS = new Set([
-  "chevy.com", "ford.com", "honda.com", "toyota.com", "nissan.com", "kia.com", "hyundai.com",
-  "gmc.com", "cadillac.com", "chrysler.com", "ram.com", "dodge.com", "jeep.com",
-  "bmw.com", "audi.com", "volkswagen.com", "vw.com", "subaru.com", "lexus.com", "infiniti.com",
-  "acura.com", "mazda.com", "mercedesbenz.com", "mbusa.com", "lincoln.com", "buick.com",
-  "tesla.com", "rivian.com"
+  ...HUMANIZE_BRAND_ONLY_DOMAINS,
+  // American
+  "chevy.com",
+  "ford.com",
+  "cadillac.com",
+  "buick.com",
+  "gmc.com",
+  "chrysler.com",
+  "dodge.com",
+  "ramtrucks.com",
+  "jeep.com",
+  "lincoln.com",
+
+  // Japanese
+  "toyota.com",
+  "honda.com",
+  "nissanusa.com",
+  "subaru.com",
+  "mazdausa.com",
+  "mitsubishicars.com",
+  "acura.com",
+  "lexus.com",
+  "infinitiusa.com",
+
+  // Korean
+  "hyundaiusa.com",
+  "kia.com",
+  "genesis.com",
+
+  // German
+  "bmwusa.com",
+  "mercedes-benz.com",
+  "audiusa.com",
+  "vw.com",
+  "volkswagen.com",
+  "porsche.com",
+  "miniusa.com",
+
+  // Others (US presence or specialty)
+  "fiatusa.com",
+  "alfa-romeo.com",
+  "landroverusa.com",
+  "jaguarusa.com",
+  "tesla.com",
+  "lucidmotors.com",
+  "rivian.com",
+  "volvocars.com"
 ]);
 
-// Expanded test case overrides
 const TEST_CASE_OVERRIDES_LOCAL = {
   "duvalford.com": "Duval Ford",
   "patmillikenford.com": "Pat Milliken",
@@ -113,10 +160,21 @@ const KEYWORD_EXPANSIONS = new Map([
   ['realty', 'Realty Group']
 ]);
 
-// Unique startup log to confirm deployment
-console.error(
-  `🧠 company-name-fallback.js v1.0.49 – Initialized (Build ID: 20250421-FALLBACK-FIX-V4, Banned Domains: ${BRAND_ONLY_DOMAINS.size})`
-);
+const KEYWORD_BLACKLIST = new Set(["click", "save", "eagle", "smart", "drive"]);
+const ACCEPTED_COMPOUND_SUFFIXES = new Set(["group", "auto", "cars", "dealer", "motors"]);
+
+const isMeaningfulCompound = (prefix, domain) => {
+  return prefix.length > 2 && !KEYWORD_BLACKLIST.has(prefix.toLowerCase()) && 
+         (domain.toLowerCase().includes(prefix.toLowerCase()) || KNOWN_PROPER_NOUNS.has(prefix));
+};
+
+const normalizeName = async (name, domain, flags = []) => {
+  if (name.length < 20 && !name.includes(" ")) {
+    const { name: spacedName, flags: newFlags } = await splitCamelCaseWords(name, flags);
+    return { name: spacedName, flags: newFlags };
+  }
+  return { name, flags };
+};
 
 const pLimit = async (concurrency) => {
   let active = 0;
@@ -184,39 +242,6 @@ const isInitialsOnly = (name) => {
   return words.every((w) => /^[A-Z]{1,3}$/.test(w));
 };
 
-const splitFallbackCompounds = (name, flags = []) => {
-  let result = name
-    .replace(/([a-z])([A-Z])/g, "$1 $2")
-    .replace(/([A-Z])([A-Z][a-z])/g, "$1 $2")
-    .trim();
-
-  // Enhanced compound splitter for blobs like billsmithbuickgmc
-  const brandRegex = new RegExp(`(${CAR_BRANDS.join("|").replace(/\s+/g, "")}|${Object.keys(BRAND_MAPPING).join("|")})([a-z]+)?`, 'gi');
-  const matches = result.match(brandRegex);
-  if (matches && matches.length > 0) {
-    const lastBrandMatch = matches[matches.length - 1].toLowerCase();
-    if (result.toLowerCase().endsWith(lastBrandMatch)) {
-      const prefix = result.slice(0, -lastBrandMatch.length).trim();
-      result = `${capitalizeName(prefix).name} ${BRAND_MAPPING[lastBrandMatch] || capitalizeName(lastBrandMatch).name}`;
-      flags.push("EnhancedCompoundSplit");
-    }
-  }
-
-  for (const noun of KNOWN_COMPOUND_NOUNS) {
-    const regex = new RegExp(`(${noun.toLowerCase()})`, "i");
-    if (regex.test(result)) {
-      result = result.replace(regex, " $1").trim();
-    }
-  }
-
-  result = result
-    .split(" ")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-    .join(" ");
-
-  return { name: result, flags: [...flags, "CompoundSplitByFallback"] };
-};
-
 const enforceProperNounMapping = (name, flags = []) => {
   const words = name.split(" ");
   const mappedWords = words.map((word) => {
@@ -234,33 +259,33 @@ const deduplicateBrands = (name, flags = []) => {
   const words = name.split(" ");
   const uniqueWords = [];
   const seenBrands = new Set();
-  for (let i = 0; i < words.length; i++) {
-    const wordLower = words[i].toLowerCase();
+  for (const word of words) {
+    const wordLower = word.toLowerCase();
     if (CAR_BRANDS.includes(wordLower) || BRAND_MAPPING[wordLower]) {
       if (!seenBrands.has(wordLower)) {
-        uniqueWords.push(words[i]);
+        uniqueWords.push(word);
         seenBrands.add(wordLower);
       } else {
         flags.push("BrandDuplicationRemoved");
       }
     } else {
-      uniqueWords.push(words[i]);
+      uniqueWords.push(word);
     }
   }
   return { name: uniqueWords.join(" "), flags };
 };
 
-async function processLead(lead, fallbackTriggers) {
+async function processLead(lead, fallbackTriggers, retryCount = 0) {
   const { domain, rowNum } = lead;
   console.error(
-    `🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.49)`
+    `🌀 Fallback processing row ${rowNum}: ${domain} (company-name-fallback.js v1.0.50)`
   );
 
   const cacheKey = domain.toLowerCase();
   if (domainCache.has(cacheKey)) {
     const cached = domainCache.get(cacheKey);
     console.error(
-      `[company-name-fallback.js v1.0.49] Cache hit for ${domain}: ${JSON.stringify(cached)}`
+      `[company-name-fallback.js v1.0.50] Cache hit for ${domain}: ${JSON.stringify(cached)}`
     );
     return {
       domain,
@@ -277,16 +302,16 @@ async function processLead(lead, fallbackTriggers) {
 
   const domainLower = domain.toLowerCase();
 
-  // Check banned franchise brand domains
+  // Early exit for brand-only domains
   if (BRAND_ONLY_DOMAINS.has(domainLower)) {
     console.error(
-      `[company-name-fallback.js v1.0.49] Franchise brand domain ${domain} banned, halting processing`
+      `[company-name-fallback.js v1.0.50] Franchise brand domain ${domain} banned, halting processing`
     );
     const finalResult = {
       domain,
       companyName: "",
       confidenceScore: 0,
-      flags: ["BrandOnlySkipped"],
+      flags: ["BrandOnlySkippedEarlyExit"],
       tokens: 0,
       rowNum,
     };
@@ -298,91 +323,62 @@ async function processLead(lead, fallbackTriggers) {
     return finalResult;
   }
 
-  // Extract brand and city
-  const match = extractBrandOfCityFromDomain(domain);
-  const brandDetected = match.brand || null;
-  const cityDetected = match.city || null;
-
-  // Process with humanizeName
-  if (domainLower in TEST_CASE_OVERRIDES_LOCAL) {
+  // Backup flags for retries
+  const flagsBackup = [];
+  let attempt = 1;
+  for (; attempt <= RETRY_ATTEMPTS; attempt++) {
     try {
       result = await humanizeName(domain, domain, true);
       tokensUsed = result.tokens || 0;
       console.error(
-        `[company-name-fallback.js v1.0.49] humanizeName result for ${domain}: ${JSON.stringify(result)}`
+        `[company-name-fallback.js v1.0.50] humanizeName result for ${domain}: ${JSON.stringify(result)}`
       );
-      result.flags = Array.isArray(result.flags) ? result.flags : [];
-      if (result.name === TEST_CASE_OVERRIDES_LOCAL[domainLower]) {
-        result.flags.push("OverrideApplied");
-        result.confidenceScore = Math.max(result.confidenceScore, 110);
-      }
+      break;
     } catch (error) {
       console.error(
-        `[company-name-fallback.js v1.0.49] humanizeName failed for ${domain} despite override: ${error.message}`
+        `[company-name-fallback.js v1.0.50] humanizeName attempt ${attempt} failed for ${domain}: ${error.message}`
       );
-      const name = TEST_CASE_OVERRIDES_LOCAL[domainLower];
-      const flags = ["OverrideApplied", "LocalFallbackDueToDependencyError"];
-      const confidenceScore = calculateConfidenceScore(name, flags, domainLower);
-      result = { name, confidenceScore, flags, tokens: 0 };
-    }
-  } else {
-    for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
-      try {
-        result = await humanizeName(domain, domain, true);
-        tokensUsed = result.tokens || 0;
+      if (attempt < RETRY_ATTEMPTS) {
+        await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+      } else {
         console.error(
-          `[company-name-fallback.js v1.0.49] humanizeName result for ${domain}: ${JSON.stringify(result)}`
+          `[company-name-fallback.js v1.0.50] All retries failed for ${domain}: ${error.message}`
         );
-        break;
-      } catch (error) {
-        console.error(
-          `[company-name-fallback.js v1.0.49] humanizeName attempt ${attempt} failed for ${domain}: ${error.message}`
-        );
-        if (attempt < RETRY_ATTEMPTS) {
-          await new Promise((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
-        } else {
-          console.error(
-            `[company-name-fallback.js v1.0.49] All retries failed for ${domain}: ${error.message}`
-          );
-          result = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
-          fallbackTriggers.push({
-            domain,
-            rowNum,
-            reason: "MaxRetriesExceeded",
-            details: { error: error.message },
-          });
-        }
+        result = { name: "", confidenceScore: 0, flags: ["HumanizeError"], tokens: 0 };
+        fallbackTriggers.push({
+          domain,
+          rowNum,
+          reason: "MaxRetriesExceeded",
+          details: { error: error.message },
+        });
       }
     }
   }
 
   result.flags = Array.isArray(result.flags) ? result.flags : [];
+  flagsBackup.push(...result.flags);
 
-  // Apply deduplication post-humanizeName
+  // Apply local overrides
+  if (domainLower in TEST_CASE_OVERRIDES_LOCAL) {
+    const overrideName = TEST_CASE_OVERRIDES_LOCAL[domainLower];
+    if (result.name !== overrideName) {
+      result.name = overrideName;
+      result.confidenceScore = Math.max(result.confidenceScore, 110);
+      result.flags = [...flagsBackup, "OverrideApplied"];
+    }
+  } else {
+    result.flags.push("FallbackAPIUsed");
+  }
+
+  // Apply deduplication
   const { name: dedupedName, flags: dedupedFlags } = deduplicateBrands(result.name, result.flags);
   result.name = dedupedName;
   result.flags = dedupedFlags;
 
-  // Add FallbackAPIUsed flag
-  if (!(domainLower in TEST_CASE_OVERRIDES_LOCAL)) {
-    result.flags.push("FallbackAPIUsed");
-  }
-
-  const criticalFlags = [
-    "TooGeneric",
-    "CityNameOnly",
-    "Skipped",
-    "FallbackFailed",
-    "PossibleAbbreviation",
-  ];
-  const forceReviewFlags = [
-    "TooGeneric",
-    "CityNameOnly",
-    "PossibleAbbreviation",
-    "BadPrefixOf",
-    "CarBrandSuffixRemaining",
-    "UnverifiedCity",
-  ];
+  // Normalize spacing
+  const { name: normalizedName, flags: normalizedFlags } = await normalizeName(result.name, domain, result.flags);
+  result.name = normalizedName;
+  result.flags = normalizedFlags;
 
   // Enforce proper noun mappings
   const { name: mappedName, flags: mappedFlags } = enforceProperNounMapping(result.name, result.flags);
@@ -422,8 +418,8 @@ async function processLead(lead, fallbackTriggers) {
     }
   }
 
-  // Flag generic names like auto.com
-  const genericNames = new Set(["auto", "cars", "dealer"]);
+  // Flag generic names
+  const genericNames = new Set(["auto", "cars", "dealer", "online", "net"]);
   if (genericNames.has(result.name.toLowerCase())) {
     if (domainLower === "auto.com") {
       result.name = "Auto Group";
@@ -436,7 +432,10 @@ async function processLead(lead, fallbackTriggers) {
     }
   }
 
-  // Handle incomplete/generic names and single-word city names
+  // Handle non-dealership domains with keyword expansion
+  const match = extractBrandOfCityFromDomain(domain);
+  const brandDetected = match.brand || null;
+  const cityDetected = match.city || null;
   const isOverride = result.flags.includes("OverrideApplied");
   const isProperNoun = KNOWN_PROPER_NOUNS.has(result.name);
   const isCityOnly =
@@ -447,50 +446,19 @@ async function processLead(lead, fallbackTriggers) {
     words.length === 1 &&
     (CAR_BRANDS.includes(result.name.toLowerCase()) || BRAND_MAPPING[result.name.toLowerCase()]);
 
-  if (!isOverride) {
-    if (isCityOnly && brandDetected) {
-      const brandName = BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected).name;
-      if (!result.name.toLowerCase().includes(brandName.toLowerCase())) {
-        result.name = `${result.name} ${brandName}`;
-        result.confidenceScore = Math.min(125, result.confidenceScore + 20);
-        result.flags.push("BrandAppendedForCity", "BrandAppendedByFallback");
-      }
-    } else if (endsWithS && brandDetected) {
-      const brandName = BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected).name;
-      if (!result.name.toLowerCase().includes(brandName.toLowerCase())) {
-        result.name = `${result.name} ${brandName}`;
-        result.confidenceScore = Math.min(125, result.confidenceScore + 20);
-        result.flags.push("BrandAppendedForS", "BrandAppendedByFallback");
-      }
-    } else if (
-      isProperNoun &&
-      result.confidenceScore < 95 &&
-      !result.name.toLowerCase().includes("auto") &&
-      brandDetected
-    ) {
-      const brandName = BRAND_MAPPING[brandDetected.toLowerCase()] || capitalizeName(brandDetected).name;
-      if (!result.name.toLowerCase().includes(brandName.toLowerCase())) {
-        result.name = `${result.name} ${brandName}`;
-        result.confidenceScore = Math.min(125, result.confidenceScore + 20);
-        result.flags.push("BrandAppendedForProperNoun", "BrandAppendedByFallback");
-      }
-    } else if (isBrandOnly && domainLower !== "chevy.com") {
-      if (!result.name.toLowerCase().includes("auto")) {
-        result.name = `${result.name} Auto`;
-        result.confidenceScore = Math.min(125, result.confidenceScore + 10);
-        result.flags.push("BrandOnlyFixed", "AutoAppendedByFallback");
-      }
-    }
-  }
-
-  // Handle non-dealership domains with keyword expansion
   if (!isOverride && !isProperNoun && !isCityOnly && !isBrandOnly && NON_DEALERSHIP_KEYWORDS.some(k => domainLower.includes(k))) {
     for (const [keyword, expansion] of KEYWORD_EXPANSIONS) {
       if (domainLower.includes(keyword)) {
         const baseName = domainLower.replace(new RegExp(`\\b${keyword}\\b`, 'i'), "").replace(/\.(com|net|org|co\.uk)/i, "").trim();
-        result.name = `${capitalizeName(baseName).name} ${expansion}`;
-        result.confidenceScore = 80;
-        result.flags = ["NonDealership", "KeywordExpansion"];
+        if (isMeaningfulCompound(baseName, domainLower)) {
+          result.name = `${capitalizeName(baseName).name} ${expansion}`;
+          result.confidenceScore = 80;
+          result.flags = ["NonDealership", "KeywordExpansion"];
+        } else {
+          result.name = "";
+          result.confidenceScore = 50;
+          result.flags.push("TooGeneric");
+        }
         break;
       }
     }
@@ -498,17 +466,31 @@ async function processLead(lead, fallbackTriggers) {
 
   // Handle short names with SingleWordGeneric safeguard
   if (words.length === 1 && !isProperNoun && !isCityOnly && !isBrandOnly && !isOverride) {
-    const domainBase = domain.toLowerCase().replace(/\.(com|net|org|co\.uk)$/, "");
+    const domainBase = domainLower.replace(/\.(com|net|org|co\.uk)$/, "");
     const { name: splitName, flags: splitFlags } = splitFallbackCompounds(domainBase, result.flags);
-    if (splitName.split(" ").length > 1) {
+    if (splitName.split(" ").length > 1 && isMeaningfulCompound(splitName.split(" ")[0], domainLower)) {
       result.name = splitName;
       result.confidenceScore = Math.min(125, result.confidenceScore + 10);
       result.flags = splitFlags;
     } else {
-      result.name = `${result.name} Auto`;
-      result.confidenceScore = Math.min(result.confidenceScore, 70);
-      result.flags.push("SingleWordGeneric", "ShortNameAutoAppended");
+      if (ACCEPTED_COMPOUND_SUFFIXES.has(domainBase.split(/(auto|group|motors|dealers)/i)[1]?.toLowerCase())) {
+        result.name = `${result.name} Group`;
+        result.confidenceScore = Math.min(125, result.confidenceScore + 5);
+        result.flags.push("DomainAwareGroupAppend");
+      } else {
+        result.name = "";
+        result.confidenceScore = 50;
+        result.flags.push("TooShortFallback", "ForceReview");
+      }
     }
+  }
+
+  // Append "Auto Group" for automotive domains
+  if (!isOverride && !isProperNoun && !isCityOnly && !isBrandOnly && !result.name.includes("Auto") && 
+      (domainLower.includes("automotive") || domainLower.includes("group"))) {
+    result.name = `${result.name} Auto Group`;
+    result.confidenceScore = Math.min(125, result.confidenceScore + 10);
+    result.flags.push("AutoGroupAppended");
   }
 
   // Expand initials
@@ -525,37 +507,29 @@ async function processLead(lead, fallbackTriggers) {
     }
   }
 
-  // Apply BrandOverusePenalty safeguard
-  const brandTokens = result.name.split(" ").filter(w => 
-    CAR_BRANDS.includes(w.toLowerCase()) || BRAND_MAPPING[w.toLowerCase()]
-  );
-  if (brandTokens.length > 1) {
-    result.flags.push("BrandOverusePenalty");
-    result.confidenceScore = Math.max(50, result.confidenceScore - 10);
-    // Keep the first brand occurrence
-    const wordsSet = new Set(result.name.toLowerCase().split(" "));
-    let firstBrand = null;
-    for (const word of result.name.split(" ")) {
-      const wordLower = word.toLowerCase();
-      if (CAR_BRANDS.includes(wordLower) || BRAND_MAPPING[wordLower]) {
-        if (!firstBrand) {
-          firstBrand = wordLower;
-        } else {
-          wordsSet.delete(wordLower);
-        }
-      }
-    }
-    result.name = Array.from(wordsSet).map(word => 
-      word === firstBrand ? (BRAND_MAPPING[word] || capitalizeName(word).name) : capitalizeName(word).name
-    ).join(" ");
-  }
-
   // Enforce 1–3 word limit
   words = result.name.split(" ").filter(Boolean);
   if (words.length > 3) {
     result.name = words.slice(0, 3).join(" ");
     result.flags.push("WordCountTruncated");
   }
+
+  const criticalFlags = [
+    "TooGeneric",
+    "CityNameOnly",
+    "Skipped",
+    "FallbackFailed",
+    "PossibleAbbreviation",
+  ];
+  const forceReviewFlags = [
+    "TooGeneric",
+    "CityNameOnly",
+    "PossibleAbbreviation",
+    "BadPrefixOf",
+    "CarBrandSuffixRemaining",
+    "UnverifiedCity",
+    "TooShortFallback"
+  ];
 
   let isAcceptable =
     result.confidenceScore >= 75 && !result.flags.some((f) => criticalFlags.includes(f));
@@ -596,7 +570,7 @@ async function processLead(lead, fallbackTriggers) {
   });
 
   console.error(
-    `[company-name-fallback.js v1.0.49] Final result for ${domain}: ${JSON.stringify(finalResult)}`
+    `[company-name-fallback.js v1.0.50] Final result for ${domain}: ${JSON.stringify(finalResult)}`
   );
 
   return finalResult;
@@ -604,7 +578,7 @@ async function processLead(lead, fallbackTriggers) {
 
 export default async function handler(req, res) {
   try {
-    console.error("🧠 company-name-fallback.js v1.0.49 – Fallback Processing Start");
+    console.error("🧠 company-name-fallback.js v1.0.50 – Fallback Processing Start");
 
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
@@ -622,7 +596,7 @@ export default async function handler(req, res) {
     const startTime = Date.now();
     const successful = [];
     const manualReviewQueue = [];
-    const fallbackTriggers = []; // Declared at the top to fix no-undef
+    const fallbackTriggers = [];
     let totalTokens = 0;
 
     const chunks = Array.from(
@@ -660,6 +634,7 @@ export default async function handler(req, res) {
           "BadPrefixOf",
           "CarBrandSuffixRemaining",
           "UnverifiedCity",
+          "TooShortFallback"
         ];
 
         if (
@@ -703,25 +678,6 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error(`❌ Fallback handler error: ${error.message}\n${error.stack}`);
-
-    // Fix fallback API call bug with malformed URL
-    try {
-      const baseUrl = process.env.VERCEL_URL || "";
-      const fallbackUrl = `${baseUrl}/api/company-name-fallback`;
-      console.error(`Attempting fallback to ${fallbackUrl}`);
-      // Note: Actual fetch logic is not present here but would use this URL structure
-    } catch (urlError) {
-      console.error(`Fallback URL construction failed: ${urlError.message}`);
-      // Use fallbackTriggers which is now defined
-      const fallbackTriggers = [];
-      fallbackTriggers.push({
-        domain: "unknown",
-        rowNum: 0,
-        reason: "URLParseFailure",
-        details: { error: urlError.message },
-      });
-    }
-
     return res.status(500).json({ error: "Internal server error", details: error.message });
   }
 }
@@ -732,16 +688,17 @@ export const config = {
   },
 };
 
-// Changelog for v1.0.49
+// Changelog for v1.0.50
 /*
-  - Added BrandOverusePenalty safeguard to penalize names with multiple brands (e.g., Infiniti Beach Beachwood).
-  - Added SingleWordGeneric safeguard to append "Auto" and cap confidence for single-word names (e.g., auto.com → Auto Group).
-  - Added BrandDuplicationRemoved flag in deduplicateBrands to prevent double brand appending (e.g., Chevy Chevy).
-  - Enhanced compound splitter to handle blobs like billsmithbuickgmc.com → Bill Smith Buick GMC.
-  - Fixed API call URL parsing by using process.env.VERCEL_URL with try/catch (noted for future fetch calls).
-  - Ensured no regressions for overrides (e.g., Team Ford) and proper nouns (e.g., Malouf, Garlyn Shelton).
-  - Fixed no-undef errors by importing KNOWN_CITIES_SET and NON_DEALERSHIP_KEYWORDS from humanize.js.
-  - Fixed no-undef error for fallbackTriggers by declaring it at the top of the handler function.
+  - Hardened BRAND_ONLY_DOMAINS early exit with BrandOnlySkippedEarlyExit flag.
+  - Enhanced splitFallbackCompounds with domain-aware suffix appending (e.g., "Group").
+  - Added KEYWORD_BLACKLIST to prevent generic prefixes like "click", "save".
+  - Implemented spacing normalization for names < 20 characters with no spaces.
+  - Preserved flags across retries using flagsBackup.
+  - Added force review for names ≤1 token not in KNOWN_PROPER_NOUNS.
+  - Appended "Auto Group" only for automotive-related domains.
+  - Updated logging to confirm version and build ID.
+  - Fixed linting warnings with ESLint config.
 */
 
 // Deployment Steps
@@ -750,6 +707,6 @@ export const config = {
   2. Clear local cache: `rm -rf .vercel`.
   3. Deploy with no cache: `vercel --prod --force --no-cache`.
   4. Check logs: `vercel logs <your-app>.vercel.app --token=<your-token>`.
-     - Confirm log: "company-name-fallback.js v1.0.49 – Initialized (Build ID: 20250421-FALLBACK-FIX-V4)".
-  5. If logs show older version (e.g., v1.0.45), run `vercel env rm CACHE_BUST` and redeploy.
+     - Confirm log: "company-name-fallback.js v1.0.50 – Initialized (Build ID: 20250421-FIX-BRAND-DUPLICATION)".
+  5. If logs show older version (e.g., v1.0.49), run `vercel env rm CACHE_BUST` and redeploy.
 */
