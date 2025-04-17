@@ -129,7 +129,6 @@ const NON_DEALERSHIP_KEYWORDS = [
 
 // eslint-disable-next-line no-unused-vars
 let KNOWN_CITIES_SET = new Set([
-   // Your original list (2,450 cities, duplicates like "tuscaloosa" removed)
   "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "hoover", "dothan", "auburn", "decatur", "madison",
   "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "alabaster", "opelika", "northport", "enterprise", "daphne",
   "homewood", "bessemer", "athens", "pelham", "fairhope", "anniston", "mountain brook", "troy", "trussville", "talladega",
@@ -380,10 +379,8 @@ let KNOWN_CITIES_SET = new Set([
   "thermopolis", "glenrock", "lovell", "mountain view", "lyman", "afton", "pinedale", "kemmerer", "greybull", "wright",
   "sundance", "lusk", "star valley ranch", "pine bluffs", "guernsey", "saratoga", "basin", "mills", "bar nunn", "upton",
   "moorcroft", "dubois", "alpine", "hanna", "diamondville", "shoshoni", "encampment", "baggs", "cokeville", "la barge",
-  // Non-duplicate cities added
   "folsom", "estero", "sutherlin", "highland park", "woodland hills", "freehold", "carver", "beachwood", "livermore", "waconia", "southtowne", "cedarpark", "westgate", "South Charlotte"
 ]);
-
 
 const KNOWN_CITY_SHORT_NAMES = {
   "las vegas": "Vegas",
@@ -443,7 +440,7 @@ const KNOWN_CITY_SHORT_NAMES = {
   "white plains": "White Plains",
   "west covina": "West Covina",
   "west hollywood": "West Hollywood",
-  "east haven": "East Haven",
+    "east haven": "East Haven",
   "east orange": "East Orange",
   "north bergen": "North Bergen",
   "north ridgeville": "North Ridgeville",
@@ -616,52 +613,10 @@ const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "motors", "dealers", "dea
 const GENERIC_WORDS = new Set(["the", "of", "to", "inc", "corp", "llc", "cars", "shop", "auto", "group", "dealership"]);
 
 const BRAND_ONLY_DOMAINS = new Set([
-  // American
-  "chevy.com",
-  "ford.com",
-  "cadillac.com",
-  "buick.com",
-  "gmc.com",
-  "chrysler.com",
-  "dodge.com",
-  "ramtrucks.com",
-  "jeep.com",
-  "lincoln.com",
-
-  // Japanese
-  "toyota.com",
-  "honda.com",
-  "nissanusa.com",
-  "subaru.com",
-  "mazdausa.com",
-  "mitsubishicars.com",
-  "acura.com",
-  "lexus.com",
-  "infinitiusa.com",
-
-  // Korean
-  "hyundaiusa.com",
-  "kia.com",
-  "genesis.com",
-
-  // German
-  "bmwusa.com",
-  "mercedes-benz.com",
-  "audiusa.com",
-  "vw.com",
-  "volkswagen.com",
-  "porsche.com",
-  "miniusa.com",
-
-  // Others (US presence or specialty)
-  "fiatusa.com",
-  "alfa-romeo.com",
-  "landroverusa.com",
-  "jaguarusa.com",
-  "tesla.com",
-  "lucidmotors.com",
-  "rivian.com",
-  "volvocars.com"
+  "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com", "dodge.com", "ramtrucks.com", "jeep.com", "lincoln.com",
+  "toyota.com", "honda.com", "nissanusa.com", "subaru.com", "mazdausa.com", "mitsubishicars.com", "acura.com", "lexus.com", "infinitiusa.com",
+  "hyundaiusa.com", "kia.com", "genesis.com", "bmwusa.com", "mercedes-benz.com", "audiusa.com", "vw.com", "volkswagen.com", "porsche.com", "miniusa.com",
+  "fiatusa.com", "alfa-romeo.com", "landroverusa.com", "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
 ]);
 
 const KNOWN_COMPOUND_NOUNS = [
@@ -729,7 +684,10 @@ function stripGenericWords(name, domain, flags = []) {
 
 function capitalizeName(words, flags = []) {
   if (!words) return { name: "", flags };
-  if (typeof words === "string") words = words.split(/\s+/);
+  if (typeof words === "string") {
+    words = words.match(/[a-z]+/gi) || [];
+  }
+  if (!Array.isArray(words)) return { name: "", flags };
   const result = words.map((word, i) => {
     if (!word) return word;
     if (word.includes("-") && !KNOWN_PROPER_NOUNS.has(word)) {
@@ -1150,6 +1108,43 @@ function splitFallbackCompounds(input, flags = []) {
         break;
       }
     }
+  }
+  // Check for car brands at the end
+  const words = result.split(" ");
+  if (words.length > 1) {
+    const lastWord = words[words.length - 1].toLowerCase();
+    if (CAR_BRANDS.includes(lastWord)) {
+      result = `${words.slice(0, -1).join(" ")} ${BRAND_MAPPING[lastWord] || capitalizeName(lastWord, flags).name}`;
+      flags.push("BrandSuffixSplit");
+    }
+  }
+  // Check for city names at the start
+  if (words.length > 1) {
+    const firstWord = words[0].toLowerCase();
+    if (KNOWN_CITIES_SET.has(firstWord)) {
+      result = `${applyCityShortName(firstWord, flags).name} ${words.slice(1).join(" ")}`;
+      flags.push("CityPrefixSplit");
+    }
+  }
+  // Check for CamelCase
+  if (result.match(/([a-z])([A-Z])/)) {
+    result = result.replace(/([a-z])([A-Z])/g, "$1 $2").trim();
+    flags.push("CamelCaseSplit");
+  }
+  // Check for known compound blobs
+  const lowerResult = result.toLowerCase().replace(/\s+/g, "");
+  for (const compound of KNOWN_COMPOUND_NOUNS) {
+    const compoundLower = compound.toLowerCase().replace(/\s+/g, "");
+    if (lowerResult.includes(compoundLower)) {
+      result = result.replace(new RegExp(compoundLower, 'i'), compound);
+      flags.push("KnownCompoundSplit");
+      break;
+    }
+  }
+  if (result.split(" ").length > 1 && !flags.includes("KnownCompoundSplit") && !flags.includes("CamelCaseSplit")) {
+    flags.push("FallbackBlobSplit");
+    const confidenceBoost = calculateConfidenceScore(result, flags, input.toLowerCase()) + 10;
+    if (confidenceBoost > 90) flags.push("HighConfidenceSplit");
   }
   return { name: result, flags };
 }
