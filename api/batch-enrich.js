@@ -1,4 +1,4 @@
-// api/batch-enrich.js v4.2.41
+// api/batch-enrich.js v4.2.44
 // Batch orchestration for domain enrichment
 
 import {
@@ -13,17 +13,6 @@ import winston from "winston";
 import path from "path";
 import fs from "fs";
 
-// Ensure logs directory exists
-const logDir = path.join(process.cwd(), "logs");
-try {
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
-    console.log("Created logs directory", logDir);
-  }
-} catch (err) {
-  console.error("Failed to create logs directory", err);
-}
-
 // Initialize Winston logger
 const logger = winston.createLogger({
   level: "debug",
@@ -33,7 +22,7 @@ const logger = winston.createLogger({
   ),
   transports: [
     new winston.transports.File({
-      filename: path.join(logDir, "enrich.log"),
+      filename: path.join("logs", "enrich.log"),
       maxsize: 5242880,
       maxFiles: 5
     }),
@@ -41,8 +30,19 @@ const logger = winston.createLogger({
   ]
 });
 
+// Ensure logs directory exists
+const logDir = path.join(process.cwd(), "logs");
+try {
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+    logger.info("Created logs directory", { logDir });
+  }
+} catch (err) {
+  logger.error("Failed to create logs directory", { error: err.message, stack: err.stack });
+}
+
 // Log server startup
-logger.info("Module loading started", { version: "4.2.41" });
+logger.info("Module loading started", { version: "4.2.44" });
 
 // Verify dependencies
 const dependencies = {
@@ -355,14 +355,19 @@ export default async function handler(req, res) {
             tokensUsed += fallback.tokens;
             logger.debug("Fallback API result", { domain, result: finalResult });
 
-            if (humanizeError) {
+            // Populate fallbackTriggers
+            if (humanizeError || finalResult.flags.includes("FallbackAPIUsed")) {
               fallbackTriggers.push({
                 domain,
                 rowNum,
-                reason: "HumanizeFailed",
+                reason: humanizeError ? "HumanizeFailed" : "LowConfidence",
                 details: {
-                  error: humanizeError.message,
-                  primary: { companyName: "", confidenceScore: 0, flags: [] },
+                  error: humanizeError ? humanizeError.message : null,
+                  primary: {
+                    companyName: initialResult?.companyName || "",
+                    confidenceScore: initialResult?.confidenceScore || 0,
+                    flags: initialResult?.flags || []
+                  },
                   fallback: {
                     companyName: finalResult.companyName,
                     confidenceScore: finalResult.confidenceScore,
@@ -396,7 +401,7 @@ export default async function handler(req, res) {
             finalResult.flags = Array.from(new Set([...finalResult.flags, "InitialsExpandedLocally"]));
             finalResult.confidenceScore -= 5;
           }
-          logger.debug("Expanded initials result SOFTENED", { domain, result: finalResult });
+          logger.debug("Expanded initials result", { domain, result: finalResult });
         }
 
         domainCache.set(domainKey, {
