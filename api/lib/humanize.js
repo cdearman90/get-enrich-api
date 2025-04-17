@@ -966,6 +966,57 @@ function extractBrandOfCityFromDomain(domain) {
   }
 }
 
+function tryBrandCityPattern(tokens) {
+  const flags = new Set();
+  log("info", "tryBrandCityPattern started", { tokens });
+
+  try {
+    if (!Array.isArray(tokens)) {
+      log("error", "Invalid tokens in tryBrandCityPattern", { tokens });
+      throw new Error("Invalid tokens input");
+    }
+
+    const normalizedTokens = tokens.map(t => t.toLowerCase());
+    let brand = null;
+    let city = null;
+
+    // Check for brand-city or city-brand order
+    for (let i = 0; i < normalizedTokens.length; i++) {
+      const token = normalizedTokens[i];
+      if (CAR_BRANDS.includes(token) && !/^[A-Z]{2,3}$/.test(token)) {
+        brand = token;
+        city = normalizedTokens.find((t, j) => j !== i && KNOWN_CITIES_SET.has(t.toLowerCase()));
+        if (city && brand.toLowerCase() !== city.toLowerCase()) {
+          break;
+        }
+        city = null;
+      } else if (KNOWN_CITIES_SET.has(token)) {
+        city = token;
+        brand = normalizedTokens.find((t, j) => j !== i && CAR_BRANDS.includes(t.toLowerCase()));
+        if (brand && brand.toLowerCase() !== city.toLowerCase()) {
+          break;
+        }
+        brand = null;
+      }
+    }
+
+    if (brand && city) {
+      const formattedBrand = BRAND_MAPPING[brand] || capitalizeName(brand).name;
+      const formattedCity = capitalizeName(city).name;
+      const output = `${formattedCity} ${formattedBrand}`; // Always City Brand
+      flags.add("BrandCityPattern");
+      log("info", "BrandCity pattern matched", { tokens, output });
+      return { companyName: output, confidenceScore: 125, flags: Array.from(flags) };
+    }
+
+    log("debug", "No BrandCity pattern matched", { tokens });
+    return { companyName: "", confidenceScore: 0, flags: Array.from(flags) };
+  } catch (e) {
+    log("error", "tryBrandCityPattern failed", { tokens, error: e.message, stack: e.stack });
+    return { companyName: "", confidenceScore: 80, flags: Array.from(new Set(["BrandCityPatternError", "ManualReviewRecommended"])) };
+  }
+}
+
 function tryProperNounPattern(tokens) {
   const flags = new Set();
   log("info", "tryProperNounPattern started", { tokens });
