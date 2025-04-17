@@ -1,4 +1,4 @@
-// api/batch-enrich.js v4.2.46
+// api/batch-enrich.js v4.2.48
 // Batch orchestration for domain enrichment
 
 import {
@@ -42,7 +42,7 @@ try {
 }
 
 // Log server startup
-logger.info("Module loading started", { version: "4.2.46" });
+logger.info("Module loading started", { version: "4.2.48" });
 
 // Verify dependencies
 const dependencies = {
@@ -317,7 +317,7 @@ export default async function handler(req, res) {
           };
         } else {
           let humanizeError = null;
-          let initialResult = null; // Declare initialResult to store humanizeName output
+          let initialResult = null;
           for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
             try {
               logger.debug(`Attempt ${attempt} to humanize domain`, { domain });
@@ -343,7 +343,7 @@ export default async function handler(req, res) {
 
           if (finalResult.flags.includes("BrandOnlyDomainSkipped")) {
             logger.debug("Skipping fallback due to BrandOnlyDomainSkipped", { domain });
-          } else if (humanizeError || finalResult.confidenceScore < 95 || finalResult.flags.includes("ManualReviewRecommended")) {
+          } else if (humanizeError || finalResult.confidenceScore < 100 || finalResult.flags.includes("ManualReviewRecommended")) {
             logger.debug("Calling fallback API", { domain });
             const meta = metaTitle ? { title: metaTitle } : {};
             const fallback = await callFallbackAPI(domain, rowNum, meta);
