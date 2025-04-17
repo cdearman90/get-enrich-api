@@ -585,19 +585,19 @@ export async function humanizeName(domain, originalDomain, useMeta = false) {
 
     const flags = [];
 
-    console.warn(`Trying human name pattern for ${domain}`);
-    let result = tryHumanNamePattern(tokens, meta);
-    if (result.name) {
-      flags.push("HumanNameDetected");
-      console.warn(`Human name pattern matched for ${domain}: ${result.name}`);
-      return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
-    }
-
     console.warn(`Trying brand city pattern for ${domain}`);
-    result = tryBrandCityPattern(tokens, meta);
+    let result = tryBrandCityPattern(tokens, meta);
     if (result.name) {
       flags.push("BrandCityPattern");
       console.warn(`Brand city pattern matched for ${domain}: ${result.name}`);
+      return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
+    }
+
+    console.warn(`Trying human name pattern for ${domain}`);
+    result = tryHumanNamePattern(tokens, meta);
+    if (result.name) {
+      flags.push("HumanNameDetected");
+      console.warn(`Human name pattern matched for ${domain}: ${result.name}`);
       return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
     }
 
