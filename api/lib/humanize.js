@@ -114,7 +114,8 @@ const TEST_CASE_OVERRIDES = {
   "edwardsautogroup.com": "Edwards Auto Group",
   "hillsidehonda.com": "Hillside Honda",
   "smithtowntoyota.com": "Smithtown Toyota",
-  "thepremiercollection.com": "Premier Collection"
+  "thepremiercollection.com": "Premier Collection",
+  "fordtustin.com": "Tustin Ford"
 };
 
 const BRAND_ONLY_DOMAINS = [
