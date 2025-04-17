@@ -9,7 +9,7 @@ const domainCache = new Map();
 const openAICache = new Map();
 
 // Comprehensive list of car brands
-export const CAR_BRANDS = [
+const CAR_BRANDS = [
   "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
   "cadillac", "carmax", "cdj", "cdjrf", "cdjr", "chev", "chevvy", "chevrolet", "chrysler", "cjd", "daewoo",
   "dodge", "eagle", "ferrari", "fiat", "ford", "genesis", "gmc", "honda", "hummer", "hyundai", "inf", "infiniti",
@@ -21,7 +21,7 @@ export const CAR_BRANDS = [
 ];
 
 // Mapping for standardized brand names
-export const BRAND_MAPPING = {
+const BRAND_MAPPING = {
   "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
   "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
   "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevy",
@@ -40,7 +40,7 @@ export const BRAND_MAPPING = {
 };
 
 // Known proper nouns for validation
-export const KNOWN_PROPER_NOUNS = new Set([
+const KNOWN_PROPER_NOUNS = new Set([
   "128", "Abbots", "Albany", "All American", "Anderson", "Art Moehn", "Avis",
   "Bear Mountain", "Bentley", "Berlin City", "Bill", "Bill Dube", "Bob Johnson", "Bob Walk Auto",
   "Boch Toyota South", "Brown", "Cadillac", "Caldwel", "Camino Real", "Capitol City", "Carl Black",
@@ -123,7 +123,7 @@ export const KNOWN_PROPER_NOUNS = new Set([
 ]);
 
 // Non-dealership keywords
-export const NON_DEALERSHIP_KEYWORDS = [
+const NON_DEALERSHIP_KEYWORDS = [
   "realty", "insurance", "leasing", "rental", "offroad", "powersports", "rent", "lease",
   "broker", "brokering", "consult", "consulting", "equipment", "tow", "towing", "tint", "tinting", "glass",
   "machinery", "car wash", "wash", "detail", "detailing", "collision", "transmission", "insurance", "loan",
@@ -388,7 +388,7 @@ let KNOWN_CITIES_SET = new Set([
 ]);
 
 // Known city short names
-export const KNOWN_CITY_SHORT_NAMES = {
+const KNOWN_CITY_SHORT_NAMES = {
   "las vegas": "Vegas",
   "los angeles": "LA",
   "new york": "NY",
@@ -522,7 +522,7 @@ export const KNOWN_CITY_SHORT_NAMES = {
 };
 
 // Updated abbreviation expansions
-export const ABBREVIATION_EXPANSIONS = {
+const ABBREVIATION_EXPANSIONS = {
   lv: "Vegas",
   ba: "BA Auto",
   mb: "Mercedes",
@@ -547,7 +547,7 @@ export const ABBREVIATION_EXPANSIONS = {
 };
 
 // Test case overrides
-export const TEST_CASE_OVERRIDES = {
+const TEST_CASE_OVERRIDES = {
   "duvalford.com": "Duval Ford",
   "patmillikenford.com": "Pat Milliken",
   "athensford.com": "Athens Ford",
@@ -626,11 +626,11 @@ export const TEST_CASE_OVERRIDES = {
 };
 
 // Generic suffixes and words
-export const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
-export const GENERIC_WORDS = new Set(["the", "of", "to", "inc", "corp", "llc", "cars", "shop", "auto", "group", "dealership"]);
+const GENERIC_SUFFIXES = new Set(["auto", "autogroup", "motors", "dealers", "dealership", "group", "inc", "mall", "collection"]);
+const GENERIC_WORDS = new Set(["the", "of", "to", "inc", "corp", "llc", "cars", "shop", "auto", "group", "dealership"]);
 
 // Brand-only domains for early exit
-export const BRAND_ONLY_DOMAINS = new Set([
+const BRAND_ONLY_DOMAINS = new Set([
   // American
   "chevy.com",
   "ford.com",
@@ -680,7 +680,7 @@ export const BRAND_ONLY_DOMAINS = new Set([
 ]);
 
 // Known compound nouns
-export const KNOWN_COMPOUND_NOUNS = [
+const KNOWN_COMPOUND_NOUNS = [
   "Auto", "AutoGroup", "Motors", "Dealers", "Dealership", "Group", "Motor",
   "Superior", "Trucks", "Powersports", "Realty", "Team", "Collection", "Ford", "Chevy",
   "Toyota", "Honda", "Hyundai", "Kia", "BMW", "Infiniti", "Nissan", "Lincoln", "Chrysler",
@@ -688,7 +688,7 @@ export const KNOWN_COMPOUND_NOUNS = [
 ];
 
 // Known bad compounds
-export const KNOWN_BAD_COMPOUNDS_SET = new Set([
+const KNOWN_BAD_COMPOUNDS_SET = new Set([
   "teamford", "sanleandroford", "jackpowell", "unionpark", "donhindsford",
   "carlblack", "fletcherauto", "mccarthyautogroup", "dyerauto", "andersonautogroup",
   "racewayford", "jimmybrittchevrolet", "starlingchevy", "daytonandrews", "vanderhydeford",
@@ -708,14 +708,14 @@ export const KNOWN_BAD_COMPOUNDS_SET = new Set([
 ]);
 
 // Proper noun prefixes and patterns
-export const PROPER_NOUN_PREFIXES = new Set([
+const PROPER_NOUN_PREFIXES = new Set([
   "o'brien", "mccarthy", "mcclarty", "o'connor", "o'neil", "o'reilly",
   "macdonald", "mcdonald", "mcgregor", "mcguire", "mckinney", "mclaren",
   "mc", "mac", "o"
 ]);
 
-export const FIRST_LAST_NAME_PATTERN = /^[A-Z][a-z]+ [A-Z][a-z]+$/;
-export const PROPER_NOUN_PATTERN = /(o'|mc|mac)\s+[a-z]+/i;
+const FIRST_LAST_NAME_PATTERN = /^[A-Z][a-z]+ [A-Z][a-z]+$/;
+const PROPER_NOUN_PATTERN = /(o'|mc|mac)\s+[a-z]+/i;
 
 console.error('humanize.js v4.2.27 – Initialized (Build ID: 20250422-FIX-ABBREVIATION-EXPANSION)');
 
@@ -726,7 +726,7 @@ console.error('humanize.js v4.2.27 – Initialized (Build ID: 20250422-FIX-ABBRE
  * @param {string} name - Input name
  * @returns {boolean} - True if contains a car brand
  */
-export function containsCarBrand(name) {
+function containsCarBrand(name) {
   if (!name || typeof name !== "string") return false;
   const normalized = name.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
   return CAR_BRANDS.some(brand => normalized.includes(brand));
@@ -766,7 +766,7 @@ function stripGenericWords(name, domain, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function capitalizeName(words, flags = []) {
+function capitalizeName(words, flags = []) {
   if (!words) return { name: "", flags };
   if (typeof words === "string") {
     words = words.match(/[a-z]+/gi) || [];
@@ -793,7 +793,7 @@ export function capitalizeName(words, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function applyCityShortName(city, flags = []) {
+function applyCityShortName(city, flags = []) {
   if (!city || typeof city !== "string") return { name: "", flags };
   const cityLower = city.toLowerCase();
   if (KNOWN_CITY_SHORT_NAMES[cityLower]) {
@@ -811,7 +811,7 @@ export function applyCityShortName(city, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function expandInitials(name, domain, brand, city, flags = []) {
+function expandInitials(name, domain, brand, city, flags = []) {
   if (!name || typeof name !== "string" || name.split(" ").length > 2) return { name, flags };
   let expanded = [];
   const words = name.split(" ");
@@ -842,7 +842,7 @@ export function expandInitials(name, domain, brand, city, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, brand: string|null, city: string|null, flags: string[] }
  */
-export function extractBrandOfCityFromDomain(domain, flags = []) {
+function extractBrandOfCityFromDomain(domain, flags = []) {
   if (!domain || typeof domain !== "string") return { name: "", brand: null, city: null, flags: ["InvalidInput"] };
   const domainLower = domain.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
   let name = domainLower;
@@ -901,7 +901,7 @@ export function extractBrandOfCityFromDomain(domain, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function splitCamelCaseWords(input, flags = []) {
+function splitCamelCaseWords(input, flags = []) {
   let result = preprocessProperNouns(input, flags).name;
   const lowerInput = result.toLowerCase();
   const suffixes = new Set(["motor", "group", "auto", "dealers", "dealership", "cars", "co"]);
@@ -925,7 +925,7 @@ export function splitCamelCaseWords(input, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function reorderBrandCity(name, flags = []) {
+function reorderBrandCity(name, flags = []) {
   if (!name || typeof name !== "string") return { name, flags };
   const words = name.split(" ");
   if (words.length < 2) return { name, flags };
@@ -946,7 +946,7 @@ export function reorderBrandCity(name, flags = []) {
  * @param {string} domainLower - Lowercase domain
  * @returns {number} - Confidence score
  */
-export function calculateConfidenceScore(name, flags, domainLower) {
+function calculateConfidenceScore(name, flags, domainLower) {
   let score = 50;
   const appliedBoosts = new Set();
   const generics = new Set([...GENERIC_WORDS, "auto", "motor", "west", "group"]);
@@ -1084,7 +1084,7 @@ export function calculateConfidenceScore(name, flags, domainLower) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function preprocessProperNouns(name, flags = []) {
+function preprocessProperNouns(name, flags = []) {
   if (!name || typeof name !== "string") return { name, flags };
   let processedName = name.replace(PROPER_NOUN_PATTERN, match => match.replace(/\s+/g, "").toLowerCase());
 
@@ -1122,7 +1122,7 @@ export function preprocessProperNouns(name, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function splitFallbackCompounds(input, flags = []) {
+function splitFallbackCompounds(input, flags = []) {
   if (!input || typeof input !== "string") return { name: input, flags };
   let result = input
     .replace(/([a-z])([A-Z])/g, "$1 $2")
@@ -1181,7 +1181,7 @@ export function splitFallbackCompounds(input, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {Promise<object>} - { name: string, flags: string[] }
  */
-export async function validateSpacingWithOpenAI(name, flags = []) {
+async function validateSpacingWithOpenAI(name, flags = []) {
   if (!name || typeof name !== "string") return { name, flags };
   if (openAICache.has(name)) return { name: openAICache.get(name), flags };
   const preprocessedName = preprocessProperNouns(name, flags).name;
@@ -1216,7 +1216,7 @@ export async function validateSpacingWithOpenAI(name, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function earlyCompoundSplit(input, flags = []) {
+function earlyCompoundSplit(input, flags = []) {
   if (!input || typeof input !== "string") return { name: input, flags };
   const domainLower = input.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
   if (CAR_BRANDS.includes(domainLower)) return { name: domainLower, flags };
@@ -1254,7 +1254,7 @@ export function earlyCompoundSplit(input, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function enforceThreeWordLimit(name, brand, city, flags = []) {
+function enforceThreeWordLimit(name, brand, city, flags = []) {
   if (!name || typeof name !== "string") return { name, flags };
   let words = name.split(" ");
   if (words.length <= 3) return { name, flags };
@@ -1275,7 +1275,7 @@ export function enforceThreeWordLimit(name, brand, city, flags = []) {
  * @param {string[]} flags - Flags array
  * @returns {object} - { name: string, flags: string[] }
  */
-export function handleNamesEndingInS(name, brand, city, flags = []) {
+function handleNamesEndingInS(name, brand, city, flags = []) {
   if (!name || typeof name !== "string") return { name, flags };
   const words = name.split(" ");
   const lastWord = words[words.length - 1];
@@ -1299,7 +1299,7 @@ export function handleNamesEndingInS(name, brand, city, flags = []) {
  * @param {boolean} skipCache - Whether to skip cache
  * @returns {Promise<object>} - { name: string, confidenceScore: number, flags: string[], tokens: number }
  */
-export async function humanizeName(inputName, domain, skipCache = false) {
+async function humanizeName(inputName, domain, skipCache = false) {
   try {
     if (!domain || typeof domain !== "string") {
       console.error(`Invalid domain: ${domain}`);
