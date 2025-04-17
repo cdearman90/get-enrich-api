@@ -167,6 +167,18 @@ function getMetaTitleBrand(meta) {
 /**
  * Clears OpenAI cache
  */
+// api/company-name-fallback.js
 export function clearOpenAICache() {
-  openAICache.clear();
+  console.warn("clearOpenAICache called (noop)");
+}
+
+export default async function handler(req, res) {
+  return res.status(200).json({
+    successful: [],
+    manualReviewQueue: [],
+    fallbackTriggers: [],
+    totalTokens: 0,
+    partial: false,
+    fromFallback: true
+  });
 }
