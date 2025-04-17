@@ -381,11 +381,11 @@ async function processLead(lead, fallbackTriggers) {
     try {
       const humanizeResult = await humanizeName(null, domain, true);
       if (!humanizeResult || typeof humanizeResult.name !== 'string') {
-        throw new Error('Invalid result from humanizeName');
+        throw new Error('Invalid result from humanizeName: ' + JSON.stringify(humanizeResult));
       }
-      result.name = humanizeResult.name;
-      result.confidenceScore = humanizeResult.confidenceScore;
-      result.flags = new Set(humanizeResult.flags);
+      result.name = humanizeResult.name || ''; // Ensure name is always a string
+      result.confidenceScore = humanizeResult.confidenceScore || 0;
+      result.flags = new Set(humanizeResult.flags || []);
       tokensUsed = humanizeResult.tokens || 0;
       console.error(
         `[company-name-fallback.js v1.0.51] humanizeName result for ${domain}: ${JSON.stringify(result)}`
@@ -451,7 +451,7 @@ async function processLead(lead, fallbackTriggers) {
   }
 
   // Split compound blobs
-  let words = result.name.split(" ");
+  let words = (result.name || "").split(" "); // Use fallback to empty string
   if (words.length === 1 && result.name.toLowerCase().includes("auto") && domainLower !== "auto.com") {
     const splitResult = splitFallbackCompounds(result.name);
     if (splitResult !== result.name) {
