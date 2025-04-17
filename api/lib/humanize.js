@@ -788,10 +788,32 @@ export function expandInitials(name) {
  * @returns {object} - { brand: string, city: string }
  */
 export function extractBrandOfCityFromDomain(domain) {
-  const tokens = extractTokens(domain);
-  const brand = tokens.find(t => CAR_BRANDS.map(b => b.toLowerCase()).includes(t.toLowerCase()));
-  const city = tokens.find(t => KNOWN_CITIES_SET.has(t));
-  return { brand: brand || null, city: city || null };
+  const flags = new Set();
+  console.warn(`extractBrandOfCityFromDomain for: ${domain}`);
+  
+  // Normalize and extract tokens
+  const cleanDomain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, '');
+  const tokens = extractTokens(cleanDomain);
+
+  // Check for "brandofcity" pattern (e.g., toyotaofchicago)
+  const brandOfCityMatch = cleanDomain.match(/(\w+)of(\w+)/i);
+  if (brandOfCityMatch) {
+    const [, brand, city] = brandOfCityMatch;
+    if (CAR_BRANDS.includes(brand.toLowerCase()) && KNOWN_CITIES_SET.has(city.toLowerCase())) {
+      const formattedBrand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name;
+      const formattedCity = capitalizeName(city).name;
+      flags.add("BrandOfCityPattern");
+      console.warn(`BrandOfCity matched: ${formattedCity} ${formattedBrand}`);
+      return { brand: formattedBrand, city: formattedCity, flags: Array.from(flags) };
+    }
+  }
+
+  // Fallback to token-based extraction
+  const brand = tokens.find(t => CAR_BRANDS.includes(t.toLowerCase()));
+  const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+  flags.add("TokenBasedExtraction");
+  console.warn(`Token-based extraction: brand=${brand || null}, city=${city || null}`);
+  return { brand: brand ? (BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name) : null, city: city ? capitalizeName(city).name : null, flags: Array.from(flags) };
 }
 
 /**
@@ -833,35 +855,48 @@ function tryHumanNamePattern(tokens, meta) {
  * @returns {object} - { name: string, confidenceScore: number, flags: string[] }
  */
 function tryBrandCityPattern(tokens, meta) {
-  const flags = [];
+  const flags = new Set(); // Use Set for flag deduplication
   console.warn(`tryBrandCityPattern tokens:`, tokens);
 
-  // Look for a brand and city pair
-  for (let i = 0; i < tokens.length; i++) {
-    const brand = tokens[i].toLowerCase();
-    if (CAR_BRANDS.map(b => b.toLowerCase()).includes(brand)) {
-      const city = tokens.find((t, j) => j !== i && KNOWN_CITIES_SET.has(t.toLowerCase()));
-      if (city) {
-        const formattedBrand = BRAND_MAPPING[brand] || capitalizeName(brand).name;
-        const formattedCity = capitalizeName(city).name;
-        flags.push("FormattingApplied");
-        console.warn(`BrandCity pattern matched: ${formattedCity} ${formattedBrand}`);
-        return { name: `${formattedCity} ${formattedBrand}`, confidenceScore: 125, flags };
-      }
+  // Normalize tokens
+  const normalizedTokens = tokens.map(t => t.toLowerCase());
+
+  // Find brand and city pair
+  let brand = null;
+  let city = null;
+  for (let i = 0; i < normalizedTokens.length; i++) {
+    if (CAR_BRANDS.includes(normalizedTokens[i])) {
+      brand = normalizedTokens[i];
+      // Look for city in remaining tokens
+      city = normalizedTokens.find((t, j) => j !== i && KNOWN_CITIES_SET.has(t.toLowerCase()));
+      if (city) break;
     }
   }
 
-  // Fallback: city-only with meta title brand
-  const cityToken = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
-  if (cityToken) {
-    const city = capitalizeName(cityToken).name;
-    const brand = getMetaTitleBrand(meta) || "Auto";
-    flags.push("CityOnlyEnhanced", "MetaTitleBrandAppended", "ManualReviewRecommended");
-    console.warn(`City-only pattern matched: ${city} ${brand}`);
-    return { name: `${city} ${brand}`, confidenceScore: 95, flags };
+  if (brand && city) {
+    const formattedBrand = BRAND_MAPPING[brand] || capitalizeName(brand).name;
+    const formattedCity = capitalizeName(city).name;
+    // Reorder to City Brand unless brand ends in 's'
+    const output = brand.endsWith('s') ? `${formattedBrand} ${formattedCity}` : `${formattedCity} ${formattedBrand}`;
+    flags.add("BrandCityPattern");
+    flags.add("FormattingApplied");
+    console.warn(`BrandCity pattern matched: ${output}`);
+    return { name: output, confidenceScore: 125, flags: Array.from(flags) }; // 125a
   }
 
-  return { name: "", confidenceScore: 0, flags: [] };
+  // Fallback: city-only with meta title brand
+  city = normalizedTokens.find(t => KNOWN_CITIES_SET.has(t));
+  if (city) {
+    const formattedCity = capitalizeName(city).name;
+    const metaBrand = getMetaTitleBrand(meta) || "Auto";
+    flags.add("CityOnlyEnhanced");
+    flags.add("MetaTitleBrandAppended");
+    flags.add("ManualReviewRecommended");
+    console.warn(`City-only pattern matched: ${formattedCity} ${metaBrand}`);
+    return { name: `${formattedCity} ${metaBrand}`, confidenceScore: 95, flags: Array.from(flags) };
+  }
+
+  return { name: "", confidenceScore: 0, flags: Array.from(flags) };
 }
 
 /**
