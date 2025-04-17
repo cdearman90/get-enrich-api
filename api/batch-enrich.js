@@ -1,11 +1,30 @@
-// api/batch-enrich.js v4.2.30 (debugging step 6)
-console.warn("Module loading started at:", new Date().toISOString());
+// api/batch-enrich.js v4.2.30
+// Orchestrates lead enrichment with humanize.js and company-name-fallback.js
+
+log('info', 'Module loading started', { timestamp: new Date().toISOString() });
 
 import { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } from "./lib/humanize.js";
 import { clearOpenAICache } from "./company-name-fallback.js";
 
-console.warn("Module imports completed at:", new Date().toISOString());
+log('info', 'Module imports completed', { timestamp: new Date().toISOString() });
 
+/**
+ * Structured logger
+ * @param {string} level - Log level (info, warn, error)
+ * @param {string} message - Log message
+ * @param {object} context - Additional context
+ */
+function log(level, message, context = {}) {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    ...context
+  };
+  console[level](JSON.stringify(logEntry, null, 2));
+}
+
+// Concurrency limiter
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
@@ -42,10 +61,12 @@ const BRAND_ONLY_DOMAINS = [
   "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
 ];
 
-const callFallbackAPI = async (domain, rowNum) => {
-  console.warn(`callFallbackAPI started for domain: ${domain}`);
+async function callFallbackAPI(domain, rowNum) {
+  log('info', 'callFallbackAPI started', { domain, rowNum });
+
+  // Skip fallback for brand-only domains
   if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
-    console.warn(`Brand-only domain skipped in callFallbackAPI: ${domain}`);
+    log('warn', 'Brand-only domain skipped in callFallbackAPI', { domain });
     return {
       domain,
       companyName: "",
@@ -57,10 +78,10 @@ const callFallbackAPI = async (domain, rowNum) => {
   }
 
   try {
-    console.warn(`Fetching from fallback API: ${FALLBACK_API_URL}`);
+    log('info', `Fetching from fallback API: ${FALLBACK_API_URL}`, { domain });
     const controller = new AbortController();
     const timeout = setTimeout(() => {
-      console.warn(`Fallback API timeout triggered for domain: ${domain}`);
+      log('warn', 'Fallback API timeout triggered', { domain });
       controller.abort();
     }, FALLBACK_API_TIMEOUT_MS);
 
@@ -72,32 +93,33 @@ const callFallbackAPI = async (domain, rowNum) => {
     });
 
     clearTimeout(timeout);
-    console.warn(`Fallback API response received for domain: ${domain}, status: ${response.status}`);
-    const data = await response.json();
+    log('info', 'Fallback API response received', { domain, status: response.status });
 
+    const data = await response.json();
     if (!response.ok || !data.successful?.[0]) {
       throw new Error(`Fallback error ${response.status}`);
     }
 
     const result = data.successful[0];
-    console.warn(`Fallback API result for domain ${domain}:`, result);
+    log('info', 'Fallback API result', { domain, result });
     return {
       domain: result.domain || domain,
       companyName: result.companyName || "",
       confidenceScore: result.confidenceScore || 0,
-      flags: Array.isArray(result.flags) ? result.flags : ["InvalidFallbackResponse"],
+      flags: Array.isArray(result.flags) ? Array.from(new Set(result.flags)) : ["InvalidFallbackResponse"], // Deduplicate flags
       tokens: result.tokens || 0,
       rowNum
     };
   } catch (error) {
-    console.error(`Fallback API failed for ${domain}: ${error.message}`);
+    log('error', 'Fallback API failed', { domain, error: error.message });
+
     let local;
     try {
-      console.warn(`Attempting local humanizeName for ${domain}`);
+      log('info', 'Attempting local humanizeName', { domain });
       local = await humanizeName(domain, domain, true);
-      console.warn(`Local humanizeName result for ${domain}:`, local);
+      log('info', 'Local humanizeName result', { domain, result: local });
     } catch (humanizeError) {
-      console.error(`Local humanizeName failed for ${domain}: ${humanizeError.message}`);
+      log('error', 'Local humanizeName failed', { domain, error: humanizeError.message });
       local = { name: "", confidenceScore: 0, flags: ["InvalidHumanizeResponse"], tokens: 0 };
     }
 
@@ -111,45 +133,43 @@ const callFallbackAPI = async (domain, rowNum) => {
       local.name = capitalizeName(splitName).name || "";
       local.confidenceScore = 80;
       local.flags = [...(local.flags || []), "LocalCompoundSplit"];
-      console.warn(`Local compound split result for ${domain}:`, local);
+      log('info', 'Local compound split result', { domain, result: local });
     }
 
     return {
       domain,
       companyName: local.name,
       confidenceScore: local.confidenceScore,
-      flags: [...(local.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"],
+      flags: Array.from(new Set([...(local.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"])), // Deduplicate flags
       tokens: local.tokens || 0,
       rowNum,
       error: error.message
     };
   }
-};
+}
 
-console.warn("Module constants defined at:", new Date().toISOString());
+log('info', 'Module constants defined', { timestamp: new Date().toISOString() });
 
 export default async function handler(req, res) {
   try {
-    console.warn("Handler started at:", new Date().toISOString());
-    console.warn("Request method:", req.method);
-    console.warn("Request headers:", req.headers);
+    log('info', 'Handler started', { method: req.method, headers: req.headers });
 
     if (req.method !== "POST") {
-      console.warn("Invalid method, expected POST");
+      log('warn', 'Invalid method, expected POST', { method: req.method });
       return res.status(405).json({ error: "Method not allowed, use POST" });
     }
 
     const body = req.body;
-    console.warn(`Received body: ${JSON.stringify(body)}`);
+    log('info', 'Received body', { body });
     if (!body) {
-      console.warn("Empty body detected");
+      log('warn', 'Empty body detected', {});
       return res.status(400).json({ error: "Empty body" });
     }
 
     const leads = body.leads || body.leadList || body.domains;
-    console.warn("Extracted leads:", leads);
+    log('info', 'Extracted leads', { leads });
     if (!Array.isArray(leads)) {
-      console.warn("Leads is not an array");
+      log('warn', 'Leads is not an array', { leads });
       return res.status(400).json({ error: "Leads must be an array" });
     }
 
@@ -169,11 +189,9 @@ export default async function handler(req, res) {
       validatedLeads.push({ domain, rowNum: lead.rowNum || i + 1 });
     });
 
-    console.warn("Validated leads:", validatedLeads);
-    console.warn("Validation errors:", validationErrors);
-
+    log('info', 'Validated leads', { validatedLeads, validationErrors });
     if (validatedLeads.length === 0) {
-      console.warn("No valid leads");
+      log('warn', 'No valid leads', { validationErrors });
       return res.status(400).json({ error: "No valid leads", details: validationErrors });
     }
 
@@ -183,19 +201,20 @@ export default async function handler(req, res) {
     let totalTokens = 0;
 
     for (const lead of validatedLeads) {
-      console.warn("Processing lead:", lead);
+      log('info', 'Processing lead', { lead });
       const { domain, rowNum } = lead;
       const domainKey = domain.toLowerCase();
 
+      // Check cache for duplicates
       if (processedDomains.has(domainKey)) {
         const cached = domainCache.get(domainKey);
         if (cached) {
-          console.warn("Using cached result for domain:", domainKey);
+          log('info', 'Using cached result', { domain: domainKey, cached });
           successful.push({
             domain,
             companyName: cached.companyName,
             confidenceScore: cached.confidenceScore,
-            flags: [...cached.flags, "DuplicateSkipped"],
+            flags: Array.from(new Set([...cached.flags, "DuplicateSkipped"])), // Deduplicate flags
             tokens: 0,
             rowNum
           });
@@ -209,19 +228,20 @@ export default async function handler(req, res) {
       let brandDetected = null;
       let cityDetected = null;
       try {
-        console.warn(`Calling extractBrandOfCityFromDomain for ${domainKey}`);
+        log('info', 'Calling extractBrandOfCityFromDomain', { domain: domainKey });
         const match = extractBrandOfCityFromDomain(domainKey);
         brandDetected = match.brand || null;
         cityDetected = match.city || null;
-        console.warn(`extractBrandOfCityFromDomain result for ${domainKey}:`, { brandDetected, cityDetected });
+        log('info', 'extractBrandOfCityFromDomain result', { domain: domainKey, brandDetected, cityDetected });
       } catch (error) {
-        console.error(`extractBrandOfCityFromDomain error for ${domainKey}: ${error.message}`);
+        log('error', 'extractBrandOfCityFromDomain failed', { domain: domainKey, error: error.message });
         brandDetected = null;
         cityDetected = null;
       }
 
+      // Skip processing for brand-only domains
       if (BRAND_ONLY_DOMAINS.includes(`${domainKey}.com`)) {
-        console.warn(`Brand-only domain skipped: ${domainKey}`);
+        log('warn', 'Brand-only domain skipped', { domain: domainKey });
         finalResult = {
           companyName: "",
           confidenceScore: 0,
@@ -232,13 +252,13 @@ export default async function handler(req, res) {
         let humanizeError = null;
         for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
           try {
-            console.warn(`Attempt ${attempt} to humanize domain: ${domain}`);
+            log('info', `Attempt ${attempt} to humanize domain`, { domain });
             const result = await humanizeName(domain, domain, true);
-            console.warn(`humanizeName result for ${domain}:`, result);
+            log('info', 'humanizeName result', { domain, result });
             finalResult = {
               companyName: result.name || "",
               confidenceScore: result.confidenceScore || 0,
-              flags: result.flags || [],
+              flags: Array.from(new Set(result.flags || [])), // Deduplicate flags
               tokens: result.tokens || 0
             };
             tokensUsed = result.tokens || 0;
@@ -246,36 +266,27 @@ export default async function handler(req, res) {
             break;
           } catch (error) {
             humanizeError = error;
-            console.warn(`Humanize attempt ${attempt} failed for domain ${domain}: ${error.message}`);
+            log('warn', `Humanize attempt ${attempt} failed`, { domain, error: error.message });
             if (attempt < RETRY_ATTEMPTS) {
               await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
             }
           }
         }
 
-        // Add to manualReviewQueue if ManualReviewRecommended flag is present
-        if (finalResult.flags.includes("ManualReviewRecommended")) {
-          console.warn(`Adding ${domain} to manualReviewQueue`);
-          manualReviewQueue.push({
-            domain,
-            name: finalResult.companyName,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags,
-            rowNum
-          });
-        }
-
-        if (humanizeError || finalResult.confidenceScore < 75) {
-          console.warn(`Calling fallback API for domain: ${domain}`);
+        // Skip fallback if BrandOnlyDomainSkipped or high-confidence result
+        if (finalResult.flags.includes("BrandOnlyDomainSkipped")) {
+          log('info', 'Skipping fallback due to BrandOnlyDomainSkipped', { domain });
+        } else if (humanizeError || finalResult.confidenceScore < 75) {
+          log('info', 'Calling fallback API', { domain });
           const fallback = await callFallbackAPI(domain, rowNum);
           finalResult = {
             companyName: fallback.companyName,
             confidenceScore: fallback.confidenceScore,
-            flags: [...fallback.flags, "FallbackAPIUsed"],
+            flags: Array.from(new Set([...fallback.flags, "FallbackAPIUsed"])), // Deduplicate flags
             tokens: fallback.tokens
           };
           tokensUsed += fallback.tokens;
-          console.warn(`Fallback API result for domain: ${domain}:`, finalResult);
+          log('info', 'Fallback API result', { domain, result: finalResult });
 
           if (humanizeError) {
             fallbackTriggers.push({
@@ -300,32 +311,34 @@ export default async function handler(req, res) {
               tokens: tokensUsed
             });
           }
+        }
 
-          // Add to manualReviewQueue if ManualReviewRecommended flag is present in fallback result
-          if (finalResult.flags.includes("ManualReviewRecommended")) {
-            console.warn(`Adding ${domain} to manualReviewQueue after fallback`);
-            manualReviewQueue.push({
-              domain,
-              name: finalResult.companyName,
-              confidenceScore: finalResult.confidenceScore,
-              flags: finalResult.flags,
-              rowNum
-            });
-          }
+        // Add to manualReviewQueue if ManualReviewRecommended flag is present
+        if (finalResult.flags.includes("ManualReviewRecommended")) {
+          log('info', 'Adding to manualReviewQueue', { domain, name: finalResult.companyName });
+          manualReviewQueue.push({
+            domain,
+            name: finalResult.companyName,
+            confidenceScore: finalResult.confidenceScore,
+            flags: finalResult.flags,
+            rowNum
+          });
         }
       }
 
+      // Handle abbreviation expansion
       if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
-        console.warn(`Expanding initials for: ${finalResult.companyName}`);
+        log('info', 'Expanding initials', { domain, name: finalResult.companyName });
         const expandedName = expandInitials(finalResult.companyName);
         if (expandedName && expandedName.name !== finalResult.companyName) {
           finalResult.companyName = expandedName.name;
-          finalResult.flags.push("InitialsExpandedLocally");
+          finalResult.flags = Array.from(new Set([...finalResult.flags, "InitialsExpandedLocally"])); // Deduplicate flags
           finalResult.confidenceScore -= 5;
         }
-        console.warn(`Expanded initials result:`, finalResult);
+        log('info', 'Expanded initials result', { domain, result: finalResult });
       }
 
+      // Cache and track processed domains
       domainCache.set(domainKey, {
         companyName: finalResult.companyName,
         confidenceScore: finalResult.confidenceScore,
@@ -334,7 +347,7 @@ export default async function handler(req, res) {
       processedDomains.add(domainKey);
 
       totalTokens += tokensUsed;
-      console.warn("Lead processing complete for:", domain, finalResult);
+      log('info', 'Lead processing complete', { domain, result: finalResult });
       successful.push({
         domain,
         companyName: finalResult.companyName,
@@ -345,7 +358,7 @@ export default async function handler(req, res) {
       });
     }
 
-    console.warn("Handler completed successfully at:", new Date().toISOString());
+    log('info', 'Handler completed successfully', { timestamp: new Date().toISOString() });
     return res.status(200).json({
       successful,
       manualReviewQueue,
@@ -354,18 +367,18 @@ export default async function handler(req, res) {
       partial: false
     });
   } catch (error) {
-    console.error(`Handler error: ${error.message}`);
+    log('error', 'Handler error', { error: error.message });
     return res.status(500).json({ error: "Internal server error", details: error.message });
   }
 }
 
 export const resetProcessedDomains = async (req, res) => {
-  console.warn("Resetting processed domains at:", new Date().toISOString());
+  log('info', 'Resetting processed domains', { timestamp: new Date().toISOString() });
   processedDomains.clear();
   domainCache.clear();
   clearOpenAICache();
-  console.warn("Processed domains and OpenAI cache reset");
+  log('info', 'Processed domains and OpenAI cache reset', {});
   return res.status(200).json({ message: "Processed domains and OpenAI cache reset" });
 };
 
-console.warn("Module loading completed at:", new Date().toISOString());
+log('info', 'Module loading completed', { timestamp: new Date().toISOString() });
