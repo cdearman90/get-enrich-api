@@ -1,4 +1,4 @@
-// api/batch-enrich.js v4.2.38
+// api/batch-enrich.js v4.2.39
 // Batch orchestration for domain enrichment
 
 import {
@@ -41,159 +41,7 @@ const logger = winston.createLogger({
 });
 
 // Log server startup
-logger.info("Module loading started", { version: "4.2.38" });
-
-// Concurrency limiter
-const pLimit = (concurrency) => {
-  let active = 0;
-  const queue = [];
-  const next = () => {
-    if (active >= concurrency || queue.length === 0) return;
-    active++;
-    const { fn, resolve, reject } = queue.shift();
-    fn().then(resolve).catch(reject).finally(() => {
-      active--;
-      next();
-    });
-  };
-  return (fn) => new Promise((resolve, reject) => {
-    queue.push({ fn, resolve, reject });
-    next();
-  });
-};
-
-const limit = pLimit(5);
-const domainCache = new Map();
-const processedDomains = new Set();
-
-const RETRY_ATTEMPTS = 2;
-const RETRY_DELAY_MS = 1000;
-
-const BRAND_ONLY_DOMAINS = [
-  "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com",
-  "dodge.com", "ramtrucks.com", "jeep.com", "lincoln.com", "toyota.com", "honda.com",
-  "nissanusa.com", "subaru.com", "mazdausa.com", "mitsubishicars.com", "acura.com",
-  "lexus.com", "infinitiusa.com", "hyundaiusa.com", "kia.com", "genesis.com",
-  "bmwusa.com", "mercedes-benz.com", "audiusa.com", "vw.com", "volkswagen.com",
-  "porsche.com", "miniusa.com", "fiatusa.com", "alfa-romeo.com", "landroverusa.com",
-  "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
-];
-
-/**
- * Calls fallback logic using fallbackName
- * @param {string} domain - Domain to enrich
- * @param {number} rowNum - Row number
- * @param {Object} meta - Meta data
- * @returns {Object} - Fallback result
- */
-async function callFallbackAPI(domain, rowNum, meta = {}) {
-  logger.info("callFallbackAPI started", { domain, rowNum });
-
-  try {
-    if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
-      logger.info("Brand-only domain skipped in callFallbackAPI", { domain });
-      return {
-        domain,
-        companyName: "",
-        confidenceScore: 0,
-        flags: Array.from(new Set(["BrandOnlyDomainSkipped"])),
-        tokens: 0,
-        rowNum
-      };
-    }
-
-    let lastError;
-    for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
-      try {
-        logger.info(`Attempt ${attempt} to call fallback`, { domain });
-        const fallback = await fallbackName(domain, { title: meta.title });
-
-        logger.info("Fallback result", { domain, fallback });
-        return {
-          domain,
-          companyName: fallback.companyName,
-          confidenceScore: fallback.confidenceScore,
-          flags: Array.from(new Set([...fallback.flags, "FallbackAPIUsed"])),
-          tokens: fallback.tokens || 0,
-          rowNum
-        };
-      } catch (error) {
-        lastError = error;
-        logger.warn(`Fallback attempt ${attempt} failed`, { domain, error: error.message });
-        if (attempt < RETRY_ATTEMPTS) {
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-        }
-      }
-    }
-
-    logger.error("Fallback exhausted retries", { domain, error: lastError.message });
-    let local;
-    try {
-      logger.info("Attempting local humanizeName", { domain });
-      local = await humanizeName(domain, domain, true);
-      logger.info("Local humanizeName result", { domain, result: local });
-    } catch (humanizeError) {
-      logger.error("Local humanizeName failed", { domain, error: humanizeError.message });
-      local = { companyName: "", confidenceScore: 80, flags: ["InvalidHumanizeResponse"], tokens: 0 };
-    }
-
-    if (!local.companyName || typeof local.companyName !== "string") {
-      local.companyName = "";
-      local.flags = [...(local.flags ||चा
-
-System: I notice the `batch-enrich.js` script was cut off in the previous message. Below, I'll complete the corrected `batch-enrich.js` (v4.2.38) to ensure all `try` blocks have `catch` clauses, align with the fixed `company-name-fallback.js`, and include enhanced logging to capture crashes. I'll also verify `humanize.js` (v5.0.3) compatibility, provide `edge-cases-30.json` with 15 domains, and outline debugging steps to resolve the `FUNCTION_INVOCATION_FAILED` error. The `company-name-fallback.js` script has already been fully provided and fixed for the `Missing catch or finally clause` error at line 94.
-
----
-
-### Completed batch-enrich.js (v4.2.38)
-
-This version completes the previously truncated `batch-enrich.js`, ensuring all `try` blocks have `catch` clauses, maintaining ESLint compliance (double quotes, semicolons, `prefer-const`, `consistent-return`), and enhancing logging to capture early crashes. It aligns with the fixed `company-name-fallback.js` and `humanize.js` (v5.0.3).
-
-```javascript
-// api/batch-enrich.js v4.2.38
-// Batch orchestration for domain enrichment
-
-import {
-  humanizeName,
-  extractBrandOfCityFromDomain,
-  capitalizeName,
-  expandInitials,
-  earlyCompoundSplit
-} from "./lib/humanize.js";
-import { fallbackName, clearOpenAICache } from "./company-name-fallback.js";
-import winston from "winston";
-import path from "path";
-import fs from "fs";
-
-// Ensure logs directory exists
-const logDir = path.join(process.cwd(), "logs");
-try {
-  if (!fs.existsSync(logDir)) {
-    fs.mkdirSync(logDir, { recursive: true });
-  }
-} catch (err) {
-  console.error("Failed to create logs directory", err);
-}
-
-// Initialize Winston logger
-const logger = winston.createLogger({
-  level: "info",
-  format: winston.format.combine(
-    winston.format.timestamp(),
-    winston.format.json()
-  ),
-  transports: [
-    new winston.transports.File({
-      filename: path.join(logDir, "enrich.log"),
-      maxsize: 5242880,
-      maxFiles: 5
-    }),
-    new winston.transports.Console()
-  ]
-});
-
-// Log server startup
-logger.info("Module loading started", { version: "4.2.38" });
+logger.info("Module loading started", { version: "4.2.39" });
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -415,7 +263,7 @@ export default async function handler(req, res) {
           if (cached) {
             logger.info("Using cached result", { domain: domainKey, cached });
             return {
- |             domain,
+              domain,
               companyName: cached.companyName,
               confidenceScore: cached.confidenceScore,
               flags: Array.from(new Set([...cached.flags, "DuplicateSkipped"])),
