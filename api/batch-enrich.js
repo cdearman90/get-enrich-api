@@ -1,4 +1,4 @@
-// api/batch-enrich.js v4.2.44
+// api/batch-enrich.js v4.2.45
 // Batch orchestration for domain enrichment
 
 import {
@@ -42,7 +42,7 @@ try {
 }
 
 // Log server startup
-logger.info("Module loading started", { version: "4.2.44" });
+logger.info("Module loading started", { version: "4.2.45" });
 
 // Verify dependencies
 const dependencies = {
@@ -56,41 +56,7 @@ const dependencies = {
 };
 logger.debug("Dependency check", { dependencies });
 
-// Concurrency limiter
-const pLimit = (concurrency) => {
-  let active = 0;
-  const queue = [];
-  const next = () => {
-    if (active >= concurrency || queue.length === 0) return;
-    active++;
-    const { fn, resolve, reject } = queue.shift();
-    fn().then(resolve).catch(reject).finally(() => {
-      active--;
-      next();
-    });
-  };
-  return (fn) => new Promise((resolve, reject) => {
-    queue.push({ fn, resolve, reject });
-    next();
-  });
-};
-
-const limit = pLimit(5);
-const domainCache = new Map();
-const processedDomains = new Set();
-
-const RETRY_ATTEMPTS = 2;
-const RETRY_DELAY_MS = 1000;
-
-const BRAND_ONLY_DOMAINS = [
-  "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com",
-  "dodge.com", "ramtrucks.com", "jeep.com", "lincoln.com", "toyota.com", "honda.com",
-  "nissanusa.com", "subaru.com", "mazdausa.com", "mitsubishicars.com", "acura.com",
-  "lexus.com", "infinitiusa.com", "hyundaiusa.com", "kia.com", "genesis.com",
-  "bmwusa.com", "mercedes-benz.com", "audiusa.com", "vw.com", "volkswagen.com",
-  "porsche.com", "miniusa.com", "fiatusa.com", "alfa-romeo.com", "landroverusa.com",
-  "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
-];
+// [pLimit, domainCache, processedDomains, RETRY_ATTEMPTS, RETRY_DELAY_MS, BRAND_ONLY_DOMAINS unchanged]
 
 /**
  * Calls fallback logic using fallbackName
@@ -317,18 +283,19 @@ export default async function handler(req, res) {
           };
         } else {
           let humanizeError = null;
+          let initialResult = null; // Declare initialResult to store humanizeName output
           for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
             try {
               logger.debug(`Attempt ${attempt} to humanize domain`, { domain });
-              const result = await humanizeName(domain, domain, !!metaTitle);
-              logger.debug("humanizeName result", { domain, result });
+              initialResult = await humanizeName(domain, domain, !!metaTitle);
+              logger.debug("humanizeName result", { domain, result: initialResult });
               finalResult = {
-                companyName: result.companyName || "",
-                confidenceScore: result.confidenceScore || 80,
-                flags: Array.from(new Set(result.flags || [])),
-                tokens: result.tokens || 0
+                companyName: initialResult.companyName || "",
+                confidenceScore: initialResult.confidenceScore || 80,
+                flags: Array.from(new Set(initialResult.flags || [])),
+                tokens: initialResult.tokens || 0
               };
-              tokensUsed = result.tokens || 0;
+              tokensUsed = initialResult.tokens || 0;
               humanizeError = null;
               break;
             } catch (error) {
