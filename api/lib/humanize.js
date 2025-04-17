@@ -754,6 +754,84 @@ function applyCityShortName(city, flags = []) {
   return capitalizeName(city, flags);
 }
 
+function expandInitials(name, domain, brand, city, flags = []) {
+  if (!name || typeof name !== "string" || name.split(" ").length > 2) return { name, flags };
+  let expanded = [];
+  const words = name.split(" ");
+  const domainLower = domain.toLowerCase();
+  words.forEach(word => {
+    const wordLower = word.toLowerCase();
+    if (/^[A-Z]{1,3}$/.test(word) && ABBREVIATION_EXPANSIONS[wordLower]) {
+      let expansion = ABBREVIATION_EXPANSIONS[wordLower];
+      if (wordLower === "mb" && domainLower.includes("mbusa")) expansion = "M.B. USA";
+      else if (wordLower === "mb" && domainLower.includes("mbof")) expansion = "M.B.";
+      else if (wordLower === "cz" && domainLower.includes("czag")) expansion = "CZAG Auto";
+      else if (wordLower === "np" && domainLower.includes("subaru")) expansion = "NP Subaru";
+      else if (wordLower === "gy" && domainLower.includes("chevy")) expansion = "GY Chevy";
+      else if (wordLower === "sj" && domainLower.includes("infiniti")) expansion = "SJ Infiniti";
+      else if (wordLower === "mv" && domainLower.includes("mv")) expansion = "MV Auto";
+      expanded.push(expansion);
+      flags.push("InitialsExpanded", "AbbreviationExpanded");
+    } else {
+      expanded.push(word);
+    }
+  });
+  return { name: expanded.join(" "), flags };
+}
+
+function extractBrandOfCityFromDomain(domain, flags = []) {
+  if (!domain || typeof domain !== "string") return { name: "", brand: null, city: null, flags: ["InvalidInput"] };
+  const domainLower = domain.toLowerCase().replace(/\.(com|org|net|co\.uk)$/, "");
+  let name = domainLower;
+  let brand = null;
+  let city = null;
+
+  for (const genericWord of GENERIC_WORDS) {
+    const regex = new RegExp(genericWord, 'i');
+    name = name.replace(regex, "").trim();
+  }
+
+  for (const carBrand of CAR_BRANDS) {
+    const brandLower = carBrand.toLowerCase();
+    if (domainLower.includes(brandLower)) {
+      brand = carBrand;
+      name = domainLower.replace(brandLower, "").trim();
+      flags.push("PatternMatched");
+      break;
+    }
+  }
+
+  for (const properNoun of KNOWN_PROPER_NOUNS) {
+    const nounLower = properNoun.toLowerCase().replace(/\s+/g, "");
+    if (domainLower.includes(nounLower)) {
+      name = properNoun;
+      flags.push("ProperNounMatched");
+      break;
+    }
+  }
+
+  const splitName = splitCamelCaseWords(domainLower, flags).name;
+  if (FIRST_LAST_NAME_PATTERN.test(splitName)) {
+    name = splitName;
+    flags.push("FirstLastNameMatched");
+  }
+
+  if (!brand && !flags.includes("ProperNounMatched") && !flags.includes("FirstLastNameMatched")) {
+    const parts = domainLower.split(/(auto|motors|group|dealers|dealership)/i);
+    if (parts.length > 1) {
+      name = parts[0].trim();
+      flags.push("PatternMatched");
+    }
+  }
+
+  if (!name) {
+    name = domainLower;
+    flags.push("FallbackToDomain");
+  }
+
+  return { name: capitalizeName(name, flags).name, brand, city, flags };
+}
+
 function splitCamelCaseWords(input, flags = []) {
   let result = preprocessProperNouns(input, flags).name;
   const lowerInput = result.toLowerCase();
@@ -778,7 +856,6 @@ function reorderBrandCity(name, flags = []) {
   if (words.length < 2) return { name, flags };
   const [first, ...rest] = words;
   const firstLower = first.toLowerCase();
-  // Removed unused restLower
   const isBrandFirst = CAR_BRANDS.includes(firstLower) || BRAND_MAPPING[firstLower];
   const isCityRest = KNOWN_CITIES_SET.has(rest.join(" ").toLowerCase());
   if (isBrandFirst && isCityRest) {
@@ -994,9 +1071,9 @@ async function humanizeName(inputName, domain, skipCache = false) {
       const confidenceScore = calculateConfidenceScore(fallbackName, flags, domainLower);
       const result = { name: fallbackName, confidenceScore: Math.max(confidenceScore, 80), flags, tokens: 0 };
       domainCache.set(domainLower, result);
-      return result
+      return result;
     }
-    let { name, flags, brand, city } = extractBrandOfCityFromDomain(domain);
+    let { name, flags, brand } = extractBrandOfCityFromDomain(domain);
     name = stripGenericWords(name, domain, flags).name;
     name = preprocessProperNouns(name, flags).name;
     let words = name.split(" ");
@@ -1020,21 +1097,21 @@ async function humanizeName(inputName, domain, skipCache = false) {
       name = spacedName;
       flags = newFlags;
     }
-    const { name: expandedName, flags: expandedFlags } = expandInitials(name, domain, brand, city, flags);
+    const { name: expandedName, flags: expandedFlags } = expandInitials(name, domain, brand, null, flags);
     name = expandedName;
     flags = expandedFlags;
     const { name: reorderedName, flags: reorderedFlags } = reorderBrandCity(name, flags);
     name = reorderedName;
     flags = reorderedFlags;
-    const { name: limitedName, flags: limitedFlags } = enforceThreeWordLimit(name, brand, city, flags);
+    const { name: limitedName, flags: limitedFlags } = enforceThreeWordLimit(name, brand, null, flags);
     name = limitedName;
     flags = limitedFlags;
-    const { name: handledName, flags: handledFlags } = handleNamesEndingInS(name, brand, city, flags);
+    const { name: handledName, flags: handledFlags } = handleNamesEndingInS(name, brand, null, flags);
     name = handledName;
     flags = handledFlags;
     let confidenceScore = calculateConfidenceScore(name, flags, domainLower);
     if (confidenceScore < 90 || name.toLowerCase() === domainLower || !name) {
-      if (name.match(/^[A-Z]{2,5}$/i) && !brand && !city) {
+      if (name.match(/^[A-Z]{2,5}$/i) && !brand) {
         flags.push("AmbiguousInitials");
         name = ABBREVIATION_EXPANSIONS[name.toLowerCase()] || `${name.toUpperCase()} Auto`;
         confidenceScore = 70;
