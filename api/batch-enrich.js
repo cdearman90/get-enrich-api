@@ -1,4 +1,4 @@
-// api/batch-enrich.js v4.2.36
+// api/batch-enrich.js v4.2.37
 // Batch orchestration for domain enrichment
 
 import {
@@ -8,7 +8,7 @@ import {
   expandInitials,
   earlyCompoundSplit
 } from "./lib/humanize.js";
-import { clearOpenAICache, companyNameFallback } from "./company-name-fallback.js";
+import { fallbackName, clearOpenAICache } from "./company-name-fallback.js";
 import winston from "winston";
 import path from "path";
 
@@ -30,7 +30,7 @@ const logger = winston.createLogger({
 });
 
 // Log server startup
-logger.info("Module loading started", { version: "4.2.36" });
+logger.info("Module loading started", { version: "4.2.37" });
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -58,7 +58,6 @@ const processedDomains = new Set();
 const RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 1000;
 
-// Simulated BRAND_ONLY_DOMAINS
 const BRAND_ONLY_DOMAINS = [
   "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com",
   "dodge.com", "ramtrucks.com", "jeep.com", "lincoln.com", "toyota.com", "honda.com",
@@ -70,7 +69,7 @@ const BRAND_ONLY_DOMAINS = [
 ];
 
 /**
- * Calls fallback logic directly (replacing fetch to FALLBACK_API_URL)
+ * Calls fallback logic using fallbackName
  * @param {string} domain - Domain to enrich
  * @param {number} rowNum - Row number
  * @param {Object} meta - Meta data
@@ -95,13 +94,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
   for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
     try {
       logger.info(`Attempt ${attempt} to call fallback`, { domain });
-      const humanizeResult = await humanizeName(domain, domain, true);
-      const fallback = await companyNameFallback(domain, {
-        companyName: humanizeResult.name || "",
-        confidenceScore: humanizeResult.confidenceScore || 0,
-        flags: humanizeResult.flags || [],
-        metaTitle: meta.title
-      });
+      const fallback = await fallbackName(domain, { title: meta.title });
 
       logger.info("Fallback result", { domain, fallback });
       return {
@@ -163,6 +156,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
  * @returns {Promise<Object>} - JSON response
  */
 export default async function handler(req, res) {
+  let body = null;
   try {
     logger.info("Handler started", { method: req.method });
 
@@ -171,7 +165,7 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "Method not allowed, use POST" });
     }
 
-    const body = req.body;
+    body = req.body;
     if (!body) {
       logger.warn("Empty body detected", {});
       return res.status(400).json({ error: "Empty body" });
@@ -373,7 +367,11 @@ export default async function handler(req, res) {
       fromFallback: fallbackTriggers.length > 0
     });
   } catch (error) {
-    logger.error("Handler error", { error: error.message, stack: error.stack });
+    logger.error("Handler error", {
+      error: error.message,
+      stack: error.stack,
+      body: body ? JSON.stringify(body).slice(0, 1000) : "null"
+    });
     return res.status(500).json({
       error: "Internal server error",
       confidenceScore: 80,
