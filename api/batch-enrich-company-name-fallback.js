@@ -742,7 +742,7 @@ export const config = {
 /*
   - Fixed 'local.name.includes is not a function' by adding type checking for humanizeName result.
   - Enhanced normalizeName to enforce spacing validation for unspaced names < 20 chars.
-  - Added proper noun mapping for 'lacity' → 'LA City' to fix lacitycars.com issue.
+  - Added proper noun mapping for 'lacity' -> 'LA City' to fix lacitycars.com issue.
   - Improved deduplicateBrands to ensure it runs early and doesn’t interfere with BrandOnlySkippedEarlyExit.
   - Cleared result.flags before BrandOnlySkippedEarlyExit to prevent extra flags.
   - Ensured all imports from humanize.js are preserved as per v1.0.50.
@@ -758,11 +758,11 @@ export const config = {
   2. Clear local cache: `rm -rf .vercel`.
   3. Deploy with no cache: `vercel --prod --force --no-cache`.
   4. Check logs: `vercel logs <your-app>.vercel.app --token=<your-token>`.
-     - Confirm log: "company-name-fallback.js v1.0.51 – Initialized (Build ID: 20250422-FIX-FALLBACK-CRASH)".
+     - Confirm log: "company-name-fallback.js v1.0.51 - Initialized (Build ID: 20250422-FIX-FALLBACK-CRASH)".
   5. If logs show older version (e.g., v1.0.50), run `vercel env rm CACHE_BUST` and redeploy.
   6. Test key cases:
-     - lacitycars.com → "LA City" (confidence: 110)
-     - chevy.com → "" (confidence: 0)
-     - teamford.com → "Team Ford" (confidence: 125)
-     - athensford.com → "Athens Ford" (confidence: 125)
+     - lacitycars.com -> "LA City" (confidence: 110)
+     - chevy.com -> "" (confidence: 0)
+     - teamford.com -> "Team Ford" (confidence: 125)
+     - athensford.com -> "Athens Ford" (confidence: 125)
 */
