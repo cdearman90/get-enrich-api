@@ -111,7 +111,7 @@ async function fallbackName(domain, meta = {}) {
       initialResult = await humanizeName(normalizedDomain, normalizedDomain, true);
       flags.push(...initialResult.flags);
       log("info", "humanizeName completed", { domain: normalizedDomain, result: initialResult });
-      if (initialResult.confidenceScore >= 95 && !initialResult.flags.includes("ManualReviewRecommended")) {
+      if (initialResult.confidenceScore >= 100 && !initialResult.flags.includes("ManualReviewRecommended")) {
         log("info", "Using humanizeName result", { domain: normalizedDomain, companyName: initialResult.companyName });
         return {
           companyName: initialResult.companyName,
@@ -146,7 +146,7 @@ async function fallbackName(domain, meta = {}) {
           flags: Array.from(new Set(flags)),
           tokens: 0
         };
-      } else if (metaBrand) {
+      } else if (metaBrand && !tokens.some(t => CAR_BRANDS.includes(t.toLowerCase()))) {
         log("info", "Meta title brand fallback", { domain: normalizedDomain, metaBrand });
         flags.push("LocalFallbackUsed", "ManualReviewRecommended");
         return {
@@ -205,23 +205,75 @@ async function fallbackName(domain, meta = {}) {
       // Clean name
       name = name.replace(/['’]s\b/g, "").replace(/\b(cars|sales|autogroup|of)\b/gi, "").replace(/\s+/g, " ").trim();
 
+      // Post-process patch (ChatGPT-inspired)
+      // Step 1: Remove duplicated brands
+      name = name.replace(/\b(\w+)\s+\1\b/gi, "$1");
+
+      // Step 2: Normalize known suffix repetition
+      name = name.replace(/\b(Auto)\s+\1\b/gi, "$1");
+
+      // Step 3: Strip junk characters or extra spaces
+      name = name.replace(/\s{2,}/g, " ").trim();
+
+      // Step 4: Fix brand distortion
+      const tokenFixes = {
+        coluus: "Columbus",
+        classicche: "Classic Chevy",
+        chevroletof: "Chevy",
+        nplinc: "NP Lincoln",
+        helloauto: "Hello Auto",
+        autonati: "AutoNation",
+        robbyauto: "Robby Nixon",
+        billauto: "Bill Dube",
+        penskeauto: "Penske",
+        classicchev: "Classic Chevy",
+        sunsetmits: "Sunset Mitsubishi",
+        drivevic: "Victory"
+      };
+      for (const [bad, good] of Object.entries(tokenFixes)) {
+        if (name.toLowerCase().includes(bad)) {
+          name = name.replace(new RegExp(bad, "gi"), good);
+        }
+      }
+
+      // Step 5: Deduplicate tokens
+      const parts = name.split(" ");
+      name = [...new Set(parts)].join(" ").trim();
+
       // Deduplicate brands
-      const brandsInName = CAR_BRANDS.filter(b => name.toLowerCase().includes(b.toLowerCase()));
+      const nameTokens = name.toLowerCase().split(" ");
+      const brandsInName = CAR_BRANDS.filter(b => nameTokens.some(t => t.includes(b.toLowerCase())));
+      let finalConfidenceScore = 85;
       if (brandsInName.length > 1) {
-        const firstBrand = BRAND_MAPPING[brandsInName[0]] || brandsInName[0];
-        name = name.replace(new RegExp(brandsInName.slice(1).join("|"), "gi"), "").replace(/\s+/g, " ").trim();
+        const firstBrand = BRAND_MAPPING[brandsInName[0]] || capitalizeName(brandsInName[0]).name;
+        name = nameTokens
+          .filter(t => !brandsInName.slice(1).some(b => t.includes(b.toLowerCase())))
+          .join(" ")
+          .replace(/\s+/g, " ")
+          .trim();
         name = `${name} ${firstBrand}`.trim();
+        finalConfidenceScore = 80; // Lower confidence for GenericPattern with multiple brands
       } else if (brandsInName.length === 0 && !initialResult.flags.includes("HumanNameDetected")) {
         const fallbackBrand = getMetaTitleBrand(meta) || "Auto";
-        name = `${name} ${fallbackBrand}`.trim();
+        if (!nameTokens.includes(fallbackBrand.toLowerCase())) {
+          name = `${name} ${fallbackBrand}`.trim();
+        }
       }
 
       // Clean redundant terms
-      name = name.replace(/\b(auto group|auto auto|usa auto|automotive auto)\b/gi, "Auto").replace(/\s+/g, " ").trim();
+      name = name
+        .replace(/\b(auto group|auto auto|usa auto|automotive auto|group auto|autogroup auto)\b/gi, "")
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!name && initialResult.flags.includes("HumanNameDetected")) {
+        name = initialResult.companyName;
+      } else if (!name) {
+        name = (getMetaTitleBrand(meta) || "Auto").trim();
+      }
 
       const result = {
         companyName: name,
-        confidenceScore: 85,
+        confidenceScore: finalConfidenceScore,
         flags: Array.from(new Set([...flags, "OpenAIFallback", "ManualReviewRecommended"])),
         tokens
       };
@@ -235,7 +287,10 @@ async function fallbackName(domain, meta = {}) {
       const cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
       const fallbackName = companyName || `${cleanDomain.split(/(?=[A-Z])/)[0]} Auto`;
       const result = {
-        companyName: fallbackName.replace(/\b(auto group|auto auto|usa auto|automotive auto)\b/gi, "Auto").replace(/\s+/g, " ").trim(),
+        companyName: fallbackName
+          .replace(/\b(auto group|auto auto|usa auto|automotive auto|group auto|autogroup auto)\b/gi, "")
+          .replace(/\s+/g, " ")
+          .trim() || "Auto",
         confidenceScore: 80,
         flags: Array.from(new Set([...flags, "OpenAIFallbackFailed", "ManualReviewRecommended"])),
         tokens: 0
@@ -325,5 +380,4 @@ async function handler(req, res) {
   }
 }
 
-// Consolidated export statement
 export { fallbackName, clearOpenAICache, handler };
