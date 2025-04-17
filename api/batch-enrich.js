@@ -1,4 +1,4 @@
-// api/batch-enrich.js v4.2.39
+// api/batch-enrich.js v4.2.41
 // Batch orchestration for domain enrichment
 
 import {
@@ -18,6 +18,7 @@ const logDir = path.join(process.cwd(), "logs");
 try {
   if (!fs.existsSync(logDir)) {
     fs.mkdirSync(logDir, { recursive: true });
+    console.log("Created logs directory", logDir);
   }
 } catch (err) {
   console.error("Failed to create logs directory", err);
@@ -25,7 +26,7 @@ try {
 
 // Initialize Winston logger
 const logger = winston.createLogger({
-  level: "info",
+  level: "debug",
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.json()
@@ -41,7 +42,19 @@ const logger = winston.createLogger({
 });
 
 // Log server startup
-logger.info("Module loading started", { version: "4.2.39" });
+logger.info("Module loading started", { version: "4.2.41" });
+
+// Verify dependencies
+const dependencies = {
+  humanizeName: typeof humanizeName === "function",
+  extractBrandOfCityFromDomain: typeof extractBrandOfCityFromDomain === "function",
+  capitalizeName: typeof capitalizeName === "function",
+  expandInitials: typeof expandInitials === "function",
+  earlyCompoundSplit: typeof earlyCompoundSplit === "function",
+  fallbackName: typeof fallbackName === "function",
+  clearOpenAICache: typeof clearOpenAICache === "function"
+};
+logger.debug("Dependency check", { dependencies });
 
 // Concurrency limiter
 const pLimit = (concurrency) => {
@@ -87,7 +100,7 @@ const BRAND_ONLY_DOMAINS = [
  * @returns {Object} - Fallback result
  */
 async function callFallbackAPI(domain, rowNum, meta = {}) {
-  logger.info("callFallbackAPI started", { domain, rowNum });
+  logger.debug("callFallbackAPI started", { domain, rowNum });
 
   try {
     if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
@@ -105,10 +118,10 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
     let lastError;
     for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
       try {
-        logger.info(`Attempt ${attempt} to call fallback`, { domain });
+        logger.debug(`Attempt ${attempt} to call fallback`, { domain });
         const fallback = await fallbackName(domain, { title: meta.title });
 
-        logger.info("Fallback result", { domain, fallback });
+        logger.debug("Fallback result", { domain, fallback });
         return {
           domain,
           companyName: fallback.companyName,
@@ -129,9 +142,9 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
     logger.error("Fallback exhausted retries", { domain, error: lastError.message });
     let local;
     try {
-      logger.info("Attempting local humanizeName", { domain });
+      logger.debug("Attempting local humanizeName", { domain });
       local = await humanizeName(domain, domain, true);
-      logger.info("Local humanizeName result", { domain, result: local });
+      logger.debug("Local humanizeName result", { domain, result: local });
     } catch (humanizeError) {
       logger.error("Local humanizeName failed", { domain, error: humanizeError.message });
       local = { companyName: "", confidenceScore: 80, flags: ["InvalidHumanizeResponse"], tokens: 0 };
@@ -147,7 +160,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
       local.companyName = capitalizeName(splitName).name || "";
       local.confidenceScore = 80;
       local.flags = [...(local.flags || []), "LocalCompoundSplit"];
-      logger.info("Local compound split result", { domain, result: local });
+      logger.debug("Local compound split result", { domain, result: local });
     }
 
     return {
@@ -181,29 +194,35 @@ function validateLeads(leads) {
   const validatedLeads = [];
   const validationErrors = [];
 
-  if (!Array.isArray(leads)) {
-    validationErrors.push("Leads is not an array");
+  try {
+    if (!Array.isArray(leads)) {
+      validationErrors.push("Leads is not an array");
+      return { validatedLeads, validationErrors };
+    }
+
+    leads.forEach((lead, i) => {
+      if (!lead || typeof lead !== "object") {
+        validationErrors.push(`Index ${i} not object`);
+        return;
+      }
+      const domain = (lead.domain || "").trim().toLowerCase();
+      if (!domain) {
+        validationErrors.push(`Index ${i} missing domain`);
+        return;
+      }
+      validatedLeads.push({
+        domain,
+        rowNum: Number.isInteger(lead.rowNum) ? lead.rowNum : i + 1,
+        metaTitle: typeof lead.metaTitle === "string" ? lead.metaTitle : undefined
+      });
+    });
+
+    return { validatedLeads, validationErrors };
+  } catch (err) {
+    logger.error("validateLeads failed", { error: err.message, stack: err.stack });
+    validationErrors.push("Validation error");
     return { validatedLeads, validationErrors };
   }
-
-  leads.forEach((lead, i) => {
-    if (!lead || typeof lead !== "object") {
-      validationErrors.push(`Index ${i} not object`);
-      return;
-    }
-    const domain = (lead.domain || "").trim().toLowerCase();
-    if (!domain) {
-      validationErrors.push(`Index ${i} missing domain`);
-      return;
-    }
-    validatedLeads.push({
-      domain,
-      rowNum: Number.isInteger(lead.rowNum) ? lead.rowNum : i + 1,
-      metaTitle: typeof lead.metaTitle === "string" ? lead.metaTitle : undefined
-    });
-  });
-
-  return { validatedLeads, validationErrors };
 }
 
 /**
@@ -215,7 +234,7 @@ function validateLeads(leads) {
 export default async function handler(req, res) {
   let body = null;
   try {
-    logger.info("Handler started", { method: req.method, bodyLength: req.body ? JSON.stringify(req.body).length : 0 });
+    logger.debug("Handler started", { method: req.method, bodyLength: req.body ? JSON.stringify(req.body).length : 0 });
 
     if (req.method !== "POST") {
       logger.warn("Invalid method, expected POST", { method: req.method });
@@ -225,7 +244,7 @@ export default async function handler(req, res) {
     // Safely access req.body
     try {
       body = req.body || {};
-      logger.info("Received body", { bodyLength: JSON.stringify(body).length });
+      logger.debug("Received body", { bodyLength: JSON.stringify(body).length });
     } catch (err) {
       logger.error("Failed to parse request body", { error: err.message, stack: err.stack });
       return res.status(400).json({ error: "Invalid request body" });
@@ -237,10 +256,10 @@ export default async function handler(req, res) {
     }
 
     const leads = body.leads || body.leadList || body.domains || body;
-    logger.info("Extracted leads", { leadCount: Array.isArray(leads) ? leads.length : 0 });
+    logger.debug("Extracted leads", { leadCount: Array.isArray(leads) ? leads.length : 0 });
 
     const { validatedLeads, validationErrors } = validateLeads(leads);
-    logger.info("Validated leads", { validatedLeads: validatedLeads.length, validationErrors });
+    logger.debug("Validated leads", { validatedLeads: validatedLeads.length, validationErrors });
 
     if (validatedLeads.length === 0) {
       logger.warn("No valid leads", { validationErrors });
@@ -255,13 +274,13 @@ export default async function handler(req, res) {
     const processLead = async (lead) => {
       const { domain, rowNum, metaTitle } = lead;
       const domainKey = domain.toLowerCase();
-      logger.info("Processing lead", { domain, rowNum });
+      logger.debug("Processing lead", { domain, rowNum });
 
       try {
         if (processedDomains.has(domainKey)) {
           const cached = domainCache.get(domainKey);
           if (cached) {
-            logger.info("Using cached result", { domain: domainKey, cached });
+            logger.debug("Using cached result", { domain: domainKey, cached });
             return {
               domain,
               companyName: cached.companyName,
@@ -279,17 +298,17 @@ export default async function handler(req, res) {
         let brandDetected = null;
         let cityDetected = null;
         try {
-          logger.info("Calling extractBrandOfCityFromDomain", { domain: domainKey });
+          logger.debug("Calling extractBrandOfCityFromDomain", { domain: domainKey });
           const match = extractBrandOfCityFromDomain(domainKey);
           brandDetected = match.brand || null;
           cityDetected = match.city || null;
-          logger.info("extractBrandOfCityFromDomain result", { domain: domainKey, brandDetected, cityDetected });
+          logger.debug("extractBrandOfCityFromDomain result", { domain: domainKey, brandDetected, cityDetected });
         } catch (error) {
           logger.error("extractBrandOfCityFromDomain failed", { domain: domainKey, error: error.message });
         }
 
         if (BRAND_ONLY_DOMAINS.includes(`${domainKey}.com`)) {
-          logger.info("Brand-only domain skipped", { domain: domainKey });
+          logger.debug("Brand-only domain skipped", { domain: domainKey });
           finalResult = {
             companyName: "",
             confidenceScore: 0,
@@ -300,9 +319,9 @@ export default async function handler(req, res) {
           let humanizeError = null;
           for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
             try {
-              logger.info(`Attempt ${attempt} to humanize domain`, { domain });
+              logger.debug(`Attempt ${attempt} to humanize domain`, { domain });
               const result = await humanizeName(domain, domain, !!metaTitle);
-              logger.info("humanizeName result", { domain, result });
+              logger.debug("humanizeName result", { domain, result });
               finalResult = {
                 companyName: result.companyName || "",
                 confidenceScore: result.confidenceScore || 80,
@@ -322,9 +341,9 @@ export default async function handler(req, res) {
           }
 
           if (finalResult.flags.includes("BrandOnlyDomainSkipped")) {
-            logger.info("Skipping fallback due to BrandOnlyDomainSkipped", { domain });
+            logger.debug("Skipping fallback due to BrandOnlyDomainSkipped", { domain });
           } else if (humanizeError || finalResult.confidenceScore < 95 || finalResult.flags.includes("ManualReviewRecommended")) {
-            logger.info("Calling fallback API", { domain });
+            logger.debug("Calling fallback API", { domain });
             const meta = metaTitle ? { title: metaTitle } : {};
             const fallback = await callFallbackAPI(domain, rowNum, meta);
             finalResult = {
@@ -334,7 +353,7 @@ export default async function handler(req, res) {
               tokens: fallback.tokens
             };
             tokensUsed += fallback.tokens;
-            logger.info("Fallback API result", { domain, result: finalResult });
+            logger.debug("Fallback API result", { domain, result: finalResult });
 
             if (humanizeError) {
               fallbackTriggers.push({
@@ -358,7 +377,7 @@ export default async function handler(req, res) {
           }
 
           if (finalResult.flags.includes("ManualReviewRecommended")) {
-            logger.info("Adding to manualReviewQueue", { domain, companyName: finalResult.companyName });
+            logger.debug("Adding to manualReviewQueue", { domain, companyName: finalResult.companyName });
             manualReviewQueue.push({
               domain,
               companyName: finalResult.companyName,
@@ -370,14 +389,14 @@ export default async function handler(req, res) {
         }
 
         if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
-          logger.info("Expanding initials", { domain, companyName: finalResult.companyName });
+          logger.debug("Expanding initials", { domain, companyName: finalResult.companyName });
           const expandedName = expandInitials(finalResult.companyName);
           if (expandedName && expandedName.name !== finalResult.companyName) {
             finalResult.companyName = expandedName.name;
             finalResult.flags = Array.from(new Set([...finalResult.flags, "InitialsExpandedLocally"]));
             finalResult.confidenceScore -= 5;
           }
-          logger.info("Expanded initials result", { domain, result: finalResult });
+          logger.debug("Expanded initials result SOFTENED", { domain, result: finalResult });
         }
 
         domainCache.set(domainKey, {
