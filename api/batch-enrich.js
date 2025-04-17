@@ -1,4 +1,4 @@
-// api/batch-enrich.js v4.2.29 (debugging step 5)
+// api/batch-enrich.js v4.2.30 (debugging step 6)
 console.warn("Module loading started at:", new Date().toISOString());
 
 import { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } from "./lib/humanize.js";
@@ -203,19 +203,6 @@ export default async function handler(req, res) {
         }
       }
 
-      if (BRAND_ONLY_DOMAINS.includes(`${domainKey}.com`)) {
-        console.warn(`Brand-only domain skipped: ${domainKey}`);
-        successful.push({
-          domain,
-          companyName: "",
-          confidenceScore: 0,
-          flags: ["BrandOnlyDomainSkipped"],
-          tokens: 0,
-          rowNum
-        });
-        continue;
-      }
-
       let finalResult = { companyName: "", confidenceScore: 0, flags: [], tokens: 0 };
       let tokensUsed = 0;
 
@@ -233,81 +220,42 @@ export default async function handler(req, res) {
         cityDetected = null;
       }
 
-      let humanizeError = null;
-      for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
-        try {
-          console.warn(`Attempt ${attempt} to humanize domain: ${domain}`);
-          const result = await humanizeName(domain, domain, true);
-          console.warn(`humanizeName result for ${domain}:`, result);
-          finalResult = {
-            companyName: result.name || "",
-            confidenceScore: result.confidenceScore || 0,
-            flags: result.flags || [],
-            tokens: result.tokens || 0
-          };
-          tokensUsed = result.tokens || 0;
-          humanizeError = null;
-          break;
-        } catch (error) {
-          humanizeError = error;
-          console.warn(`Humanize attempt ${attempt} failed for domain ${domain}: ${error.message}`);
-          if (attempt < RETRY_ATTEMPTS) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      if (BRAND_ONLY_DOMAINS.includes(`${domainKey}.com`)) {
+        console.warn(`Brand-only domain skipped: ${domainKey}`);
+        finalResult = {
+          companyName: "",
+          confidenceScore: 0,
+          flags: ["BrandOnlyDomainSkipped"],
+          tokens: 0
+        };
+      } else {
+        let humanizeError = null;
+        for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+          try {
+            console.warn(`Attempt ${attempt} to humanize domain: ${domain}`);
+            const result = await humanizeName(domain, domain, true);
+            console.warn(`humanizeName result for ${domain}:`, result);
+            finalResult = {
+              companyName: result.name || "",
+              confidenceScore: result.confidenceScore || 0,
+              flags: result.flags || [],
+              tokens: result.tokens || 0
+            };
+            tokensUsed = result.tokens || 0;
+            humanizeError = null;
+            break;
+          } catch (error) {
+            humanizeError = error;
+            console.warn(`Humanize attempt ${attempt} failed for domain ${domain}: ${error.message}`);
+            if (attempt < RETRY_ATTEMPTS) {
+              await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+            }
           }
         }
-      }
 
-      // Add to manualReviewQueue if ManualReviewRecommended flag is present
-      if (finalResult.flags.includes("ManualReviewRecommended")) {
-        console.warn(`Adding ${domain} to manualReviewQueue`);
-        manualReviewQueue.push({
-          domain,
-          name: finalResult.companyName,
-          confidenceScore: finalResult.confidenceScore,
-          flags: finalResult.flags,
-          rowNum
-        });
-      }
-
-      if (humanizeError || finalResult.confidenceScore < 75) {
-        console.warn(`Calling fallback API for domain: ${domain}`);
-        const fallback = await callFallbackAPI(domain, rowNum);
-        finalResult = {
-          companyName: fallback.companyName,
-          confidenceScore: fallback.confidenceScore,
-          flags: [...fallback.flags, "FallbackAPIUsed"],
-          tokens: fallback.tokens
-        };
-        tokensUsed += fallback.tokens;
-        console.warn(`Fallback API result for domain: ${domain}:`, finalResult);
-
-        if (humanizeError) {
-          fallbackTriggers.push({
-            domain,
-            rowNum,
-            reason: "HumanizeFailed",
-            details: {
-              error: humanizeError.message,
-              primary: {
-                name: "",
-                confidenceScore: 0,
-                flags: []
-              },
-              fallback: {
-                name: finalResult.companyName,
-                confidenceScore: finalResult.confidenceScore,
-                flags: finalResult.flags
-              },
-              brand: brandDetected,
-              city: cityDetected
-            },
-            tokens: tokensUsed
-          });
-        }
-
-        // Add to manualReviewQueue if ManualReviewRecommended flag is present in fallback result
+        // Add to manualReviewQueue if ManualReviewRecommended flag is present
         if (finalResult.flags.includes("ManualReviewRecommended")) {
-          console.warn(`Adding ${domain} to manualReviewQueue after fallback`);
+          console.warn(`Adding ${domain} to manualReviewQueue`);
           manualReviewQueue.push({
             domain,
             name: finalResult.companyName,
@@ -315,6 +263,55 @@ export default async function handler(req, res) {
             flags: finalResult.flags,
             rowNum
           });
+        }
+
+        if (humanizeError || finalResult.confidenceScore < 75) {
+          console.warn(`Calling fallback API for domain: ${domain}`);
+          const fallback = await callFallbackAPI(domain, rowNum);
+          finalResult = {
+            companyName: fallback.companyName,
+            confidenceScore: fallback.confidenceScore,
+            flags: [...fallback.flags, "FallbackAPIUsed"],
+            tokens: fallback.tokens
+          };
+          tokensUsed += fallback.tokens;
+          console.warn(`Fallback API result for domain: ${domain}:`, finalResult);
+
+          if (humanizeError) {
+            fallbackTriggers.push({
+              domain,
+              rowNum,
+              reason: "HumanizeFailed",
+              details: {
+                error: humanizeError.message,
+                primary: {
+                  name: "",
+                  confidenceScore: 0,
+                  flags: []
+                },
+                fallback: {
+                  name: finalResult.companyName,
+                  confidenceScore: finalResult.confidenceScore,
+                  flags: finalResult.flags
+                },
+                brand: brandDetected,
+                city: cityDetected
+              },
+              tokens: tokensUsed
+            });
+          }
+
+          // Add to manualReviewQueue if ManualReviewRecommended flag is present in fallback result
+          if (finalResult.flags.includes("ManualReviewRecommended")) {
+            console.warn(`Adding ${domain} to manualReviewQueue after fallback`);
+            manualReviewQueue.push({
+              domain,
+              name: finalResult.companyName,
+              confidenceScore: finalResult.confidenceScore,
+              flags: finalResult.flags,
+              rowNum
+            });
+          }
         }
       }
 
