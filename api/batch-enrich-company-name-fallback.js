@@ -19,18 +19,18 @@ const BRAND_MAPPING = {
   "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
   "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
   "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevy",
-  "chevy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
+  "chevvy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
   "dodge": "Dodge", "eagle": "Eagle", "ferrari": "Ferrari", "fiat": "Fiat", "ford": "Ford", "genesis": "Genesis",
   "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
   "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
   "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
   "lincoln": "Ford", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
-  "mb": "Mercedes", "merc": "Mercedes", "mercedes": "Mercedes", "mercedes-benz": "Mercedes", "mercedesbenz": "Mercedes",
+  "mb": "Mercedes", "merc": "Mercedes", "mercedes": "Mercedes", "mercedes-benz": "Mercedes", "mercedesbenz": "Mercedes", "merk": "Mercedes",
   "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile", "plymouth": "Plymouth",
   "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram", "rivian": "Rivian",
   "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion", "smart": "Smart",
   "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
-  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW"
+  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW", "chevy": "Chevy"
 };
 
 const BRAND_ONLY_DOMAINS = [
@@ -47,6 +47,34 @@ const BRAND_ONLY_DOMAINS = [
 const openAICache = new Map();
 
 /**
+ * Custom error for fallback failures
+ */
+class FallbackError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = 'FallbackError';
+    this.details = details;
+  }
+}
+
+/**
+ * Structured logger
+ * @param {string} level - Log level (info, warn, error)
+ * @param {string} message - Log message
+ * @param {object} context - Additional context
+ */
+function log(level, message, context = {}) {
+  const logEntry = {
+    timestamp: new Date().toISOString(),
+    level,
+    message,
+    domain: context.domain || null,
+    ...context
+  };
+  console[level](JSON.stringify(logEntry, null, 2));
+}
+
+/**
  * Fallback function for unresolved names
  * @param {string} domain - Dealership domain
  * @param {object} meta - Metadata
@@ -56,13 +84,23 @@ export async function fallbackName(domain, meta = {}) {
   const flags = new Set();
   let tokens = 0;
 
+  log('info', 'Starting fallback processing', { domain });
+
   // Try humanize.js first
-  const initialResult = await humanizeName(domain, domain, true);
-  flags.add(...initialResult.flags);
+  let initialResult;
+  try {
+    initialResult = await humanizeName(domain, domain, true);
+    flags.add(...initialResult.flags);
+    log('info', 'humanizeName completed', { domain, result: initialResult });
+  } catch (error) {
+    log('error', 'humanizeName failed', { domain, error: error.message });
+    flags.add("HumanizeNameError");
+    initialResult = { name: "", confidenceScore: 0, flags: [], tokens: 0 };
+  }
 
   // Return early if humanizeName produced a high-confidence result
   if (initialResult.confidenceScore >= 95 && !initialResult.flags.includes("ManualReviewRecommended")) {
-    console.warn(`Using humanizeName result for ${domain}: ${initialResult.name}`);
+    log('info', 'Using humanizeName result', { domain, name: initialResult.name });
     return {
       companyName: initialResult.name,
       confidenceScore: initialResult.confidenceScore,
@@ -73,7 +111,7 @@ export async function fallbackName(domain, meta = {}) {
 
   // Skip OpenAI for brand-only domains
   if (initialResult.flags.includes("BrandOnlyDomainSkipped") || BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
-    console.warn(`Skipping OpenAI for brand-only domain: ${domain}`);
+    log('warn', 'Skipping OpenAI for brand-only domain', { domain });
     flags.add("BrandOnlyDomainSkipped");
     flags.add("FallbackSkipped");
     return {
@@ -85,23 +123,28 @@ export async function fallbackName(domain, meta = {}) {
   }
 
   // Local fallback: use meta title brand
-  const metaBrand = getMetaTitleBrand(meta);
-  if (metaBrand) {
-    console.warn(`Local fallback used for ${domain}: ${metaBrand}`);
-    flags.add("LocalFallbackUsed");
-    return {
-      companyName: metaBrand,
-      confidenceScore: 80,
-      flags: Array.from(flags),
-      tokens: 0
-    };
+  try {
+    const metaBrand = getMetaTitleBrand(meta);
+    if (metaBrand) {
+      log('info', 'Local fallback used', { domain, metaBrand });
+      flags.add("LocalFallbackUsed");
+      return {
+        companyName: metaBrand,
+        confidenceScore: 80,
+        flags: Array.from(flags),
+        tokens: 0
+      };
+    }
+  } catch (error) {
+    log('error', 'Local fallback failed', { domain, error: error.message });
+    flags.add("LocalFallbackFailed");
   }
 
   // Check OpenAI cache
   const cacheKey = `${domain}:${meta.title || ''}`;
   if (openAICache.has(cacheKey)) {
     const cached = openAICache.get(cacheKey);
-    console.warn(`Cache hit for ${domain}: ${cached.companyName}`);
+    log('info', 'Cache hit', { domain, cachedName: cached.companyName });
     flags.add("OpenAICacheHit");
     return {
       companyName: cached.companyName,
@@ -124,7 +167,7 @@ export async function fallbackName(domain, meta = {}) {
   `;
 
   try {
-    console.warn(`Calling OpenAI for ${domain}`);
+    log('info', 'Calling OpenAI', { domain });
     const response = await callOpenAI(prompt, {
       model: "gpt-4-turbo",
       max_tokens: 50,
@@ -134,6 +177,10 @@ export async function fallbackName(domain, meta = {}) {
 
     let name = response.output.trim();
     tokens = response.tokens;
+
+    if (!name) {
+      throw new FallbackError('OpenAI returned empty name', { domain });
+    }
 
     // Post-process
     name = name.replace(/['’]s\b/g, '');
@@ -159,10 +206,11 @@ export async function fallbackName(domain, meta = {}) {
 
     // Cache result
     openAICache.set(cacheKey, result);
-    console.warn(`OpenAI result cached for ${domain}: ${name}`);
+    log('info', 'OpenAI result cached', { domain, name });
     return result;
   } catch (error) {
-    console.error(`OpenAI fallback failed for ${domain}: ${error.message}`);
+    const errorDetails = error instanceof FallbackError ? error.details : { error: error.message };
+    log('error', 'OpenAI fallback failed', { domain, ...errorDetails });
     const fallbackName = initialResult.name || `${domain.split('.')[0]} Auto`;
     const result = {
       companyName: fallbackName,
@@ -194,11 +242,14 @@ function getMetaTitleBrand(meta) {
 /**
  * Clears OpenAI cache
  */
-// api/company-name-fallback.js
 export function clearOpenAICache() {
-  console.warn("clearOpenAICache called (noop)");
+  openAICache.clear();
+  log('info', 'OpenAI cache cleared', {});
 }
 
+/**
+ * API handler (stub for Vercel)
+ */
 export default async function handler(req, res) {
   return res.status(200).json({
     successful: [],
