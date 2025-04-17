@@ -1,4 +1,4 @@
-// api/batch-enrich.js v4.2.18
+// api/batch-enrich.js v4.2.19
 import { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } from "./lib/humanize.js";
 import { clearOpenAICache } from "./company-name-fallback.js";
 
@@ -110,13 +110,18 @@ const streamToString = async (req) => {
     const chunks = [];
     const timeout = setTimeout(() => reject(new Error("Stream timeout")), 5000);
 
-    req.on("data", (chunk) => chunks.push(chunk));
+    req.on("data", (chunk) => {
+      chunks.push(chunk);
+    });
     req.on("end", () => {
       clearTimeout(timeout);
-      resolve(Buffer.concat(chunks).toString("utf-8"));
+      const raw = Buffer.concat(chunks).toString("utf-8");
+      console.log(`Raw request body: ${raw}`); // Debug log
+      resolve(raw);
     });
     req.on("error", (error) => {
       clearTimeout(timeout);
+      console.error(`Stream error: ${error.message}`);
       reject(error);
     });
   });
@@ -127,9 +132,17 @@ export default async function handler(req, res) {
     const raw = await streamToString(req);
     if (!raw) return res.status(400).json({ error: "Empty body" });
 
-    let body = JSON.parse(raw);
+    let body;
+    try {
+      body = JSON.parse(raw);
+    } catch (error) {
+      console.error(`Invalid JSON body: ${error.message}, Raw: ${raw}`);
+      return res.status(400).json({ error: "Invalid JSON body", details: error.message, raw });
+    }
+
     const leads = body.leads || body.leadList || body.domains;
     if (!Array.isArray(leads)) {
+      console.error("Leads must be an array");
       return res.status(400).json({ error: "Leads must be an array" });
     }
 
@@ -150,6 +163,7 @@ export default async function handler(req, res) {
     });
 
     if (validatedLeads.length === 0) {
+      console.error("No valid leads");
       return res.status(400).json({ error: "No valid leads", details: validationErrors });
     }
 
@@ -263,7 +277,7 @@ export default async function handler(req, res) {
           }
 
           if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
-            const expandedName = expandInitials(finalResult.companyName, domain, brandDetected, cityDetected);
+            const expandedName = expandInitials(finalResult.companyName);
             if (expandedName && expandedName.name !== finalResult.companyName) {
               finalResult.companyName = expandedName.name;
               finalResult.flags.push("InitialsExpandedLocally");
