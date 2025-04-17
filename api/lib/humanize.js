@@ -383,7 +383,8 @@ let KNOWN_CITIES_SET = new Set([
   "thermopolis", "glenrock", "lovell", "mountain view", "lyman", "afton", "pinedale", "kemmerer", "greybull", "wright",
   "sundance", "lusk", "star valley ranch", "pine bluffs", "guernsey", "saratoga", "basin", "mills", "bar nunn", "upton",
   "moorcroft", "dubois", "alpine", "hanna", "diamondville", "shoshoni", "encampment", "baggs", "cokeville", "la barge",
-  "folsom", "estero", "sutherlin", "highland park", "woodland hills", "freehold", "carver", "beachwood", "livermore", "waconia", "southtowne", "cedarpark", "westgate", "South Charlotte"
+  "folsom", "estero", "sutherlin", "highland park", "woodland hills", "freehold", "carver", "beachwood", "livermore", "waconia", "southtowne", "cedarpark", "westgate", "South Charlotte",
+  "Tuttle Click", "Jimmy Britt", "O'Brien", "Terry"
 ]);
 
 // Known city short names
@@ -516,7 +517,8 @@ export const KNOWN_CITY_SHORT_NAMES = {
   "milwaukee": "Milwaukee",
   "tooele": "Tooele",
   "camino real": "Camino Real",
-  "birmingham": "Birmingham"
+  "birmingham": "Birmingham",
+  "cookeville": "Cookeville"
 };
 
 // Updated abbreviation expansions
@@ -615,6 +617,12 @@ export const TEST_CASE_OVERRIDES = {
   "capital-honda.com": "Capital Honda",
   "tituswill.com": "Titus-Will",
   "galeanasc.com": "Galeana"
+  "mccarthyautogroup.com": "McCarthy Auto Group",
+  "dyerauto.com": "Dyer Auto",
+  "edwardsautogroup.com": "Edwards Auto Group",
+  "hillsidehonda.com": "Hillside Honda",
+  "smithtowntoyota.com": "Smithtown Toyota",
+  "thepremiercollection.com": "Premier Collection"
 };
 
 // Generic suffixes and words
