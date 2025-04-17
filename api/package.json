@@ -2,9 +2,10 @@
   "type": "module",
   "name": "get-enrich-api",
   "version": "1.1.0",
-  "description": "ShowRevv Lead Enrichment System API for cleaning and enriching lead data",
+  "description": "ShowRevv Lead Enrichment System API for cleaning and enriching lead data.",
   "dependencies": {
-    "openai": "4.0.0"
+    "openai": "^4.0.0",
+    "next": "^14.2.0"
   },
   "devDependencies": {
     "eslint": "^9.24.0"
@@ -15,7 +16,7 @@
   "scripts": {
     "start": "vercel dev",
     "deploy": "vercel deploy --prod",
-    "test": "echo 'Run manual tests as described in script comments.'",
+    "test": "echo Run manual tests as described in script comments.",
     "lint": "eslint .",
     "build": "npm run lint"
   },
