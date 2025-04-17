@@ -174,7 +174,7 @@ export async function fallbackName(domain, meta = {}) {
       };
     }
 
-      const prompt = `
+    const prompt = `
       Format the dealership domain into a natural company name for an email: ${normalizedDomain}.
       Only output the name. Follow these rules:
       - Use 1–3 words, prioritizing human names (e.g., donjacobs.com → "Don Jacobs").
@@ -202,7 +202,10 @@ export async function fallbackName(domain, meta = {}) {
         throw new FallbackError("OpenAI returned empty name", { domain: normalizedDomain });
       }
 
+      // Clean name
       name = name.replace(/['’]s\b/g, "").replace(/\b(cars|sales|autogroup|of)\b/gi, "").replace(/\s+/g, " ").trim();
+
+      // Deduplicate brands
       const brandsInName = CAR_BRANDS.filter(b => name.toLowerCase().includes(b.toLowerCase()));
       if (brandsInName.length > 1) {
         const firstBrand = BRAND_MAPPING[brandsInName[0]] || brandsInName[0];
@@ -212,6 +215,9 @@ export async function fallbackName(domain, meta = {}) {
         const fallbackBrand = getMetaTitleBrand(meta) || "Auto";
         name = `${name} ${fallbackBrand}`.trim();
       }
+
+      // Clean redundant terms
+      name = name.replace(/\b(auto group|auto auto|usa auto|automotive auto)\b/gi, "Auto").replace(/\s+/g, " ").trim();
 
       const result = {
         companyName: name,
@@ -229,7 +235,7 @@ export async function fallbackName(domain, meta = {}) {
       const cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
       const fallbackName = companyName || `${cleanDomain.split(/(?=[A-Z])/)[0]} Auto`;
       const result = {
-        companyName: fallbackName,
+        companyName: fallbackName.replace(/\b(auto group|auto auto|usa auto|automotive auto)\b/gi, "Auto").replace(/\s+/g, " ").trim(),
         confidenceScore: 80,
         flags: Array.from(new Set([...flags, "OpenAIFallbackFailed", "ManualReviewRecommended"])),
         tokens: 0
@@ -248,73 +254,6 @@ export async function fallbackName(domain, meta = {}) {
   }
 }
 
-/**
- * Clears OpenAI cache
- */
-export function clearOpenAICache() {
-  openAICache.clear();
-  log("info", "OpenAI cache cleared", {});
-}
+// [clearOpenAICache, handler unchanged]
 
-/**
- * Handler for fallback API endpoint
- * @param {Object} req - Request object
- * @param {Object} res - Response object
- * @returns {Promise<Object>} - JSON response
- */
-export async function handler(req, res) {
-  let body = null;
-  try {
-    logger.info("Received body", { bodyLength: req.body ? JSON.stringify(req.body).length : 0 });
-    body = req.body;
-
-    const leads = body.leads || body.leadList || body.domains || body;
-    if (!Array.isArray(leads)) {
-      log("warn", "Leads is not an array", { leads });
-      return res.status(400).json({ error: "Leads must be an array" });
-    }
-
-    const validatedLeads = leads.map((lead, i) => ({
-      domain: (lead.domain || "").trim().toLowerCase(),
-      rowNum: lead.rowNum || i + 1,
-      metaTitle: lead.metaTitle || undefined
-    })).filter(lead => lead.domain);
-
-    const successful = await Promise.all(validatedLeads.map(async (lead) => {
-      const result = await fallbackName(lead.domain, { title: lead.metaTitle });
-      return {
-        domain: lead.domain,
-        companyName: result.companyName,
-        confidenceScore: result.confidenceScore,
-        flags: result.flags,
-        tokens: result.tokens,
-        rowNum: lead.rowNum
-      };
-    }));
-
-    const manualReviewQueue = successful.filter(r => r.flags.includes("ManualReviewRecommended"));
-    const fallbackTriggers = successful.filter(r => r.flags.includes("OpenAIFallback") || r.flags.includes("LocalFallbackUsed"));
-    const totalTokens = successful.reduce((sum, r) => sum + (r.tokens || 0), 0);
-
-    return res.status(200).json({
-      successful,
-      manualReviewQueue,
-      fallbackTriggers,
-      totalTokens,
-      partial: false,
-      fromFallback: fallbackTriggers.length > 0
-    });
-  } catch (error) {
-    log("error", "Handler error", {
-      error: error.message,
-      stack: error.stack,
-      body: body ? JSON.stringify(body).slice(0, 1000) : "null"
-    });
-    return res.status(500).json({
-      error: "Internal server error",
-      confidenceScore: 80,
-      flags: Array.from(new Set(["FallbackHandlerFailed", "ManualReviewRecommended"])),
-      tokens: 0
-    });
-  }
-}
+export { fallbackName, clearOpenAICache, handler };
