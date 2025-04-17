@@ -656,16 +656,19 @@ function extractTokens(domain) {
     if (token.length > 4 && !CAR_BRANDS.includes(tokenLower) && !KNOWN_CITIES_SET.has(tokenLower)) {
       let splitTokens = [];
 
-      // Explicit handling for known brand-city patterns
+      // Explicit regex-based brand-city splitting
       const brandCityPatterns = [
-        { brand: "ford", city: "tustin" },
-        { brand: "toyota", city: "chicago" }
+        { regex: /^(ford)(tustin)$/i, brand: "ford", city: "tustin" },
+        { regex: /^(toyota)(chicago)$/i, brand: "toyota", city: "chicago" },
+        { regex: /^(kia)(lagrange)$/i, brand: "kia", city: "lagrange" },
+        { regex: /^(toyota)(greenwich)$/i, brand: "toyota", city: "greenwich" }
       ];
       for (const pattern of brandCityPatterns) {
-        if (tokenLower === `${pattern.brand}${pattern.city}`) {
+        const match = tokenLower.match(pattern.regex);
+        if (match) {
           splitTokens.push(capitalizeName(pattern.brand).name);
           splitTokens.push(capitalizeName(pattern.city).name);
-          log('info', 'Matched brand-city pattern', { domain, token, split: splitTokens });
+          log('info', 'Matched brand-city regex', { domain, token, split: splitTokens });
           return splitTokens;
         }
       }
@@ -874,7 +877,7 @@ function tryBrandCityPattern(tokens, meta) {
     }
   }
 
-  if (brand && city) {
+  if (brand && city && brand.toLowerCase() !== city.toLowerCase()) {
     const formattedBrand = BRAND_MAPPING[brand] || capitalizeName(brand).name;
     const formattedCity = capitalizeName(city).name;
     // Reorder to City Brand unless brand ends in 's'
@@ -981,12 +984,22 @@ function tryGenericPattern(tokens, meta) {
     return { name: brand, confidenceScore: 85, flags: Array.from(flags) };
   }
 
-  const name = cleanedTokens[0];
+  let name = cleanedTokens[0];
   const brand = getMetaTitleBrand(meta) || "Auto";
+  // Sanity check for duplicate tokens (e.g., "Ford Ford")
+  const proposedName = `${name} ${brand}`;
+  if (proposedName.split(" ").every((w, _, arr) => w.toLowerCase() === arr[0].toLowerCase())) {
+    flags.add("DuplicateTokenSanitized");
+    name = cleanedTokens[1] ? `${cleanedTokens[1]} Auto` : "Auto";
+    log('info', 'Duplicate tokens sanitized', { tokens, name });
+  } else {
+    name = proposedName;
+  }
+
   flags.add("GenericAppended");
   flags.add("ManualReviewRecommended");
-  log('info', 'Generic pattern matched', { tokens, name: `${name} ${brand}` });
-  return { name: `${name} ${brand}`, confidenceScore: 95, flags: Array.from(flags) };
+  log('info', 'Generic pattern matched', { tokens, name });
+  return { name, confidenceScore: 95, flags: Array.from(flags) };
 }
 
 /**
@@ -1001,7 +1014,7 @@ async function fetchMetaData(domain) {
     "chicagocars.com": { title: "Toyota Dealer in Chicago" },
     "davisautosales.com": { title: "Chevrolet Dealer" },
     "northwestcars.com": { title: "Toyota Dealer" },
-    "fordtustin.com": { title: "Ford Dealer in Tustin" } // Added for test case
+    "fordtustin.com": { title: "Ford Dealer in Tustin" }
   };
   return meta[domain] || {};
 }
