@@ -425,7 +425,7 @@ const KNOWN_CITIES_SET = new Set([
   "Tuttle Click", "Jimmy Britt", "O'Brien", "Terry"
 ]);
 
-export async function humanizeName(domain, originalDomain, useMeta = false) {
+async function humanizeName(domain, originalDomain, useMeta = false) {
   log("info", "humanizeName started", { domain, originalDomain, useMeta });
 
   if (!domain || typeof domain !== "string") {
