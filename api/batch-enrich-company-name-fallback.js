@@ -157,7 +157,7 @@ export async function fallbackName(domain, meta = {}) {
         };
       }
     } catch (error) {
-      log("error", "Meta title fallback failed", { domain: normalizedDomain, error: error.message });
+      log("error", "Meta title fallback failed", { domain: normalizedDomain, error: error.message, stack: error.stack });
       flags.push("LocalFallbackFailed");
     }
 
@@ -174,7 +174,7 @@ export async function fallbackName(domain, meta = {}) {
       };
     }
 
-    const prompt = `
+      const prompt = `
       Format the dealership domain into a natural company name for an email: ${normalizedDomain}.
       Only output the name. Follow these rules:
       - Use 1–3 words, prioritizing human names (e.g., donjacobs.com → "Don Jacobs").
@@ -237,6 +237,15 @@ export async function fallbackName(domain, meta = {}) {
       openAICache.set(cacheKey, result);
       return result;
     }
+  } catch (err) {
+    log("error", "fallbackName failed", {
+      domain: normalizedDomain || "unknown",
+      error: err.message,
+      stack: err.stack
+    });
+    flags.push("FallbackNameError", "ManualReviewRecommended");
+    return { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
+  }
 }
 
 /**
