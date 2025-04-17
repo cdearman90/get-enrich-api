@@ -542,48 +542,82 @@ const KNOWN_CITIES_SET = new Set([
  * @returns {object} - { name: string, confidenceScore: number, flags: string[], tokens: number }
  */
 export async function humanizeName(domain, originalDomain, useMeta = false) {
-  const meta = useMeta ? await fetchMetaData(domain) : {};
-  domain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, '');
+  console.warn(`humanizeName started for domain: ${domain}, originalDomain: ${originalDomain}, useMeta: ${useMeta}`);
 
-  // Check brand-only domains
-  if (BRAND_ONLY_DOMAINS.includes(`${domain}.com`)) {
-    return { name: "", confidenceScore: 0, flags: ["BrandOnlyDomainSkipped"], tokens: 0 };
+  let meta = {};
+  if (useMeta) {
+    try {
+      console.warn(`Calling fetchMetaData for ${domain}`);
+      meta = await fetchMetaData(domain);
+      console.warn(`fetchMetaData result for ${domain}:`, meta);
+    } catch (e) {
+      console.error(`fetchMetaData failed for ${domain}: ${e.message}`);
+      meta = {};
+    }
   }
 
-  // Apply test case overrides
-  if (TEST_CASE_OVERRIDES[originalDomain]) {
-    return { name: TEST_CASE_OVERRIDES[originalDomain], confidenceScore: 125, flags: ["TestCaseOverride"], tokens: 0 };
-  }
+  try {
+    console.warn(`Normalizing domain: ${domain}`);
+    domain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, '');
+    console.warn(`Normalized domain: ${domain}`);
 
-  // Apply general overrides
-  if (OVERRIDES[domain]) {
-    return { name: OVERRIDES[domain], confidenceScore: 125, flags: ["OverrideApplied"], tokens: 0 };
-  }
+    // Check brand-only domains
+    if (BRAND_ONLY_DOMAINS.includes(`${domain}.com`)) {
+      console.warn(`Brand-only domain detected: ${domain}`);
+      return { name: "", confidenceScore: 0, flags: ["BrandOnlyDomainSkipped"], tokens: 0 };
+    }
 
-  const tokens = extractTokens(domain);
-  const flags = [];
+    // Apply test case overrides
+    if (TEST_CASE_OVERRIDES[originalDomain]) {
+      console.warn(`Test case override applied for ${originalDomain}`);
+      return { name: TEST_CASE_OVERRIDES[originalDomain], confidenceScore: 125, flags: ["TestCaseOverride"], tokens: 0 };
+    }
 
-  let result = tryHumanNamePattern(tokens, meta);
-  if (result.name) {
-    flags.push("HumanNameDetected");
+    // Apply general overrides
+    if (OVERRIDES[domain]) {
+      console.warn(`General override applied for ${domain}`);
+      return { name: OVERRIDES[domain], confidenceScore: 125, flags: ["OverrideApplied"], tokens: 0 };
+    }
+
+    console.warn(`Extracting tokens for ${domain}`);
+    const tokens = extractTokens(domain);
+    console.warn(`Tokens extracted:`, tokens);
+
+    const flags = [];
+
+    console.warn(`Trying human name pattern for ${domain}`);
+    let result = tryHumanNamePattern(tokens, meta);
+    if (result.name) {
+      flags.push("HumanNameDetected");
+      console.warn(`Human name pattern matched for ${domain}: ${result.name}`);
+      return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
+    }
+
+    console.warn(`Trying brand city pattern for ${domain}`);
+    result = tryBrandCityPattern(tokens, meta);
+    if (result.name) {
+      flags.push("BrandCityPattern");
+      console.warn(`Brand city pattern matched for ${domain}: ${result.name}`);
+      return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
+    }
+
+    console.warn(`Trying proper noun pattern for ${domain}`);
+    result = tryProperNounPattern(tokens);
+    if (result.name) {
+      flags.push("ProperNounDetected");
+      console.warn(`Proper noun pattern matched for ${domain}: ${result.name}`);
+      return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
+    }
+
+    console.warn(`Trying generic pattern for ${domain}`);
+    result = tryGenericPattern(tokens, meta);
+    flags.push("GenericPattern", "ManualReviewRecommended");
+    console.warn(`Generic pattern applied for ${domain}: ${result.name}`);
     return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
+  } catch (error) {
+    console.error(`humanizeName error for ${domain}: ${error.message}`);
+    return { name: "", confidenceScore: 0, flags: ["HumanizeNameError"], tokens: 0 };
   }
-
-  result = tryBrandCityPattern(tokens, meta);
-  if (result.name) {
-    flags.push("BrandCityPattern");
-    return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
-  }
-
-  result = tryProperNounPattern(tokens);
-  if (result.name) {
-    flags.push("ProperNounDetected");
-    return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
-  }
-
-  result = tryGenericPattern(tokens, meta);
-  flags.push("GenericPattern", "ManualReviewRecommended");
-  return { ...result, flags: [...flags, ...result.flags], tokens: 0 };
 }
 
 /**
