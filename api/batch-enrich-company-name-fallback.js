@@ -540,8 +540,9 @@ async function fallbackName(domain, meta = {}) {
         flags.push("NormalizationApplied");
       }
     }
-        // Check cache
-    const cacheKey = `${normalizedDomain}:${meta.title || ""}`;
+
+    // Check cache
+    const cacheKey = `${normalizedDomain}:${(meta.title || "").toLowerCase().trim()}`;
     if (openAICache.has(cacheKey)) {
       const cached = openAICache.get(cacheKey);
       log("info", "Cache hit", { domain: normalizedDomain, companyName: cached.companyName });
@@ -655,7 +656,31 @@ function clearOpenAICache() {
  * @param {Object} res - Response object
  * @returns {Promise<Object>} - JSON response
  */
+const RATE_LIMIT = {
+  maxRequests: 100,
+  windowMs: 60 * 1000 // 1 minute
+};
+let requestCount = 0;
+let windowStart = Date.now();
+
 async function handler(req, res) {
+  // Reset rate limit counter if window has passed
+  if (Date.now() - windowStart > RATE_LIMIT.windowMs) {
+    requestCount = 0;
+    windowStart = Date.now();
+  }
+
+  // Check rate limit
+  if (requestCount >= RATE_LIMIT.maxRequests) {
+    log("warn", "Rate limit exceeded", { requestCount });
+    return res.status(429).json({
+      error: "Too Many Requests",
+      message: "Rate limit exceeded, please try again later",
+      retryAfter: Math.ceil((RATE_LIMIT.windowMs - (Date.now() - windowStart)) / 1000)
+    });
+  }
+  requestCount++;
+
   // Validate authentication token
   const authToken = process.env.VERCEL_AUTH_TOKEN;
   const authHeader = req.headers.authorization;
