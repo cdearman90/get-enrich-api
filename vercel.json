@@ -1,12 +1,15 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" }
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
   ],
   "routes": [
-    { "src": "/api/batch-enrich", "dest": "/api/company-name-fallback.js" }
-  ],
-  "env": {
-    "VERCEL_AUTH_TOKEN": "<VERCEL_AUTH_TOKEN>"
-  }
+    {
+      "src": "/api/batch-enrich",
+      "dest": "/api/company-name-fallback.js"
+    }
+  ]
 }
