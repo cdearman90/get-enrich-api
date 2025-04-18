@@ -234,6 +234,14 @@ function validateLeads(leads) {
 export default async function handler(req, res) {
   let body = null;
   try {
+    // Validate VERCEL_AUTH_TOKEN
+    const authToken = process.env.VERCEL_AUTH_TOKEN;
+    const authHeader = req.headers.authorization;
+    logger.info(`Received auth header: ${authHeader}, Expected: Bearer ${authToken}`);
+    if (!authHeader || authHeader !== `Bearer ${authToken}`) {
+      logger.warn("Unauthorized request", { authHeader, expected: `Bearer ${authToken}` });
+      return res.status(401).json({ error: "Unauthorized", message: "Invalid or missing authorization token" });
+    }
     logger.debug("Handler started", { method: req.method, bodyLength: req.body ? JSON.stringify(req.body).length : 0 });
 
     if (req.method !== "POST") {
