@@ -470,12 +470,12 @@ function extractTokens(domain) {
     let tokens = earlyCompoundSplit(cleanDomain);
     log("debug", "After earlyCompoundSplit", { domain, tokens });
 
-    // Dynamic splitting for cities, nouns, and brands
+    // Dynamic splitting for nouns, cities, and brands
     tokens = tokens.flatMap(token => {
       const lower = token.toLowerCase();
       if (!CAR_BRANDS.includes(lower) && !KNOWN_CITIES_SET.has(lower) && !KNOWN_PROPER_NOUNS.has(token)) {
         const splits = [];
-        // Check for proper noun pairs (e.g., donjacobs → ["Don", "Jacobs"])
+        // Proper noun pairs (e.g., donjacobs → ["Don", "Jacobs"])
         for (const noun of KNOWN_PROPER_NOUNS) {
           const nounLower = noun.toLowerCase();
           if (lower.includes(nounLower)) {
@@ -486,12 +486,23 @@ function extractTokens(domain) {
             }
           }
         }
-        // Check for city patterns (e.g., lacitycars → ["LA", "City"])
+        // City patterns (e.g., lacitycars → ["LA", "City"])
         for (const city of KNOWN_CITIES_SET) {
           if (lower.includes(city)) {
             splits.push(capitalizeName(city).name);
             const remaining = lower.replace(city, "");
             if (remaining && !["cars", "sales", "autogroup"].includes(remaining)) {
+              splits.push(capitalizeName(remaining).name);
+            }
+            return splits;
+          }
+        }
+        // Brand patterns (e.g., classicbmw → ["Classic", "BMW"])
+        for (const brand of CAR_BRANDS) {
+          if (lower.includes(brand)) {
+            splits.push(capitalizeName(brand).name);
+            const remaining = lower.replace(brand, "");
+            if (remaining) {
               splits.push(capitalizeName(remaining).name);
             }
             return splits;
@@ -575,13 +586,13 @@ function earlyCompoundSplit(text) {
       const nounLower = noun.toLowerCase();
       if (lower.includes(nounLower) && !KNOWN_CITIES_SET.has(nounLower)) {
         const remaining = lower.replace(nounLower, "");
-        // Check for second noun (e.g., donjacobs → Don Jacobs)
+        // Noun pair (e.g., donjacobs → Don Jacobs)
         if (remaining && KNOWN_PROPER_NOUNS.has(capitalizeName(remaining).name) && !KNOWN_CITIES_SET.has(remaining)) {
           const split = [capitalizeName(nounLower).name, capitalizeName(remaining).name];
           log("debug", "Dynamic noun split in earlyCompoundSplit", { text, split });
           return split;
         }
-        // Check for trailing brand (e.g., ricksmithchevrolet → Rick Smith Chevrolet)
+        // Noun + brand (e.g., ricksmithchevrolet → Rick Smith Chevrolet)
         for (const brand of CAR_BRANDS) {
           if (remaining.includes(brand)) {
             const preBrand = remaining.replace(brand, "");
@@ -601,6 +612,7 @@ function earlyCompoundSplit(text) {
     return [text];
   }
 }
+
 /**
  * Splits camelCase text into tokens
  * @param {string} text - Text to split
