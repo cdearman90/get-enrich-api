@@ -904,52 +904,85 @@ function tryGenericPattern(tokens, meta) {
       throw new Error("Invalid tokens input");
     }
 
-    const abbreviation = tokens.find(t => /^[A-Z]{2,3}$/.test(t) && !COMMON_WORDS.includes(t.toLowerCase()));
+    // Clean tokens: remove spam triggers and deduplicate
+    const spamTriggers = ["cars", "sales", "autogroup", "group"];
+    let cleanedTokens = tokens
+      .map(t => t.toLowerCase())
+      .filter(t => !spamTriggers.includes(t))
+      .filter((t, i, arr) => i === 0 || t !== arr[i - 1]); // Deduplicate
+    log("debug", "Cleaned tokens", { tokens, cleanedTokens });
+
+    // Handle abbreviations (e.g., "NP", "MB")
+    const abbreviation = cleanedTokens.find(t => /^[a-z]{2,3}$/i.test(t) && !COMMON_WORDS.includes(t));
     if (abbreviation) {
-      const brand = tokens.find(t => CAR_BRANDS.includes(t.toLowerCase())) || getMetaTitleBrand(meta) || "Auto";
+      const metaBrand = getMetaTitleBrand(meta) || "Auto";
+      const formattedAbbr = expandInitials(abbreviation).name;
       flags.add("AbbreviationDetected");
-      flags.add("ManualReviewRecommended");
-      log("info", "Abbreviation pattern matched", { tokens, name: `${abbreviation} ${brand}` });
-      return { companyName: `${abbreviation} ${brand}`, confidenceScore: 95, flags: Array.from(flags) };
+      const name = `${formattedAbbr} ${BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand).name}`;
+      log("info", "Abbreviation pattern matched", { tokens, name });
+      return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
     }
 
-    const cleanedTokens = tokens.filter(t => !["cars", "sales", "autogroup"].includes(t.toLowerCase()));
+    // Check for city + meta brand
+    const city = cleanedTokens.find(t => KNOWN_CITIES_SET.has(t));
+    if (city) {
+      const metaBrand = getMetaTitleBrand(meta);
+      if (metaBrand && !cleanedTokens.some(t => CAR_BRANDS.includes(t))) {
+        const formattedCity = capitalizeName(city).name;
+        const formattedBrand = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand).name;
+        const name = `${formattedCity} ${formattedBrand}`;
+        flags.add("CityBrandPattern");
+        flags.add("MetaTitleBrandAppended");
+        log("info", "City with meta brand matched", { tokens, name });
+        return { companyName: name, confidenceScore: 125, flags: Array.from(flags) };
+    }
+    }
+
+    // Handle remaining tokens
     if (cleanedTokens.length === 0) {
-      const brand = getMetaTitleBrand(meta) || "Auto";
+      const metaBrand = getMetaTitleBrand(meta) || "Auto";
+      const name = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand).name;
       flags.add("GenericAppended");
       flags.add("ManualReviewRecommended");
-      log("info", "No valid tokens, using brand", { tokens, name: brand });
-      return { companyName: brand, confidenceScore: 85, flags: Array.from(flags) };
+      log("info", "No valid tokens, using meta brand", { tokens, name });
+      return { companyName: name, confidenceScore: 85, flags: Array.from(flags) };
     }
 
-    let name = cleanedTokens[0];
-    const brand = getMetaTitleBrand(meta) || "Auto";
-    const proposedName = name.toLowerCase() === "autonation" ? `${name} Auto` : `${name} ${brand}`;
-    if (proposedName.split(" ").every((w, _, arr) => w.toLowerCase() === arr[0].toLowerCase())) {
-      flags.add("DuplicateTokenSanitized");
-      name = cleanedTokens[1] ? `${cleanedTokens[1]} Auto` : "Auto";
-      log("info", "Duplicate tokens sanitized", { tokens, name });
-    } else {
-      name = proposedName;
+    // Select primary token (prefer proper nouns or first non-brand token)
+    let primaryToken = cleanedTokens.find(t => KNOWN_PROPER_NOUNS.has(capitalizeName(t).name)) || cleanedTokens[0];
+    let brand = cleanedTokens.find(t => CAR_BRANDS.includes(t)) || getMetaTitleBrand(meta) || "Auto";
+    brand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name;
+
+    // Handle special cases (e.g., AutoNation)
+    if (primaryToken === "autonation") {
+      flags.add("SpecialCase");
+      log("info", "AutoNation detected", { tokens, name: "AutoNation" });
+      return { companyName: "AutoNation", confidenceScore: 125, flags: Array.from(flags) };
     }
 
-    // Deduplicate brands in generic pattern
-    const nameTokens = name.toLowerCase().split(" ");
-    const brandsInName = CAR_BRANDS.filter(b => nameTokens.some(t => t.includes(b.toLowerCase())));
-    if (brandsInName.length > 1) {
-      const firstBrand = BRAND_MAPPING[brandsInName[0]] || capitalizeName(brandsInName[0]).name;
-      name = nameTokens
-        .filter(t => !brandsInName.slice(1).some(b => t.includes(b.toLowerCase())))
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
-      name = `${name} ${firstBrand}`.trim();
+    // Format name
+    let name = capitalizeName(primaryToken).name;
+    const isPossessiveFriendly = name.toLowerCase().endsWith("s");
+    if (!isPossessiveFriendly && !name.toLowerCase().includes(brand.toLowerCase())) {
+      name = `${name} ${brand}`;
     }
+
+    // Deduplicate brands in name
+    const nameTokens = name.split(" ").filter((t, i, arr) => i === 0 || t.toLowerCase() !== arr[i - 1].toLowerCase());
+    name = nameTokens.slice(0, 3).join(" "); // Limit to 1–3 words
+
+    // Clean redundant terms
+    name = name
+      .replace(/\b(auto auto|auto group)\b/gi, "Auto")
+      .replace(/\s+/g, " ")
+      .trim();
 
     flags.add("GenericAppended");
-    flags.add("ManualReviewRecommended");
+    if (!flags.has("CityBrandPattern")) {
+      flags.add("ManualReviewRecommended");
+    }
     log("info", "Generic pattern matched", { tokens, name });
-    return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
+    return { companyName: name, confidenceScore: flags.has("CityBrandPattern") ? 125 : 95, flags: Array.from(flags) };
   } catch (e) {
     log("error", "tryGenericPattern failed", { tokens, error: e.message, stack: e.stack });
     return { companyName: "", confidenceScore: 80, flags: Array.from(new Set(["GenericPatternError", "ManualReviewRecommended"])) };
