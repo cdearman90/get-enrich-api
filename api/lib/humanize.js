@@ -1171,23 +1171,23 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
       return { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
     }
 
-    // Check Abbreviation Generic Pattern
-    log("info", "Trying generic pattern", { domain: normalizedDomain });
+    // Check Human Name pattern first
+    log("info", "Trying human name pattern", { domain: normalizedDomain });
     let result;
     try {
-      result = tryGenericPattern(extractedTokens, meta);
+      result = tryHumanNamePattern(extractedTokens, meta);
     } catch (err) {
-      log("error", "tryGenericPattern failed", { domain: normalizedDomain, error: err.message, stack: err.stack });
-      flags.push("GenericPatternError");
+      log("error", "tryHumanNamePattern failed", { domain: normalizedDomain, error: err.message, stack: err.stack });
+      flags.push("HumanNamePatternError");
       return { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
     }
 
-    if (result.companyName && result.flags.includes("AbbreviationDetected")) {
-      log("info", "Abbreviation pattern matched", { domain: normalizedDomain, companyName: result.companyName });
+    if (result.companyName) {
+      log("info", "Human name pattern matched", { domain: normalizedDomain, companyName: result.companyName });
       return {
         companyName: result.companyName,
         confidenceScore: result.confidenceScore,
-        flags: Array.from(new Set(["GenericPattern", ...result.flags])),
+        flags: Array.from(new Set(["HumanNameDetected", ...result.flags])),
         tokens
       };
     }
@@ -1208,26 +1208,6 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
         companyName: result.companyName,
         confidenceScore: result.confidenceScore,
         flags: Array.from(new Set(["BrandCityPattern", ...result.flags])),
-        tokens
-      };
-    }
-
-    // Check Human Name pattern
-    log("info", "Trying human name pattern", { domain: normalizedDomain });
-    try {
-      result = tryHumanNamePattern(extractedTokens, meta);
-    } catch (err) {
-      log("error", "tryHumanNamePattern failed", { domain: normalizedDomain, error: err.message, stack: err.stack });
-      flags.push("HumanNamePatternError");
-      return { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
-    }
-
-    if (result.companyName) {
-      log("info", "Human name pattern matched", { domain: normalizedDomain, companyName: result.companyName });
-      return {
-        companyName: result.companyName,
-        confidenceScore: result.confidenceScore,
-        flags: Array.from(new Set(["HumanNameDetected", ...result.flags])),
         tokens
       };
     }
@@ -1253,12 +1233,12 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
     }
 
     // Fallback Generic Pattern
-    log("info", "Trying generic pattern fallback", { domain: normalizedDomain });
+    log("info", "Trying generic pattern", { domain: normalizedDomain });
     try {
       result = tryGenericPattern(extractedTokens, meta);
     } catch (err) {
-      log("error", "tryGenericPattern (fallback) failed", { domain: normalizedDomain, error: err.message, stack: err.stack });
-      flags.push("GenericPatternFallbackError");
+      log("error", "tryGenericPattern failed", { domain: normalizedDomain, error: err.message, stack: err.stack });
+      flags.push("GenericPatternError");
       return { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
     }
 
