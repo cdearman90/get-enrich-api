@@ -82,7 +82,17 @@ const OVERRIDES = {
   "billdube.com": "Bill Dube",
   "donjacobs.com": "Don Jacobs",
   "sunsetmitsubishi.com": "Sunset Mitsubishi",
-  "classicbmw.com": "Classic BMW"
+  "classicbmw.com": "Classic BMW",
+  "robertthorne.com": "Robert Thorne",
+  "ricksmithchevrolet.com": "Rick Smith",
+  "crystalautogroup.com": "Crystal",
+  "davisautosales.com": "Davis",
+  "drivevictory.com": "Victory Auto",
+  "mazdanashville.com": "Nashville Mazda",
+  "kiaofchattanooga.com": "Chattanooga Kia",
+  "mikeerdman.com": "Mike Erdman",
+  "tasca.com": "Tasca",
+  "lacitycars.com": "La City"
 };
 
 // Blocklist for spammy patterns
@@ -94,7 +104,8 @@ const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
 // Known proper nouns for noun-pair restoration (subset of KNOWN_PROPER_NOUNS from humanize.js)
 const KNOWN_PROPER_NOUNS_ARRAY = [
   "Bill", "Dube", "Don", "Jacobs", "Rick", "Smith", "McLarty", "Daniel", "NP", "Lincoln",
-  "Sunset", "Classic", "Tasca", "Davis", "Barlow", "Mike", "Erdman", "AutoNation", "Robby", "Nixon"
+  "Sunset", "Classic", "Tasca", "Davis", "Barlow", "Mike", "Erdman", "AutoNation", "Robby", "Nixon",
+  "Robert", "Thorne", "Crystal", "Young", "Victory"
 ];
 
 // Cache for OpenAI results
@@ -128,6 +139,15 @@ function validateFallbackName(result, domain, domainBrand) {
       log("warn", "Invalid OpenAI result", { domain, result });
       flags.push("FallbackNameError", "ManualReviewRecommended");
       return { validatedName: null, flags };
+    }
+
+    // Split merged tokens (e.g., "Robertthorne" → "Robert Thorne")
+    if (validatedName.split(" ").length === 1) {
+      const splitTokens = validatedName.replace(/([a-z])([A-Z])/g, '$1 $2').split(" ").map(t => capitalizeName(t).name);
+      if (splitTokens.length > 1 && splitTokens.every(t => KNOWN_PROPER_NOUNS_ARRAY.includes(t))) {
+        validatedName = splitTokens.join(" ");
+        log("info", "Merged tokens split", { domain, validatedName });
+      }
     }
 
     // Enforce domain brand precedence
@@ -182,18 +202,15 @@ function validateFallbackName(result, domain, domainBrand) {
       validatedName = null;
     }
 
-    // Ensure brand is present if domain has a brand
-    if (domainBrand && validatedName && !validatedName.toLowerCase().includes(domainBrand.toLowerCase())) {
-      log("warn", "OpenAI output missing domain brand", { domain, name: validatedName });
-      flags.push("FallbackNameError");
-      validatedName = null;
-    }
-
-    // Check if result is flagged by OpenAI
-    if (result.flagged) {
-      log("warn", "OpenAI result flagged", { domain, name: validatedName });
-      flags.push("FallbackNameError", "ManualReviewRecommended");
-      validatedName = null;
+    // Relax ManualReviewRecommended for known proper nouns
+    if (validatedName) {
+      const nameTokens = validatedName.split(" ");
+      if (nameTokens.every(t => KNOWN_PROPER_NOUNS_ARRAY.includes(t)) || 
+          (nameTokens.length === 1 && KNOWN_PROPER_NOUNS_ARRAY.includes(nameTokens[0]))) {
+        log("info", "Relaxing ManualReviewRecommended for known proper nouns", { domain, name: validatedName });
+      } else if (!domainBrand || nameTokens.some(t => t.toLowerCase() === domainBrand?.toLowerCase())) {
+        flags.push("ManualReviewRecommended");
+      }
     }
 
     // Log successful validation
@@ -271,17 +288,31 @@ async function fallbackName(domain, meta = {}) {
       initialResult = { companyName: "", confidenceScore: 80, flags: [], tokens: 0 };
     }
 
-    // Enhanced city/brand detection
+    // Enhanced token rescue
     let cleanDomain;
     try {
       cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
-      const metaBrand = getMetaTitleBrand(meta);
       const tokens = cleanDomain
+        .replace(/([a-z])([A-Z])/g, '$1 $2') // Split camelCase
         .split(/(?=[A-Z])|of/)
         .map(t => t.toLowerCase())
         .filter(t => !SPAMMY_TOKENS.includes(t) && t !== "of");
       const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+      const properNounPair = tokens.filter(t => KNOWN_PROPER_NOUNS_ARRAY.includes(capitalizeName(t).name));
 
+      if (properNounPair.length === 2) {
+        const name = properNounPair.map(t => capitalizeName(t).name).join(" ");
+        log("info", "Proper noun pair rescued", { domain: normalizedDomain, name });
+        flags.push("ProperNounRecovered");
+        return {
+          companyName: name,
+          confidenceScore: 125,
+          flags: Array.from(new Set(flags)),
+          tokens: 0
+        };
+      }
+
+      const metaBrand = getMetaTitleBrand(meta);
       if (city && metaBrand && !CAR_BRANDS.some(b => cleanDomain.includes(b.toLowerCase()))) {
         const name = `${capitalizeName(city).name} ${BRAND_MAPPING[metaBrand.toLowerCase()] || metaBrand}`;
         log("info", "City and meta brand applied", { domain: normalizedDomain, name });
@@ -312,7 +343,7 @@ async function fallbackName(domain, meta = {}) {
         flags.push("CityDropped");
       }
     } catch (error) {
-      log("error", "City/brand fallback failed", { domain: normalizedDomain, error: error.message });
+      log("error", "Token rescue failed", { domain: normalizedDomain, error: error.message });
       flags.push("LocalFallbackFailed");
     }
 
@@ -384,49 +415,18 @@ async function fallbackName(domain, meta = {}) {
         name = validatedName;
       }
 
-      // Token rescue and noun-pair restoration
-      let finalName = name;
-      if (validatedName) {
-        const fallbackTokens = validatedName.split(" ");
-        const fallbackBrand = CAR_BRANDS.find(b => fallbackTokens.some(t => t.toLowerCase() === b.toLowerCase()));
-        const knownNamePair = KNOWN_PROPER_NOUNS_ARRAY.filter(n => 
-          fallbackTokens.some(t => n.toLowerCase().includes(t.toLowerCase())) &&
-          KNOWN_PROPER_NOUNS_ARRAY.includes(n)
-        );
-
-        if (knownNamePair.length === 2) {
-          finalName = knownNamePair.join(" ");
-          confidenceScore = 125;
-          flags.push("ProperNounRecovered");
-          log("info", "Proper noun pair recovered", { domain: normalizedDomain, name: finalName });
-          // Append brand if domain contains one and not already in name
-          if (domainBrand && !finalName.toLowerCase().includes(domainBrand.toLowerCase())) {
-            finalName = `${finalName} ${domainBrand}`;
-          }
-        } else if (fallbackBrand) {
-          // Validate brand origin
-          const metaBrand = getMetaTitleBrand(meta) || "";
-          if (!cleanDomain.includes(fallbackBrand.toLowerCase()) && !metaBrand.toLowerCase().includes(fallbackBrand.toLowerCase())) {
-            log("warn", "Brand rejected from fallback", { domain: normalizedDomain, brand: fallbackBrand });
-            flags.push("BrandRejectedFromFallback");
-            finalName = knownNamePair.length > 0 ? knownNamePair.join(" ") : fallbackTokens.filter(t => t.toLowerCase() !== fallbackBrand.toLowerCase()).join(" ");
-            confidenceScore = 85;
-          }
-        }
-      }
-
       // Post-fallback validation: ensure proper capitalization and no spammy tokens
-      if (finalName && !/^([A-Z][a-z]*\s?){1,3}$/.test(finalName)) {
-        log("warn", "Post-fallback capitalization fix needed", { domain: normalizedDomain, name: finalName });
-        finalName = finalName
+      if (name && !/^([A-Z][a-z]*\s?){1,3}$/.test(name)) {
+        log("warn", "Post-fallback capitalization fix needed", { domain: normalizedDomain, name });
+        name = name
           .split(" ")
           .map(t => capitalizeName(t).name)
           .join(" ");
       }
 
-      if (finalName && SPAMMY_TOKENS.some(token => finalName.toLowerCase().includes(token))) {
-        log("warn", "Post-fallback spammy tokens detected", { domain: normalizedDomain, name: finalName });
-        finalName = finalName
+      if (name && SPAMMY_TOKENS.some(token => name.toLowerCase().includes(token))) {
+        log("warn", "Post-fallback spammy tokens detected", { domain: normalizedDomain, name });
+        name = name
           .split(" ")
           .filter(t => !SPAMMY_TOKENS.includes(t.toLowerCase()))
           .join(" ");
@@ -434,20 +434,20 @@ async function fallbackName(domain, meta = {}) {
       }
 
       // Ensure final name is not empty
-      if (!finalName) {
-        finalName = companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
+      if (!name) {
+        name = companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
         flags.push("FallbackNameError", "ManualReviewRecommended");
       }
 
       const finalResult = {
-        companyName: finalName,
+        companyName: name,
         confidenceScore: validatedName && confidenceScore >= 95 ? confidenceScore : 80,
         flags: Array.from(new Set([...flags, validatedName ? "OpenAIFallback" : "OpenAIFallbackFailed"])),
         tokens
       };
 
       openAICache.set(cacheKey, finalResult);
-      log("info", "OpenAI result cached", { domain: normalizedDomain, companyName: finalName });
+      log("info", "OpenAI result cached", { domain: normalizedDomain, companyName: name });
       return finalResult;
     } catch (error) {
       const errorDetails = error instanceof FallbackError ? error.details : { error: error.message };
