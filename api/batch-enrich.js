@@ -1,7 +1,62 @@
-// api/batch-enrich.js v4.2.19
-import { humanizeName, extractBrandOfCityFromDomain, TEST_CASE_OVERRIDES, capitalizeName, expandInitials, earlyCompoundSplit } from "./lib/humanize.js";
-import { clearOpenAICache } from "./company-name-fallback.js";
+// api/batch-enrich.js v4.2.48
+// Batch orchestration for domain enrichment
 
+import {
+  humanizeName,
+  extractBrandOfCityFromDomain,
+  capitalizeName,
+  expandInitials,
+  earlyCompoundSplit
+} from "./lib/humanize.js";
+import { fallbackName, clearOpenAICache } from "./company-name-fallback.js";
+import winston from "winston";
+import path from "path";
+import fs from "fs";
+
+// Initialize Winston logger
+const logger = winston.createLogger({
+  level: "debug",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [
+    new winston.transports.File({
+      filename: path.join("logs", "enrich.log"),
+      maxsize: 5242880,
+      maxFiles: 5
+    }),
+    new winston.transports.Console()
+  ]
+});
+
+// Ensure logs directory exists
+const logDir = path.join(process.cwd(), "logs");
+try {
+  if (!fs.existsSync(logDir)) {
+    fs.mkdirSync(logDir, { recursive: true });
+    logger.info("Created logs directory", { logDir });
+  }
+} catch (err) {
+  logger.error("Failed to create logs directory", { error: err.message, stack: err.stack });
+}
+
+// Log server startup
+logger.info("Module loading started", { version: "4.2.48" });
+
+// Verify dependencies
+const dependencies = {
+  humanizeName: typeof humanizeName === "function",
+  extractBrandOfCityFromDomain: typeof extractBrandOfCityFromDomain === "function",
+  capitalizeName: typeof capitalizeName === "function",
+  expandInitials: typeof expandInitials === "function",
+  earlyCompoundSplit: typeof earlyCompoundSplit === "function",
+  fallbackName: typeof fallbackName === "function",
+  clearOpenAICache: typeof clearOpenAICache === "function"
+};
+logger.debug("Dependency check", { dependencies });
+
+// Concurrency limiter
 const pLimit = (concurrency) => {
   let active = 0;
   const queue = [];
@@ -20,11 +75,10 @@ const pLimit = (concurrency) => {
   });
 };
 
+const limit = pLimit(5);
 const domainCache = new Map();
 const processedDomains = new Set();
 
-const FALLBACK_API_URL = "/api/company-name-fallback";
-const FALLBACK_API_TIMEOUT_MS = parseInt(process.env.FALLBACK_API_TIMEOUT_MS, 10) || 6000;
 const RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 1000;
 
@@ -38,116 +92,113 @@ const BRAND_ONLY_DOMAINS = [
   "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
 ];
 
-const callFallbackAPI = async (domain, rowNum) => {
-  if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
+/**
+ * Calls fallback logic using fallbackName
+ * @param {string} domain - Domain to enrich
+ * @param {number} rowNum - Row number
+ * @param {Object} meta - Meta data
+ * @returns {Object} - Fallback result
+ */
+async function callFallbackAPI(domain, rowNum, meta = {}) {
+  logger.debug("callFallbackAPI started", { domain, rowNum });
+
+  try {
+    if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
+      logger.info("Brand-only domain skipped in callFallbackAPI", { domain });
+      return {
+        domain,
+        companyName: "",
+        confidenceScore: 0,
+        flags: Array.from(new Set(["BrandOnlyDomainSkipped"])),
+        tokens: 0,
+        rowNum
+      };
+    }
+
+    let lastError;
+    for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+      try {
+        logger.debug(`Attempt ${attempt} to call fallback`, { domain });
+        const fallback = await fallbackName(domain, { title: meta.title });
+
+        logger.debug("Fallback result", { domain, fallback });
+        return {
+          domain,
+          companyName: fallback.companyName,
+          confidenceScore: fallback.confidenceScore,
+          flags: Array.from(new Set([...fallback.flags, "FallbackAPIUsed"])),
+          tokens: fallback.tokens || 0,
+          rowNum
+        };
+      } catch (error) {
+        lastError = error;
+        logger.warn(`Fallback attempt ${attempt} failed`, { domain, error: error.message });
+        if (attempt < RETRY_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        }
+      }
+    }
+
+    logger.error("Fallback exhausted retries", { domain, error: lastError.message });
+    let local;
+    try {
+      logger.debug("Attempting local humanizeName", { domain });
+      local = await humanizeName(domain, domain, true);
+      logger.debug("Local humanizeName result", { domain, result: local });
+    } catch (humanizeError) {
+      logger.error("Local humanizeName failed", { domain, error: humanizeError.message });
+      local = { companyName: "", confidenceScore: 80, flags: ["InvalidHumanizeResponse"], tokens: 0 };
+    }
+
+    if (!local.companyName || typeof local.companyName !== "string") {
+      local.companyName = "";
+      local.flags = [...(local.flags || []), "InvalidHumanizeResponse"];
+    }
+
+    if (!local.companyName || local.confidenceScore < 75) {
+      const splitName = earlyCompoundSplit(domain.split(".")[0]);
+      local.companyName = capitalizeName(splitName).name || "";
+      local.confidenceScore = 80;
+      local.flags = [...(local.flags || []), "LocalCompoundSplit"];
+      logger.debug("Local compound split result", { domain, result: local });
+    }
+
+    return {
+      domain,
+      companyName: local.companyName,
+      confidenceScore: local.confidenceScore,
+      flags: Array.from(new Set([...(local.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"])),
+      tokens: local.tokens || 0,
+      rowNum,
+      error: lastError.message
+    };
+  } catch (err) {
+    logger.error("callFallbackAPI failed", { domain, rowNum, error: err.message, stack: err.stack });
     return {
       domain,
       companyName: "",
-      confidenceScore: 0,
-      flags: ["BrandOnlyDomainSkipped"],
+      confidenceScore: 80,
+      flags: Array.from(new Set(["FallbackAPIFailed", "ManualReviewRecommended"])),
       tokens: 0,
       rowNum
     };
   }
+}
+
+/**
+ * Validates leads array
+ * @param {Array} leads - Array of lead objects
+ * @returns {Object} - Validated leads and errors
+ */
+function validateLeads(leads) {
+  const validatedLeads = [];
+  const validationErrors = [];
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), FALLBACK_API_TIMEOUT_MS);
-
-    const response = await fetch(FALLBACK_API_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ leads: [{ domain, rowNum }] }),
-      signal: controller.signal
-    });
-
-    clearTimeout(timeout);
-    const data = await response.json();
-
-    if (!response.ok || !data.successful?.[0]) {
-      throw new Error(`Fallback error ${response.status}`);
-    }
-
-    const result = data.successful[0];
-    return {
-      domain: result.domain || domain,
-      companyName: result.companyName || "",
-      confidenceScore: result.confidenceScore || 0,
-      flags: Array.isArray(result.flags) ? result.flags : ["InvalidFallbackResponse"],
-      tokens: result.tokens || 0,
-      rowNum
-    };
-  } catch (error) {
-    console.error(`Fallback API failed for ${domain}: ${error.message}`);
-    let local = await humanizeName(domain, domain, true);
-
-    if (!local.name || typeof local.name !== 'string') {
-      local.name = '';
-      local.flags = [...(local.flags || []), "InvalidHumanizeResponse"];
-    }
-
-    if (!local.name || local.confidenceScore < 75) {
-      const splitName = earlyCompoundSplit(domain.split(".")[0]);
-      local.name = capitalizeName(splitName).name || '';
-      local.confidenceScore = 80;
-      local.flags = [...(local.flags || []), "LocalCompoundSplit"];
-    }
-
-    return {
-      domain,
-      companyName: local.name,
-      confidenceScore: local.confidenceScore,
-      flags: [...(local.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"],
-      tokens: local.tokens || 0,
-      rowNum,
-      error: error.message
-    };
-  }
-};
-
-const streamToString = async (req) => {
-  return new Promise((resolve, reject) => {
-    const chunks = [];
-    const timeout = setTimeout(() => reject(new Error("Stream timeout")), 5000);
-
-    req.on("data", (chunk) => {
-      chunks.push(chunk);
-    });
-    req.on("end", () => {
-      clearTimeout(timeout);
-      const raw = Buffer.concat(chunks).toString("utf-8");
-      console.log(`Raw request body: ${raw}`); // Debug log
-      resolve(raw);
-    });
-    req.on("error", (error) => {
-      clearTimeout(timeout);
-      console.error(`Stream error: ${error.message}`);
-      reject(error);
-    });
-  });
-};
-
-export default async function handler(req, res) {
-  try {
-    const raw = await streamToString(req);
-    if (!raw) return res.status(400).json({ error: "Empty body" });
-
-    let body;
-    try {
-      body = JSON.parse(raw);
-    } catch (error) {
-      console.error(`Invalid JSON body: ${error.message}, Raw: ${raw}`);
-      return res.status(400).json({ error: "Invalid JSON body", details: error.message, raw });
-    }
-
-    const leads = body.leads || body.leadList || body.domains;
     if (!Array.isArray(leads)) {
-      console.error("Leads must be an array");
-      return res.status(400).json({ error: "Leads must be an array" });
+      validationErrors.push("Leads is not an array");
+      return { validatedLeads, validationErrors };
     }
-
-    const validatedLeads = [];
-    const validationErrors = [];
 
     leads.forEach((lead, i) => {
       if (!lead || typeof lead !== "object") {
@@ -159,176 +210,275 @@ export default async function handler(req, res) {
         validationErrors.push(`Index ${i} missing domain`);
         return;
       }
-      validatedLeads.push({ domain, rowNum: lead.rowNum || i + 1 });
+      validatedLeads.push({
+        domain,
+        rowNum: Number.isInteger(lead.rowNum) ? lead.rowNum : i + 1,
+        metaTitle: typeof lead.metaTitle === "string" ? lead.metaTitle : undefined
+      });
     });
 
+    return { validatedLeads, validationErrors };
+  } catch (err) {
+    logger.error("validateLeads failed", { error: err.message, stack: err.stack });
+    validationErrors.push("Validation error");
+    return { validatedLeads, validationErrors };
+  }
+}
+
+/**
+ * Main handler for batch enrichment
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<Object>} - JSON response
+ */
+export default async function handler(req, res) {
+  let body = null;
+  try {
+    logger.debug("Handler started", { method: req.method, bodyLength: req.body ? JSON.stringify(req.body).length : 0 });
+
+    if (req.method !== "POST") {
+      logger.warn("Invalid method, expected POST", { method: req.method });
+      return res.status(405).json({ error: "Method not allowed, use POST" });
+    }
+
+    // Safely access req.body
+    try {
+      body = req.body || {};
+      logger.debug("Received body", { bodyLength: JSON.stringify(body).length });
+    } catch (err) {
+      logger.error("Failed to parse request body", { error: err.message, stack: err.stack });
+      return res.status(400).json({ error: "Invalid request body" });
+    }
+
+    if (!body) {
+      logger.warn("Empty body detected", {});
+      return res.status(400).json({ error: "Empty body" });
+    }
+
+    const leads = body.leads || body.leadList || body.domains || body;
+    logger.debug("Extracted leads", { leadCount: Array.isArray(leads) ? leads.length : 0 });
+
+    const { validatedLeads, validationErrors } = validateLeads(leads);
+    logger.debug("Validated leads", { validatedLeads: validatedLeads.length, validationErrors });
+
     if (validatedLeads.length === 0) {
-      console.error("No valid leads");
+      logger.warn("No valid leads", { validationErrors });
       return res.status(400).json({ error: "No valid leads", details: validationErrors });
     }
 
-    const limit = pLimit(5);
-    const startTime = Date.now();
     const successful = [];
     const manualReviewQueue = [];
     const fallbackTriggers = [];
     let totalTokens = 0;
 
-    const BATCH_SIZE = 10;
-    const chunks = Array.from({ length: Math.ceil(validatedLeads.length / BATCH_SIZE) }, (_, i) =>
-      validatedLeads.slice(i * BATCH_SIZE, (i + 1) * BATCH_SIZE)
-    );
+    const processLead = async (lead) => {
+      const { domain, rowNum, metaTitle } = lead;
+      const domainKey = domain.toLowerCase();
+      logger.debug("Processing lead", { domain, rowNum });
 
-    for (const chunk of chunks) {
-      if (Date.now() - startTime > 18000) {
-        return res.status(200).json({ successful, manualReviewQueue, totalTokens, fallbackTriggers, partial: true });
-      }
-
-      const chunkResults = await Promise.all(
-        chunk.map(lead => limit(async () => {
-          const { domain, rowNum } = lead;
-          const domainKey = domain.toLowerCase();
-
-          if (processedDomains.has(domainKey)) {
-            const cached = domainCache.get(domainKey);
-            if (cached) {
-              return {
-                domain,
-                companyName: cached.companyName,
-                confidenceScore: cached.confidenceScore,
-                flags: [...cached.flags, "DuplicateSkipped"],
-                rowNum,
-                tokens: 0
-              };
-            }
-          }
-
-          let finalResult = { companyName: "", confidenceScore: 0, flags: [], tokens: 0 };
-          let tokensUsed = 0;
-
-          const match = extractBrandOfCityFromDomain(domainKey);
-          const brandDetected = match.brand || null;
-          const cityDetected = match.city || null;
-
-          if (domainKey in TEST_CASE_OVERRIDES) {
-            const result = await humanizeName(domain, domain, true);
-            finalResult = {
-              companyName: result.name,
-              confidenceScore: result.confidenceScore,
-              flags: result.flags,
-              tokens: result.tokens
+      try {
+        if (processedDomains.has(domainKey)) {
+          const cached = domainCache.get(domainKey);
+          if (cached) {
+            logger.debug("Using cached result", { domain: domainKey, cached });
+            return {
+              domain,
+              companyName: cached.companyName,
+              confidenceScore: cached.confidenceScore,
+              flags: Array.from(new Set([...cached.flags, "DuplicateSkipped"])),
+              tokens: 0,
+              rowNum
             };
-            tokensUsed = result.tokens;
-          } else {
-            let humanizeError = null;
-            for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
-              try {
-                const result = await humanizeName(domain, domain, true);
-                finalResult = {
-                  companyName: result.name,
-                  confidenceScore: result.confidenceScore,
-                  flags: result.flags,
-                  tokens: result.tokens
-                };
-                tokensUsed = result.tokens;
-                humanizeError = null;
-                break;
-              } catch (error) {
-                humanizeError = error;
-                if (attempt < RETRY_ATTEMPTS) {
-                  await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-                }
-              }
-            }
-
-            if (humanizeError || finalResult.confidenceScore < 75 || finalResult.flags.includes("ManualReviewRecommended")) {
-              const fallback = await callFallbackAPI(domain, rowNum);
-              finalResult = {
-                companyName: fallback.companyName,
-                confidenceScore: fallback.confidenceScore,
-                flags: [...fallback.flags, "FallbackAPIUsed"],
-                tokens: fallback.tokens
-              };
-              tokensUsed += fallback.tokens;
-              if (humanizeError) {
-                fallbackTriggers.push({
-                  domain,
-                  rowNum,
-                  reason: "HumanizeFailed",
-                  details: {
-                    error: humanizeError.message,
-                    primary: {
-                      name: "",
-                      confidenceScore: 0,
-                      flags: []
-                    },
-                    fallback: {
-                      name: finalResult.companyName,
-                      confidenceScore: finalResult.confidenceScore,
-                      flags: finalResult.flags
-                    },
-                    brand: brandDetected,
-                    city: cityDetected
-                  },
-                  tokens: tokensUsed
-                });
-              }
-            }
           }
+        }
 
-          if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
-            const expandedName = expandInitials(finalResult.companyName);
-            if (expandedName && expandedName.name !== finalResult.companyName) {
-              finalResult.companyName = expandedName.name;
-              finalResult.flags.push("InitialsExpandedLocally");
-              finalResult.confidenceScore -= 5;
-            }
-          }
+        let finalResult = { companyName: "", confidenceScore: 80, flags: [], tokens: 0 };
+        let tokensUsed = 0;
 
-          domainCache.set(domainKey, {
-            companyName: finalResult.companyName,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags
-          });
-          processedDomains.add(domainKey);
+        let brandDetected = null;
+        let cityDetected = null;
+        try {
+          logger.debug("Calling extractBrandOfCityFromDomain", { domain: domainKey });
+          const match = extractBrandOfCityFromDomain(domainKey);
+          brandDetected = match.brand || null;
+          cityDetected = match.city || null;
+          logger.debug("extractBrandOfCityFromDomain result", { domain: domainKey, brandDetected, cityDetected });
+        } catch (error) {
+          logger.error("extractBrandOfCityFromDomain failed", { domain: domainKey, error: error.message });
+        }
 
-          totalTokens += tokensUsed;
-          return {
-            domain,
-            companyName: finalResult.companyName,
-            confidenceScore: finalResult.confidenceScore,
-            flags: finalResult.flags,
-            rowNum,
-            tokens: tokensUsed
+        if (BRAND_ONLY_DOMAINS.includes(`${domainKey}.com`)) {
+          logger.debug("Brand-only domain skipped", { domain: domainKey });
+          finalResult = {
+            companyName: "",
+            confidenceScore: 0,
+            flags: ["BrandOnlyDomainSkipped"],
+            tokens: 0
           };
-        }))
-      );
+        } else {
+          let humanizeError = null;
+          let initialResult = null;
+          for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+            try {
+              logger.debug(`Attempt ${attempt} to humanize domain`, { domain });
+              initialResult = await humanizeName(domain, domain, !!metaTitle);
+              logger.debug("humanizeName result", { domain, result: initialResult });
+              finalResult = {
+                companyName: initialResult.companyName || "",
+                confidenceScore: initialResult.confidenceScore || 80,
+                flags: Array.from(new Set(initialResult.flags || [])),
+                tokens: initialResult.tokens || 0
+              };
+              tokensUsed = initialResult.tokens || 0;
+              humanizeError = null;
+              break;
+            } catch (error) {
+              humanizeError = error;
+              logger.warn(`Humanize attempt ${attempt} failed`, { domain, error: error.message });
+              if (attempt < RETRY_ATTEMPTS) {
+                await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+              }
+            }
+          }
 
-      successful.push(...chunkResults);
-    }
+          if (finalResult.flags.includes("BrandOnlyDomainSkipped")) {
+            logger.debug("Skipping fallback due to BrandOnlyDomainSkipped", { domain });
+          } else if (humanizeError || finalResult.confidenceScore < 100 || finalResult.flags.includes("ManualReviewRecommended")) {
+            logger.debug("Calling fallback API", { domain });
+            const meta = metaTitle ? { title: metaTitle } : {};
+            const fallback = await callFallbackAPI(domain, rowNum, meta);
+            finalResult = {
+              companyName: fallback.companyName,
+              confidenceScore: fallback.confidenceScore,
+              flags: Array.from(new Set([...fallback.flags, "FallbackAPIUsed"])),
+              tokens: fallback.tokens
+            };
+            tokensUsed += fallback.tokens;
+            logger.debug("Fallback API result", { domain, result: finalResult });
 
+            // Populate fallbackTriggers
+            if (humanizeError || finalResult.flags.includes("FallbackAPIUsed")) {
+              fallbackTriggers.push({
+                domain,
+                rowNum,
+                reason: humanizeError ? "HumanizeFailed" : "LowConfidence",
+                details: {
+                  error: humanizeError ? humanizeError.message : null,
+                  primary: {
+                    companyName: initialResult?.companyName || "",
+                    confidenceScore: initialResult?.confidenceScore || 0,
+                    flags: initialResult?.flags || []
+                  },
+                  fallback: {
+                    companyName: finalResult.companyName,
+                    confidenceScore: finalResult.confidenceScore,
+                    flags: finalResult.flags
+                  },
+                  brand: brandDetected,
+                  city: cityDetected
+                },
+                tokens: tokensUsed
+              });
+            }
+          }
+
+          if (finalResult.flags.includes("ManualReviewRecommended")) {
+            logger.debug("Adding to manualReviewQueue", { domain, companyName: finalResult.companyName });
+            manualReviewQueue.push({
+              domain,
+              companyName: finalResult.companyName,
+              confidenceScore: finalResult.confidenceScore,
+              flags: finalResult.flags,
+              rowNum
+            });
+          }
+        }
+
+        if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
+          logger.debug("Expanding initials", { domain, companyName: finalResult.companyName });
+          const expandedName = expandInitials(finalResult.companyName);
+          if (expandedName && expandedName.name !== finalResult.companyName) {
+            finalResult.companyName = expandedName.name;
+            finalResult.flags = Array.from(new Set([...finalResult.flags, "InitialsExpandedLocally"]));
+            finalResult.confidenceScore -= 5;
+          }
+          logger.debug("Expanded initials result", { domain, result: finalResult });
+        }
+
+        domainCache.set(domainKey, {
+          companyName: finalResult.companyName,
+          confidenceScore: finalResult.confidenceScore,
+          flags: finalResult.flags
+        });
+        processedDomains.add(domainKey);
+
+        totalTokens += tokensUsed;
+        return {
+          domain,
+          companyName: finalResult.companyName,
+          confidenceScore: finalResult.confidenceScore,
+          flags: finalResult.flags,
+          tokens: tokensUsed,
+          rowNum
+        };
+      } catch (err) {
+        logger.error("processLead failed", { domain, rowNum, error: err.message, stack: err.stack });
+        return {
+          domain,
+          companyName: "",
+          confidenceScore: 80,
+          flags: Array.from(new Set(["EnrichmentFailed", "ManualReviewRecommended"])),
+          tokens: 0,
+          rowNum
+        };
+      }
+    };
+
+    const results = await Promise.all(validatedLeads.map(lead => limit(() => processLead(lead))));
+    successful.push(...results);
+
+    logger.info("Handler completed successfully", {});
     return res.status(200).json({
       successful,
       manualReviewQueue,
       fallbackTriggers,
       totalTokens,
-      partial: false
+      partial: results.some(r => r.flags.includes("EnrichmentFailed")),
+      fromFallback: fallbackTriggers.length > 0
     });
   } catch (error) {
-    console.error(`Handler error: ${error.message}`);
-    return res.status(500).json({ error: "Internal server error", details: error.message });
+    logger.error("Handler error", {
+      error: error.message,
+      stack: error.stack,
+      body: body ? JSON.stringify(body).slice(0, 1000) : "null"
+    });
+    return res.status(500).json({
+      error: "Internal server error",
+      confidenceScore: 80,
+      flags: Array.from(new Set(["BatchEnrichmentFailed", "ManualReviewRecommended"])),
+      tokens: 0
+    });
   }
 }
 
+/**
+ * Resets processed domains and caches
+ * @param {Object} req - Request object
+ * @param {Object} res - Response object
+ * @returns {Promise<Object>} - JSON response
+ */
 export const resetProcessedDomains = async (req, res) => {
-  processedDomains.clear();
-  domainCache.clear();
-  clearOpenAICache();
-  return res.status(200).json({ message: "Processed domains and OpenAI cache reset" });
-};
-
-export const config = {
-  api: {
-    bodyParser: false
+  logger.info("Resetting processed domains", {});
+  try {
+    processedDomains.clear();
+    domainCache.clear();
+    clearOpenAICache();
+    logger.info("Processed domains and OpenAI cache reset", {});
+    return res.status(200).json({ message: "Processed domains and OpenAI cache reset" });
+  } catch (err) {
+    logger.error("resetProcessedDomains failed", { error: err.message, stack: err.stack });
+    return res.status(500).json({ error: "Failed to reset caches" });
   }
 };
+
+logger.info("Module loading completed", {});

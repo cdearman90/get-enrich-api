@@ -19,18 +19,18 @@ const BRAND_MAPPING = {
   "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
   "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
   "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevy",
-  "chevvy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
+  "chevy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
   "dodge": "Dodge", "eagle": "Eagle", "ferrari": "Ferrari", "fiat": "Fiat", "ford": "Ford", "genesis": "Genesis",
   "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
   "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
   "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
   "lincoln": "Ford", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
-  "mb": "Mercedes", "merc": "Mercedes", "mercedes": "Mercedes", "mercedes-benz": "Mercedes", "mercedesbenz": "Mercedes", "mer$
+  "mb": "Mercedes", "merc": "Mercedes", "mercedes": "Mercedes", "mercedes-benz": "Mercedes", "mercedesbenz": "Mercedes",
   "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile", "plymouth": "Plymouth",
   "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram", "rivian": "Rivian",
   "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion", "smart": "Smart",
   "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
-  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW", "chevy": "Chevy"
+  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW"
 };
 
 const BRAND_ONLY_DOMAINS = [
@@ -75,7 +75,7 @@ export async function fallbackName(domain, meta = {}) {
   }
 
   // Check OpenAI cache
-  const cacheKey = `${domain}:${meta.title || ''}`;
+  const cacheKey = `${domain}:${meta.title || ""}`;
   if (openAICache.has(cacheKey)) {
     const cached = openAICache.get(cacheKey);
     return {
@@ -110,14 +110,14 @@ export async function fallbackName(domain, meta = {}) {
     let tokens = response.tokens;
 
     // Post-process
-    name = name.replace(/['’]s\b/g, '');
-    name = name.replace(/\b(cars|sales|autogroup)\b/gi, '');
-    name = name.replace(/\bof\b/gi, '');
+    name = name.replace(/['’]s\b/g, "");
+    name = name.replace(/\b(cars|sales|autogroup)\b/gi, "");
+    name = name.replace(/\bof\b/gi, "");
 
     const brandsInName = CAR_BRANDS.filter(b => name.toLowerCase().includes(b.toLowerCase()));
     if (brandsInName.length > 1) {
       const firstBrand = BRAND_MAPPING[brandsInName[0]] || brandsInName[0];
-      name = name.replace(new RegExp(brandsInName.slice(1).join('|'), 'gi'), '').replace(/\s+/g, ' ').trim();
+      name = name.replace(new RegExp(brandsInName.slice(1).join("|"), "gi"), "").replace(/\s+/g, " ").trim();
       name = `${name} ${firstBrand}`.trim();
     } else if (brandsInName.length === 0 && !initialResult.flags.includes("HumanNameDetected")) {
       const metaBrand = getMetaTitleBrand(meta) || "Auto";
@@ -138,7 +138,7 @@ export async function fallbackName(domain, meta = {}) {
   } catch (error) {
     console.error(`OpenAI fallback failed for ${domain}: ${error.message}`);
     const result = {
-      companyName: initialResult.name || domain.split('.')[0] + " Auto",
+      companyName: initialResult.name || domain.split(".")[0] + " Auto",
       confidenceScore: 85,
       flags: ["OpenAIFallbackFailed", "ManualReviewRecommended"],
       tokens: 0
