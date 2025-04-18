@@ -7,6 +7,6 @@
     { "src": "/api/batch-enrich", "dest": "/api/company-name-fallback.js" }
   ],
   "env": {
-    "VERCEL_AUTH_TOKEN": "<BOGYN1NFScxSc3DQRVEnNO5c>"
+    "VERCEL_AUTH_TOKEN": "<Wo9puF5mfUzDn2Pw0jxAB53y>"
   }
 }
