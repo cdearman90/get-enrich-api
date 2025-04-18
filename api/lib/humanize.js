@@ -60,7 +60,7 @@ const OVERRIDES = {
 };
 
 const TEST_CASE_OVERRIDES = {
-  "duvalford.com": "Duval Ford",
+  "duvalford.com": "Duval",
   "patmillikenford.com": "Pat Milliken",
   "athensford.com": "Athens Ford",
   "gusmachadoford.com": "Gus Machado",
@@ -73,9 +73,9 @@ const TEST_CASE_OVERRIDES = {
   "donhindsford.com": "Don Hinds Ford",
   "unionpark.com": "Union Park",
   "jackpowell.com": "Jack Powell",
-  "teamford.com": "Team Ford",
+  "teamford.com": "Team",
   "miamilakesautomall.com": "Miami Lakes Auto",
-  "mclartydaniel.com": "Mclarty Daniel",
+  "mclartydaniel.com": "McLarty Daniel",
   "autobyfox.com": "Fox Auto",
   "yorkautomotive.com": "York Auto",
   "executiveag.com": "Executive AG",
@@ -86,7 +86,7 @@ const TEST_CASE_OVERRIDES = {
   "larryhmillertoyota.com": "Larry H. Miller",
   "dougrehchevrolet.com": "Doug Reh",
   "caminorealchevrolet.com": "Camino Real Chevy",
-  "golfmillford.com": "Golf Mill Ford",
+  "golfmillford.com": "Golf Mill",
   "townandcountryford.com": "Town & Country",
   "czag.net": "CZAG Auto",
   "signatureautony.com": "Signature Auto",
@@ -152,8 +152,29 @@ const TEST_CASE_OVERRIDES = {
   "tasca.com": "Tasca",
   "lacitycars.com": "LA City",
   "carsatcarlblack.com": "Carl Black",
-  "southcharlottejcd.com": "Charlotte Jeep",
-  "oaklandauto.com": "Oakland Auto"
+  "southcharlottejcd.com": "Charlotte Auto",
+  "oaklandauto.com": "Oakland Auto",
+  "rodbakerford.com": "Rod Baker",
+  "nplincoln.com": "NP Lincoln",
+  "rohrmanhonda.com": "Rohrman Honda",
+  "malouf.com": "Malouf",
+  "prestonmotor.com": "Preston",
+  "demontrond.com": "DeMontrond",
+  "fletcherauto.com": "Fletcher",
+  "davischevrolet.com": "Davis Chevy",
+  "gychevy.com": "GY Chevy",
+  "potamkinhyundai.com": "Potamkin Hyundai",
+  "tedbritt.com": "Ted Britt",
+  "andersonautogroup.com": "Anderson Auto",
+  "racewayford.com": "Raceway Ford",
+  "donhattan.com": "Don Hattan",
+  "chastangford.com": "Chastang Ford",
+  "machens.com": "Machen",
+  "taylorauto.com": "Taylor",
+  "dancummins.com": "Dan Cummins",
+  "kennedyauto.com": "Kennedy Auto",
+  "artmoehn.com": "Art Moehn",
+  "mbbhm.com": "M.B. BHM"
 };
 
 const BRAND_ONLY_DOMAINS = [

@@ -8,11 +8,24 @@
   ],
   "routes": [
     {
-      "src": "/api/batch-enrich",
-      "dest": "/api/company-name-fallback.js"
+      "src": "/public-api/batch-enrich",
+      "dest": "/api/batch-enrich.js"
+    },
+    {
+      "src": "/public-api/batch-enrich-company-name-fallback",
+      "dest": "/api/batch-enrich-company-name-fallback.js"
+    },
+    {
+      "src": "/public-api/batch-enrich-franchise",
+      "dest": "/api/batch-enrich-franchise.js"
+    },
+    {
+      "src": "/public-api/batch-clean-titles-and-locations",
+      "dest": "/api/batch-clean-titles-and-locations.js"
     }
   ],
   "env": {
     "VERCEL_AUTH_TOKEN": "@vercel_auth_token",
     "OPENAI_API_KEY": "@openai_api_key"
   }
+}
