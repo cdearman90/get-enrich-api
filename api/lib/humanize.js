@@ -891,13 +891,11 @@ function tryBrandCityPattern(tokens) {
 }
 
 /**
- * Humanizes a domain into a cold-email-friendly company name
- * @param {string} domain - The domain to enrich
- * @param {string} originalDomain - Original domain for overrides
- * @param {boolean} useMeta - Whether to fetch meta data
- * @returns {Object} - Enriched result
+ * Attempts to match a human name pattern in tokens
+ * @param {Array<string>} tokens - Tokens to analyze
+ * @returns {{companyName: string, confidenceScore: number, flags: Array<string>}} - Result with company name, confidence score, and flags
  */
-function tryHumanNamePattern(tokens, meta) {
+function tryHumanNamePattern(tokens) {
   const flags = new Set();
   log("info", "tryHumanNamePattern started", { tokens });
 
@@ -1285,7 +1283,7 @@ async function fetchMetaData(domain) {
       "donjacobs.com": { title: "Chevrolet Dealer" },
       "crossroadscars.com": { title: "Toyota Dealer" },
       "chicagocars.com": { title: "Toyota Dealer in Chicago" },
-      "davisautosales.com": { title: "Chevrolet Dealer" },
+      "davisautosales.com": { title: "Auto Dealer" },
       "northwestcars.com": { title: "Toyota Dealer" },
       "fordtustin.com": { title: "Ford Dealer in Tustin" },
       "hondakingsport.com": { title: "Honda Dealer in Kingsport" },
@@ -1298,7 +1296,10 @@ async function fetchMetaData(domain) {
       "ricksmithchevrolet.com": { title: "Chevrolet Dealer" },
       "mikeerdman.com": { title: "Toyota Dealer" },
       "tasca.com": { title: "Ford Dealer" },
-      "crystalautogroup.com": { title: "Auto Dealer" }
+      "crystalautogroup.com": { title: "Auto Dealer" },
+      "lacitycars.com": { title: "Auto Dealer" },
+      "barlowautogroup.com": { title: "Auto Dealer" },
+      "drivevictory.com": { title: "Auto Dealer" }
     };
     return meta[domain] || {};
   } catch (e) {
