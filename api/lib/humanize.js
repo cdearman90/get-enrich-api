@@ -786,7 +786,7 @@ function tryBrandCityPattern(tokens) {
  * Attempts to match a human name pattern in tokens
  * @param {Array<string>} tokens - Tokens to analyze
  * @param {Object} meta - Meta data
- * @returns {Object} - Result with company name, confidence score, and flags
+ * @returns {{companyName: string, confidenceScore: number, flags: Array<string>}} - Result with company name, confidence score, and flags
  */
 function tryHumanNamePattern(tokens, meta) {
   const flags = new Set();
