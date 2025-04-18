@@ -85,7 +85,7 @@ const OVERRIDES = {
 const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
 
 // Spammy tokens to filter out
-const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
+const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto", "shop"];
 
 // Cache for OpenAI results
 const openAICache = new Map();
