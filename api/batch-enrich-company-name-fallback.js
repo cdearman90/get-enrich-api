@@ -78,14 +78,24 @@ const OVERRIDES = {
   "chevyofcolumbuschevrolet.com": "Columbus Chevy",
   "classicchevrolet.com": "Classic Chevy",
   "penskeautomotive.com": "Penske Auto",
-  "helloautogroup.com": "Hello Auto"
+  "helloautogroup.com": "Hello Auto",
+  "billdube.com": "Bill Dube",
+  "donjacobs.com": "Don Jacobs",
+  "sunsetmitsubishi.com": "Sunset Mitsubishi",
+  "classicbmw.com": "Classic BMW"
 };
 
-// Blocklist for spammy tokens
+// Blocklist for spammy patterns
 const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
 
 // Spammy tokens to filter out
-const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto", "shop"];
+const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
+
+// Known proper nouns for noun-pair restoration (subset of KNOWN_PROPER_NOUNS from humanize.js)
+const KNOWN_PROPER_NOUNS_ARRAY = [
+  "Bill", "Dube", "Don", "Jacobs", "Rick", "Smith", "McLarty", "Daniel", "NP", "Lincoln",
+  "Sunset", "Classic", "Tasca", "Davis", "Barlow", "Mike", "Erdman", "AutoNation", "Robby", "Nixon"
+];
 
 // Cache for OpenAI results
 const openAICache = new Map();
@@ -327,8 +337,7 @@ async function fallbackName(domain, meta = {}) {
       Given a dealership domain "${normalizedDomain}", return a JSON object with a 1–3 word, cold-email-safe name.
       Rules:
       - Use 1–3 words, prioritizing human names (e.g., "donjacobs.com" → {"name": "Don Jacobs", "brand": "Chevy", "flagged": false}).
-      - Remove "of", "sales", "cars", "autogroup", "shop", "the", "group".
-      - Never include more than 1 car brand in a name.
+      - Remove "of", "sales", "cars", "autogroup".
       - Use title case (e.g., "Nashville Mazda").
       - Brand must match domain brand (${domainBrand || "none"}) or meta title brand (${getMetaTitleBrand(meta) || "none"}).
       - If no brand in domain or meta, set brand to null.
@@ -371,37 +380,74 @@ async function fallbackName(domain, meta = {}) {
       if (!validatedName) {
         log("warn", "OpenAI validation failed", { domain: normalizedDomain, name });
         flags.push("OpenAIFallbackFailed", "ManualReviewRecommended");
-        const fallbackName = companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
-        const finalResult = {
-          companyName: fallbackName,
-          confidenceScore: 80,
-          flags: Array.from(new Set(flags)),
-          tokens
-        };
-        openAICache.set(cacheKey, finalResult);
-        return finalResult;
+      } else {
+        name = validatedName;
       }
 
-      // Deduplicate brands in name
-      const nameTokens = validatedName.toLowerCase().split(" ");
-      const brandsInName = CAR_BRANDS.filter(b => nameTokens.some(t => t.includes(b.toLowerCase())));
-      if (brandsInName.length > 1) {
-        name = nameTokens
-          .filter(t => !brandsInName.slice(1).some(b => t.includes(b.toLowerCase())))
-          .join(" ")
-          .trim();
-        name = `${capitalizeName(name).name} ${BRAND_MAPPING[brandsInName[0]] || capitalizeName(brandsInName[0]).name}`.trim();
+      // Token rescue and noun-pair restoration
+      let finalName = name;
+      if (validatedName) {
+        const fallbackTokens = validatedName.split(" ");
+        const fallbackBrand = CAR_BRANDS.find(b => fallbackTokens.some(t => t.toLowerCase() === b.toLowerCase()));
+        const knownNamePair = KNOWN_PROPER_NOUNS_ARRAY.filter(n => 
+          fallbackTokens.some(t => n.toLowerCase().includes(t.toLowerCase())) &&
+          KNOWN_PROPER_NOUNS_ARRAY.includes(n)
+        );
+
+        if (knownNamePair.length === 2) {
+          finalName = knownNamePair.join(" ");
+          confidenceScore = 125;
+          flags.push("ProperNounRecovered");
+          log("info", "Proper noun pair recovered", { domain: normalizedDomain, name: finalName });
+          // Append brand if domain contains one and not already in name
+          if (domainBrand && !finalName.toLowerCase().includes(domainBrand.toLowerCase())) {
+            finalName = `${finalName} ${domainBrand}`;
+          }
+        } else if (fallbackBrand) {
+          // Validate brand origin
+          const metaBrand = getMetaTitleBrand(meta) || "";
+          if (!cleanDomain.includes(fallbackBrand.toLowerCase()) && !metaBrand.toLowerCase().includes(fallbackBrand.toLowerCase())) {
+            log("warn", "Brand rejected from fallback", { domain: normalizedDomain, brand: fallbackBrand });
+            flags.push("BrandRejectedFromFallback");
+            finalName = knownNamePair.length > 0 ? knownNamePair.join(" ") : fallbackTokens.filter(t => t.toLowerCase() !== fallbackBrand.toLowerCase()).join(" ");
+            confidenceScore = 85;
+          }
+        }
+      }
+
+      // Post-fallback validation: ensure proper capitalization and no spammy tokens
+      if (finalName && !/^([A-Z][a-z]*\s?){1,3}$/.test(finalName)) {
+        log("warn", "Post-fallback capitalization fix needed", { domain: normalizedDomain, name: finalName });
+        finalName = finalName
+          .split(" ")
+          .map(t => capitalizeName(t).name)
+          .join(" ");
+      }
+
+      if (finalName && SPAMMY_TOKENS.some(token => finalName.toLowerCase().includes(token))) {
+        log("warn", "Post-fallback spammy tokens detected", { domain: normalizedDomain, name: finalName });
+        finalName = finalName
+          .split(" ")
+          .filter(t => !SPAMMY_TOKENS.includes(t.toLowerCase()))
+          .join(" ");
+        flags.push("SpammyTokensRemoved");
+      }
+
+      // Ensure final name is not empty
+      if (!finalName) {
+        finalName = companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
+        flags.push("FallbackNameError", "ManualReviewRecommended");
       }
 
       const finalResult = {
-        companyName: validatedName,
-        confidenceScore: 95,
-        flags: Array.from(new Set([...flags, "OpenAIFallback"])),
+        companyName: finalName,
+        confidenceScore: validatedName && confidenceScore >= 95 ? confidenceScore : 80,
+        flags: Array.from(new Set([...flags, validatedName ? "OpenAIFallback" : "OpenAIFallbackFailed"])),
         tokens
       };
 
       openAICache.set(cacheKey, finalResult);
-      log("info", "OpenAI result cached", { domain: normalizedDomain, companyName: validatedName });
+      log("info", "OpenAI result cached", { domain: normalizedDomain, companyName: finalName });
       return finalResult;
     } catch (error) {
       const errorDetails = error instanceof FallbackError ? error.details : { error: error.message };
