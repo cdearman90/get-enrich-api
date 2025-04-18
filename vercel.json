@@ -8,8 +8,16 @@
   ],
   "routes": [
     {
-      "src": "/api/batch-enrich",
+      "src": "/public-api/batch-enrich",
+      "dest": "/api/company-name-fallback.js"
+    },
+    {
+      "src": "/public-api/batch-enrich-company-name-fallback",
       "dest": "/api/company-name-fallback.js"
     }
-  ]
+  ],
+  "env": {
+    "VERCEL_AUTH_TOKEN": "@vercel_auth_token",
+    "OPENAI_API_KEY": "@openai_api_key"
+  }
 }
