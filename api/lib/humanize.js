@@ -621,13 +621,14 @@ function earlyCompoundSplit(text) {
       "mccarthyautogroup": ["McCarthy", "Auto"],
       "donjacobs": ["Don", "Jacobs"],
       "lacitycars": ["La", "City"],
-      "ricksmithchevrolet": ["Rick", "Smith", "Chevrolet"],
+      "ricksmithchevrolet": ["Rick", "Smith"],
       "classicbmw": ["Classic", "BMW"],
       "davisautosales": ["Davis", "Auto"],
       "barlowautogroup": ["Barlow", "Auto"],
       "mikeerdman": ["Mike", "Erdman"],
       "chevyofcolumbuschevrolet": ["Chevy", "Columbus"],
-      "drivevictory": ["Victory"]
+      "drivevictory": ["Victory"],
+      "sunsetmitsubishi": ["Sunset", "Mitsubishi"]
     };
 
     if (overrides[lower]) {
@@ -635,7 +636,21 @@ function earlyCompoundSplit(text) {
       return overrides[lower];
     }
 
-    // Dynamic splitting for proper noun pairs, cities, and brands
+    // Dynamic proper noun pair detection (ChatGPT v5.0.4)
+    for (const name of KNOWN_PROPER_NOUNS) {
+      const nameLower = name.toLowerCase();
+      if (lower.includes(nameLower)) {
+        const remaining = lower.replace(nameLower, "").trim();
+        const remainderName = capitalizeName(remaining).name;
+        if (KNOWN_PROPER_NOUNS.has(remainderName) && !KNOWN_CITIES_SET.has(remainderName.toLowerCase())) {
+          const split = [name, remainderName];
+          log("debug", "Dynamic noun pair split in earlyCompoundSplit", { text, split });
+          return split;
+        }
+      }
+    }
+
+    // Iterative tokenization for proper nouns, cities, and brands
     const tokens = [];
     let remaining = lower;
 
