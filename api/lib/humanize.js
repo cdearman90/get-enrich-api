@@ -1073,6 +1073,7 @@ function tryGenericPattern(tokens, meta) {
         flags.add("MetaTitleBrandAppended");
         log("info", "City with meta brand matched", { tokens, name });
         return { companyName: name, confidenceScore: 125, flags: Array.from(flags) };
+      }
     }
 
     // Handle remaining tokens
