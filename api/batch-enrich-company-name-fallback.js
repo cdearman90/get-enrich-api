@@ -153,8 +153,8 @@ async function fallbackName(domain, meta = {}) {
 
     // Enhanced city/brand detection
     try {
-      const metaBrand = getMetaTitleBrand(meta);
       const cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
+      const metaBrand = getMetaTitleBrand(meta);
       const tokens = cleanDomain
         .split(/(?=[A-Z])|of/)
         .map(t => t.toLowerCase())
@@ -215,7 +215,7 @@ async function fallbackName(domain, meta = {}) {
     const inputName = cleanTokens.join(" ");
 
     const prompt = `
-      Given a dealership domain "${normalizedDomain}", return a JSON object with a 1–3 word, cold-email-safe name.
+      Given a dealership domain "${normalizedDomain}" and cleaned tokens "${inputName}", return a JSON object with a 1–3 word, cold-email-safe name.
       Rules:
       - Use 1–3 words, prioritizing human names (e.g., "donjacobs.com" → {"name": "Don Jacobs", "brand": null, "flagged": false}).
       - Remove "of", "sales", "cars", "autogroup".
@@ -277,7 +277,7 @@ async function fallbackName(domain, meta = {}) {
         log("warn", "Invalid OpenAI name", { domain: normalizedDomain, name });
         flags.push("OpenAIInvalidName", "ManualReviewRecommended");
         return {
-          companyName: companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]),
+          companyName: companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]),
           confidenceScore: 80,
           flags: Array.from(new Set([...flags, "OpenAIFallbackFailed"])),
           tokens
@@ -285,7 +285,7 @@ async function fallbackName(domain, meta = {}) {
       }
       if (!validateName(name)) {
         flags.push("SpamTriggerDetected", "ManualReviewRecommended");
-        name = companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]);
+        name = companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]);
         confidenceScore = 80;
       }
 
@@ -302,7 +302,7 @@ async function fallbackName(domain, meta = {}) {
     } catch (error) {
       const errorDetails = error instanceof FallbackError ? error.details : { error: error.message };
       log("error", "OpenAI fallback failed", { domain: normalizedDomain, ...errorDetails });
-      const fallbackName = companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]);
+      const fallbackName = companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]);
       const result = {
         companyName: fallbackName,
         confidenceScore: 80,
