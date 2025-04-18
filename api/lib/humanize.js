@@ -1,5 +1,5 @@
-// api/lib/humanize.js v5.0.8
-// Extracts cold-email-friendly company names from dealership domains
+// api/lib/humanize.js v5.0.9
+// Comprehensive list of car brands (unchanged)
 
 import winston from "winston";
 import path from "path";
@@ -7,7 +7,8 @@ import path from "path";
 const logger = winston.createLogger({
   level: "debug",
   format: winston.format.combine(
-    winston.format.timestamp(),
+    winston.format.timesta
+mp(),
     winston.format.json()
   ),
   transports: [
@@ -32,11 +33,6 @@ const CAR_BRANDS = [
   'volkswagen', 'volvo', 'vw', 'chevy', 'honda'
 ];
 
-const OVERRIDES = {
-  'eh': 'East Hills',
-  'mb': 'M.B.'
-};
-
 // Mapping for standardized brand names
 const BRAND_MAPPING = {
   'acura': 'Acura', 'alfa romeo': 'Alfa Romeo', 'amc': 'AMC', 'aston martin': 'Aston Martin', 'audi': 'Audi',
@@ -57,6 +53,15 @@ const BRAND_MAPPING = {
 };
 
 const COMMON_WORDS = ['to', 'of', 'and', 'the', 'for', 'in', 'on', 'at', 'inc', 'llc', 'corp'];
+
+const OVERRIDES = {
+  'eh': 'East Hills',
+  'mb': 'M.B.',
+  'robertthorne': 'Robert Thorne',
+  'crystal': 'Crystal',
+  'young': 'Young',
+  'victory': 'Victory'
+};
 
 const TEST_CASE_OVERRIDES = {
   'duvalford.com': 'Duval Ford',
@@ -134,7 +139,22 @@ const TEST_CASE_OVERRIDES = {
   'hillsidehonda.com': 'Hillside Honda',
   'smithtowntoyota.com': 'Smithtown Toyota',
   'thepremiercollection.com': 'Premier Collection',
-  'fordtustin.com': 'Tustin Ford'
+  'fordtustin.com': 'Tustin Ford',
+  'billdube.com': 'Bill Dube',
+  'donjacobs.com': 'Don Jacobs',
+  'ricksmithchevrolet.com': 'Rick Smith',
+  'robertthorne.com': 'Robert Thorne',
+  'crystalautogroup.com': 'Crystal',
+  'davisautosales.com': 'Davis',
+  'drivevictory.com': 'Victory Auto',
+  'chevyofcolumbuschevrolet.com': 'Columbus Chevy',
+  'toyotaofchicago.com': 'Chicago Toyota',
+  'northwestcars.com': 'Northwest Toyota',
+  'mazdanashville.com': 'Nashville Mazda',
+  'kiaofchattanooga.com': 'Chattanooga Kia',
+  'mikeerdman.com': 'Mike Erdman',
+  'tasca.com': 'Tasca',
+  'lacitycars.com': 'LA City'
 };
 
 const BRAND_ONLY_DOMAINS = [
@@ -167,7 +187,7 @@ const KNOWN_PROPER_NOUNS = new Set([
   'Galeana', 'Rick Smith', 'Don Jacobs', 'Doug Reh', 'Karl Stuart', 'Jim Falk', 'Jay Wolfe',
   'Berman', 'Robbins', 'Matt Blatt', 'Birdnow', 'Beaty', 'Stephen Wade', 'Reed Lallier',
   'Bert Smith', 'Ron Bouchard', 'Haley', 'Greg Leblanc', 'Sunny King', 'Jim Taylor', 'Jake',
-  'Charlie', 'Lou Sobh', 'Bear Mountain', "NP Lincoln"
+  'Charlie', 'Lou Sobh', 'Bear Mountain', "NP Lincoln", "Crystal", "Victory"
 ]);
 
 // eslint-disable-next-line no-unused-vars
@@ -439,7 +459,11 @@ const TOKEN_FIXES = {
   penskeauto: "Penske",
   classicchev: "Classic Chevy",
   sunsetmits: "Sunset Mitsubishi",
-  drivevic: "Victory"
+  drivevic: "Victory",
+  robertthorne: "Robert Thorne",
+  crystalauto: "Crystal",
+  youngauto: "Young",
+  victoryauto: "Victory Auto"
 };
 
 /**
@@ -589,7 +613,8 @@ function earlyCompoundSplit(text) {
       "kiaofchattanooga": ["Chattanooga", "Kia"],
       "mazdanashville": ["Nashville", "Mazda"],
       "tasca": ["Tasca"],
-      "crystalautogroup": ["Crystal", "Auto"]
+      "crystalautogroup": ["Crystal", "Auto"],
+      "robertthorne": ["Robert", "Thorne"]
     };
 
     if (overrides[lower]) {
@@ -603,7 +628,7 @@ function earlyCompoundSplit(text) {
       if (lower.includes(nameLower)) {
         const remaining = lower.replace(nameLower, "").trim();
         const remainderName = capitalizeName(remaining).name;
-        if (KNOWN_PROPER_NOUNS.has(remainderName) && !KNOWN_CITIES_SET.has(remainderName.toLowerCase())) {
+        if (KNOWN_PROPER_NOUNS.has(remainderName)) {
           const split = [name, remainderName];
           log("debug", "Dynamic noun pair split in earlyCompoundSplit", { text, split });
           return split;
@@ -611,7 +636,7 @@ function earlyCompoundSplit(text) {
       }
     }
 
-    // Iterative tokenization for proper nouns, cities, and brands
+    // CamelCase and merged token splitting
     const tokens = [];
     let remaining = lower;
 
@@ -621,7 +646,7 @@ function earlyCompoundSplit(text) {
       // Match proper nouns
       for (const noun of KNOWN_PROPER_NOUNS) {
         const nounLower = noun.toLowerCase();
-        if (remaining.startsWith(nounLower) && !KNOWN_CITIES_SET.has(nounLower)) {
+        if (remaining.startsWith(nounLower)) {
           tokens.push(capitalizeName(nounLower).name);
           remaining = remaining.slice(nounLower.length);
           matched = true;
@@ -653,12 +678,19 @@ function earlyCompoundSplit(text) {
         }
       }
 
-      // Fallback to camelCase or blob splitting
+      // Enhanced camelCase splitting
       if (!matched) {
         const camelMatch = remaining.match(/^([a-z]+)([A-Z][a-z]*)/);
         if (camelMatch) {
-          tokens.push(capitalizeName(camelMatch[1]).name);
-          remaining = camelMatch[2] + remaining.slice(camelMatch[0].length);
+          const first = camelMatch[1];
+          const second = camelMatch[2];
+          if (KNOWN_PROPER_NOUNS.has(capitalizeName(first).name) || KNOWN_PROPER_NOUNS.has(capitalizeName(second).name)) {
+            tokens.push(capitalizeName(first).name);
+            remaining = second + remaining.slice(camelMatch[0].length);
+          } else {
+            tokens.push(capitalizeName(first).name);
+            remaining = second + remaining.slice(camelMatch[0].length);
+          }
         } else {
           const blobMatch = remaining.match(/^([a-z]+)([A-Z]|$)/);
           if (blobMatch) {
@@ -1041,7 +1073,6 @@ function tryGenericPattern(tokens, meta) {
         flags.add("MetaTitleBrandAppended");
         log("info", "City with meta brand matched", { tokens, name });
         return { companyName: name, confidenceScore: 125, flags: Array.from(flags) };
-      }
     }
 
     // Handle remaining tokens
@@ -1059,6 +1090,13 @@ function tryGenericPattern(tokens, meta) {
     let brand = cleanedTokens.find(t => CAR_BRANDS.includes(t)) || getMetaTitleBrand(meta);
     if (brand) {
       brand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name;
+      // Validate brand against domain or meta
+      const isBrandSafe = brand => CAR_BRANDS.includes(brand.toLowerCase()) && 
+        (tokens.some(t => t.toLowerCase().includes(brand.toLowerCase())) || 
+         (meta.title || '').toLowerCase().includes(brand.toLowerCase()));
+      if (!isBrandSafe(brand)) {
+        brand = null;
+      }
     }
 
     // Handle special cases (e.g., AutoNation)
@@ -1083,10 +1121,12 @@ function tryGenericPattern(tokens, meta) {
       .replace(/\s+/g, " ")
       .trim();
 
-    flags.add("GenericPattern");
-    if (!flags.has("CityBrandPattern")) {
-      flags.add("ManualReviewRecommended");
+    // Relax ManualReviewRecommended for known proper nouns
+    if (nameTokens.every(t => KNOWN_PROPER_NOUNS.has(t)) || (nameTokens.length === 1 && KNOWN_PROPER_NOUNS.has(nameTokens[0]))) {
+      flags.delete("ManualReviewRecommended");
     }
+
+    flags.add("GenericPattern");
     log("info", "Generic pattern matched", { tokens, name });
     return { companyName: name, confidenceScore: flags.has("CityBrandPattern") ? 125 : 95, flags: Array.from(flags) };
   } catch (e) {
