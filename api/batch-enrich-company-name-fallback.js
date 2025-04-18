@@ -72,7 +72,6 @@ const OVERRIDES = {
   'autonationusa.com': 'AutoNation',
   'robbynixonbuickgmc.com': 'Robby Nixon',
   'chevyofcolumbuschevrolet.com': 'Columbus Chevy',
-  'mazdanashville.com': 'Nashville Mazda',
   'classicchevrolet.com': 'Classic Chevy',
   'penskeautomotive.com': 'Penske Auto',
   'helloautogroup.com': 'Hello Auto'
@@ -89,9 +88,6 @@ class FallbackError extends Error {
     this.details = details;
   }
 }
-
-// Inside fallbackName function, after humanizeName and city/brand detection
-// Replace the existing OpenAI and fallback logic (lines ~150–end) with this:
 
 /**
  * Fallback logic for low-confidence or failed humanize results
@@ -155,8 +151,9 @@ async function fallbackName(domain, meta = {}) {
     }
 
     // Enhanced city/brand detection
+    let cleanDomain;
     try {
-      const cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
+      cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
       const metaBrand = getMetaTitleBrand(meta);
       const tokens = cleanDomain
         .split(/(?=[A-Z])|of/)
@@ -211,11 +208,10 @@ async function fallbackName(domain, meta = {}) {
       };
     }
 
-    // Blocklist for invalid names
-    const nameBlocklist = ["auto auto", "group auto", "sales auto", "cars auto"];
+    // Validate name function
     const validateName = (name) => {
       const nameLower = name.toLowerCase();
-      if (nameBlocklist.some(bad => nameLower.includes(bad))) {
+      if (nameLower.includes("auto auto") || BLOCKLIST.some(trigger => nameLower.includes(trigger))) {
         log("warn", "Invalid name detected", { domain: normalizedDomain, name, reason: "Blocklist match" });
         return false;
       }
@@ -227,7 +223,7 @@ async function fallbackName(domain, meta = {}) {
         log("warn", "Duplicate token detected", { domain: normalizedDomain, name, reason: "Repeated word" });
         return false;
       }
-      // Relaxed casing check to allow valid generics (e.g., "Victory Auto")
+      // Relaxed casing check to allow valid generics
       if (!name.match(/^[A-Z][a-z]*(\s[A-Z][a-z]*)*(\s[A-Z]+)?$/)) {
         log("warn", "Invalid casing detected", { domain: normalizedDomain, name, reason: "Incorrect casing" });
         return false;
@@ -290,7 +286,7 @@ async function fallbackName(domain, meta = {}) {
         flags.add("ManualReviewRecommended");
         log("warn", "Fallback name error flagged", { domain: normalizedDomain, name, reason: "Invalid or low-confidence name" });
         return {
-          companyName: companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name,
+          companyName: companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]).name,
           confidenceScore: 80,
           flags: Array.from(new Set([...flags, "OpenAIFallbackFailed"])),
           tokens
@@ -310,7 +306,7 @@ async function fallbackName(domain, meta = {}) {
     } catch (error) {
       const errorDetails = error instanceof FallbackError ? error.details : { error: error.message };
       log("error", "OpenAI fallback failed", { domain: normalizedDomain, ...errorDetails });
-      const fallbackName = companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
+      const fallbackName = companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]).name;
       if (!validateName(fallbackName)) {
         flags.add("FallbackNameError");
         flags.add("ManualReviewRecommended");
