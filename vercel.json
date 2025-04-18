@@ -16,10 +16,6 @@
       "dest": "/api/batch-enrich-company-name-fallback.js"
     },
     {
-      "src": "/public-api/batch-enrich-franchise",
-      "dest": "/api/batch-enrich-franchise.js"
-    },
-    {
       "src": "/public-api/batch-clean-titles-and-locations",
       "dest": "/api/batch-clean-titles-and-locations.js"
     }

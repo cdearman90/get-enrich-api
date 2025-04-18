@@ -7,7 +7,12 @@ import path from "path";
 const logger = winston.createLogger({
   level: "debug",
   format: winston.format.combine(
+<<<<<<< HEAD
     winston.format.timestamp(),
+=======
+    winston.format.timesta
+mp(),
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
     winston.format.json()
   ),
   transports: [
@@ -15,6 +20,7 @@ const logger = winston.createLogger({
     new winston.transports.Console()
   ]
 });
+<<<<<<< HEAD
 
 // Comprehensive list of car brands
 const CAR_BRANDS = [
@@ -27,10 +33,28 @@ const CAR_BRANDS = [
   "polestar", "pontiac", "porsche", "ram", "rivian", "rolls-royce", "saab", "saturn", "scion",
   "smart", "subaru", "subie", "suzuki", "tesla", "toyota", "volkswagen", "volvo", "vw", "chevy",
   "honda"
+=======
+
+function log(level, message, context = {}) {
+  logger[level]({ message, ...context });
+}
+
+// Comprehensive list of car brands
+const CAR_BRANDS = [
+  'acura', 'alfa romeo', 'amc', 'aston martin', 'audi', 'bentley', 'bmw', 'bugatti', 'buick',
+  'cadillac', 'carmax', 'cdj', 'cdjrf', 'cdjr', 'chev', 'chevvy', 'chevrolet', 'chrysler', 'cjd', 'daewoo',
+  'dodge', 'eagle', 'ferrari', 'fiat', 'ford', 'genesis', 'gmc', 'honda', 'hummer', 'hyundai', 'inf', 'infiniti',
+  'isuzu', 'jaguar', 'jeep', 'jlr', 'kia', 'lamborghini', 'land rover', 'landrover', 'lexus', 'lincoln', 'lucid',
+  'maserati', 'maz', 'mazda', 'mb', 'merc', 'mercedes', 'mercedes-benz', 'mercedesbenz', 'merk', 'mini',
+  'mitsubishi', 'nissan', 'oldsmobile', 'plymouth', 'polestar', 'pontiac', 'porsche', 'ram', 'rivian',
+  'rolls-royce', 'saab', 'saturn', 'scion', 'smart', 'subaru', 'subie', 'suzuki', 'tesla', 'toyota',
+  'volkswagen', 'volvo', 'vw', 'chevy', 'honda'
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
 ];
 
 // Mapping for standardized brand names
 const BRAND_MAPPING = {
+<<<<<<< HEAD
   "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
   "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
   "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevy",
@@ -46,9 +70,43 @@ const BRAND_MAPPING = {
   "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion", "smart": "Smart",
   "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
   "volkswagen": "VW", "volvo": "Volvo", "vw": "VW", "chevy": "Chevy", "jcd": "Jeep"
+=======
+  'acura': 'Acura', 'alfa romeo': 'Alfa Romeo', 'amc': 'AMC', 'aston martin': 'Aston Martin', 'audi': 'Audi',
+  'bentley': 'Bentley', 'bmw': 'BMW', 'bugatti': 'Bugatti', 'buick': 'Buick', 'cadillac': 'Cadillac',
+  'carmax': 'Carmax', 'cdj': 'Dodge', 'cdjrf': 'Dodge', 'cdjr': 'Dodge', 'chev': 'Chevy',
+  'chevvy': 'Chevy', 'chevrolet': 'Chevy', 'chrysler': 'Chrysler', 'cjd': 'Dodge', 'daewoo': 'Daewoo',
+  'dodge': 'Dodge', 'eagle': 'Eagle', 'ferrari': 'Ferrari', 'fiat': 'Fiat', 'ford': 'Ford', 'genesis': 'Genesis',
+  'gmc': 'GMC', 'honda': 'Honda', 'hummer': 'Hummer', 'hyundai': 'Hyundai', 'inf': 'Infiniti', 'infiniti': 'Infiniti',
+  'isuzu': 'Isuzu', 'jaguar': 'Jaguar', 'jeep': 'Jeep', 'jlr': 'Jaguar Land Rover', 'kia': 'Kia',
+  'lamborghini': 'Lamborghini', 'land rover': 'Land Rover', 'landrover': 'Land Rover', 'lexus': 'Lexus',
+  'lincoln': 'Ford', 'lucid': 'Lucid', 'maserati': 'Maserati', 'maz': 'Mazda', 'mazda': 'Mazda',
+  'mb': 'Mercedes', 'merc': 'Mercedes', 'mercedes': 'Mercedes', 'mercedes-benz': 'Mercedes', 'mercedesbenz': 'Mercedes', 'merk': 'Mercedes',
+  'mini': 'Mini', 'mitsubishi': 'Mitsubishi', 'nissan': 'Nissan', 'oldsmobile': 'Oldsmobile', 'plymouth': 'Plymouth',
+  'polestar': 'Polestar', 'pontiac': 'Pontiac', 'porsche': 'Porsche', 'ram': 'Ram', 'rivian': 'Rivian',
+  'rolls-royce': 'Rolls-Royce', 'saab': 'Saab', 'saturn': 'Saturn', 'scion': 'Scion', 'smart': 'Smart',
+  'subaru': 'Subaru', 'subie': 'Subaru', 'suzuki': 'Suzuki', 'tesla': 'Tesla', 'toyota': 'Toyota',
+  'volkswagen': 'VW', 'volvo': 'Volvo', 'vw': 'VW', 'chevy': 'Chevy', 'jcd': 'Jeep'
 };
 
-const COMMON_WORDS = ["to", "of", "and", "the", "for", "in", "on", "at", "inc", "llc", "corp"];
+const ABBREVIATION_EXPANSIONS = {
+  "la": "LA",
+  "mb": "M.B.",
+  "gy": "GY",
+  "np": "NP",
+  "rt": "RT"
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
+};
+
+const COMMON_WORDS = ['to', 'of', 'and', 'the', 'for', 'in', 'on', 'at', 'inc', 'llc', 'corp'];
+
+const OVERRIDES = {
+  'eh': 'East Hills',
+  'mb': 'M.B.',
+  'robertthorne': 'Robert Thorne',
+  'crystal': 'Crystal',
+  'young': 'Young',
+  'victory': 'Victory'
+};
 
 const OVERRIDES = {
   "eh": "East Hills",
@@ -60,6 +118,7 @@ const OVERRIDES = {
 };
 
 const TEST_CASE_OVERRIDES = {
+<<<<<<< HEAD
   "duvalford.com": "Duval",
   "patmillikenford.com": "Pat Milliken",
   "athensford.com": "Athens Ford",
@@ -175,19 +234,137 @@ const TEST_CASE_OVERRIDES = {
   "kennedyauto.com": "Kennedy Auto",
   "artmoehn.com": "Art Moehn",
   "mbbhm.com": "M.B. BHM"
+=======
+  'duvalford.com': 'Duval Ford',
+  'patmillikenford.com': 'Pat Milliken',
+  'athensford.com': 'Athens Ford',
+  'gusmachadoford.com': 'Gus Machado',
+  'geraldauto.com': 'Gerald Auto',
+  'mbofbrooklyn.com': 'M.B. Brooklyn',
+  'karlchevroletstuart.com': 'Karl Stuart',
+  'kiaoflagrange.com': 'Lagrange Kia',
+  'toyotaofgreenwich.com': 'Greenwich Toyota',
+  'sanleandroford.com': 'San Leandro Ford',
+  'donhindsford.com': 'Don Hinds Ford',
+  'unionpark.com': 'Union Park',
+  'jackpowell.com': 'Jack Powell',
+  'teamford.com': 'Team',
+  'miamilakesautomall.com': 'Miami Lakes Auto',
+  'mclartydaniel.com': 'McLarty Daniel',
+  'autobyfox.com': 'Fox Auto',
+  'yorkautomotive.com': 'York Auto',
+  'executiveag.com': 'Executive AG',
+  'smartdrive.com': 'Smart Drive',
+  'wickmail.com': 'Wick Mail',
+  'oceanautomotivegroup.com': 'Ocean Auto',
+  'tommynixautogroup.com': 'Tommy Nix',
+  'larryhmillertoyota.com': 'Larry H. Miller',
+  'dougrehchevrolet.com': 'Doug Reh',
+  'caminorealchevrolet.com': 'Camino Real Chevy',
+  'golfmillford.com': 'Golf Mill Ford',
+  'townandcountryford.com': 'Town & Country',
+  'czag.net': 'CZAG Auto',
+  'signatureautony.com': 'Signature Auto',
+  'sunnysideauto.com': 'Sunnyside Chevy',
+  'exprealty.com': 'Exp Realty',
+  'drivesuperior.com': 'Drive Superior',
+  'powerautogroup.com': 'Power Auto Group',
+  'crossroadscars.com': 'Crossroad',
+  'onesubaru.com': 'One Subaru',
+  'vanderhydeford.net': 'Vanderhyde Ford',
+  'mbusa.com': 'M.B. USA',
+  'gomontrose.com': 'Go Montrose',
+  'ehchevy.com': 'East Hills Chevy',
+  'shoplynch.com': 'Lynch',
+  'austininfiniti.com': 'Austin Infiniti',
+  'martinchevrolet.com': 'Martin Chevy',
+  'garberchevrolet.com': 'Garber Chevy',
+  'bulluckchevrolet.com': 'Bulluck Chevy',
+  'scottclark.com': 'Scott Clark',
+  'newhollandauto.com': 'New Holland',
+  'lynnlayton.com': 'Lynn Layton',
+  'landerscorp.com': 'Landers',
+  'parkerauto.com': 'Parker Auto',
+  'laurelautogroup.com': 'Laurel Auto',
+  'rt128honda.com': 'RT128',
+  'subaruofwakefield.com': 'Subaru Wakefield',
+  'lexusofchattanooga.com': 'Lexus Chattanooga',
+  'planet-powersports.net': 'Planet Power',
+  'garlynshelton.com': 'Garlyn Shelton',
+  'saffordbrown.com': 'Safford Brown',
+  'saffordauto.com': 'Safford Auto',
+  'npsubaru.com': 'NP Subaru',
+  'prestoncars.com': 'Preston',
+  'toyotaofredlands.com': 'Toyota Redland',
+  'lexusoflakeway.com': 'Lexus Lakeway',
+  'robbinstoyota.com': 'Robbin Toyota',
+  'swantgraber.com': 'Swant Graber',
+  'sundancechevy.com': 'Sundance Chevy',
+  'steponeauto.com': 'Step One Auto',
+  'capital-honda.com': 'Capital Honda',
+  'tituswill.com': 'Titus-Will',
+  'galeanasc.com': 'Galeana',
+  'mccarthyautogroup.com': 'McCarthy Auto Group',
+  'dyerauto.com': 'Dyer Auto',
+  'edwardsautogroup.com': 'Edwards Auto Group',
+  'hillsidehonda.com': 'Hillside Honda',
+  'smithtowntoyota.com': 'Smithtown Toyota',
+  'thepremiercollection.com': 'Premier Collection',
+  'fordtustin.com': 'Tustin Ford',
+  'billdube.com': 'Bill Dube',
+  'donjacobs.com': 'Don Jacobs',
+  'ricksmithchevrolet.com': 'Rick Smith',
+  'robertthorne.com': 'Robert Thorne',
+  'crystalautogroup.com': 'Crystal',
+  'davisautosales.com': 'Davis',
+  'drivevictory.com': 'Victory Auto',
+  'chevyofcolumbuschevrolet.com': 'Columbus Chevy',
+  'toyotaofchicago.com': 'Chicago Toyota',
+  'northwestcars.com': 'Northwest Toyota',
+  'mazdanashville.com': 'Nashville Mazda',
+  'kiaofchattanooga.com': 'Chattanooga Kia',
+  'mikeerdman.com': 'Mike Erdman',
+  'tasca.com': 'Tasca',
+  'lacitycars.com': 'LA City',
+  'carsatcarlblack.com': 'Carl Black',
+  'southcharlottejcd.com': 'Charlotte Auto',
+  'oaklandauto.com': 'Oakland Auto',
+  'rodbakerford.com': 'Rod Baker',
+  'nplincoln.com': 'NP Lincoln',
+  'rohrmanhonda.com': 'Rohrman Honda',
+  'malouf.com': 'Malouf',
+  'prestonmotor.com': 'Preston',
+  'demontrond.com': 'DeMontrond',
+  'fletcherauto.com': 'Fletcher',
+  'davischevrolet.com': 'Davis Chevy',
+  'gychevy.com': 'Gy Chevy',
+  'potamkinhyundai.com': 'Potamkin Hyundai',
+  'tedbritt.com': 'Ted Britt',
+  'andersonautogroup.com': 'Anderson Auto',
+  'racewayford.com': 'Raceway Ford',
+  'donhattan.com': 'Don Hattan',
+  'chastangford.com': 'Chastang Ford',
+  'machens.com': 'Machens',
+  'taylorauto.com': 'Taylor',
+  'dancummins.com': 'Dan Cummins',
+  'kennedyauto.com': 'Kennedy Auto',
+  'artmoehn.com': 'Art Moehn',
+  'mbbhm.com': 'M.B. BHM'
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
 };
 
 const BRAND_ONLY_DOMAINS = [
-  "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com",
-  "dodge.com", "ramtrucks.com", "jeep.com", "lincoln.com", "toyota.com", "honda.com",
-  "nissanusa.com", "subaru.com", "mazdausa.com", "mitsubishicars.com", "acura.com",
-  "lexus.com", "infinitiusa.com", "hyundaiusa.com", "kia.com", "genesis.com",
-  "bmwusa.com", "mercedes-benz.com", "audiusa.com", "vw.com", "volkswagen.com",
-  "porsche.com", "miniusa.com", "fiatusa.com", "alfa-romeo.com", "landroverusa.com",
-  "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
+  'chevy.com', 'ford.com', 'cadillac.com', 'buick.com', 'gmc.com', 'chrysler.com',
+  'dodge.com', 'ramtrucks.com', 'jeep.com', 'lincoln.com', 'toyota.com', 'honda.com',
+  'nissanusa.com', 'subaru.com', 'mazdausa.com', 'mitsubishicars.com', 'acura.com',
+  'lexus.com', 'infinitiusa.com', 'hyundaiusa.com', 'kia.com', 'genesis.com',
+  'bmwusa.com', 'mercedes-benz.com', 'audiusa.com', 'vw.com', 'volkswagen.com',
+  'porsche.com', 'miniusa.com', 'fiatusa.com', 'alfa-romeo.com', 'landroverusa.com',
+  'jaguarusa.com', 'tesla.com', 'lucidmotors.com', 'rivian.com', 'volvocars.com'
 ];
 
 const KNOWN_PROPER_NOUNS = new Set([
+<<<<<<< HEAD
   "Abbots", "Albany", "All American", "Anderson", "Art Moehn", "Avis", "Bear Mountain", "Bentley",
   "Berlin City", "Bill Dube", "Bob Johnson", "Bob Walk", "Brown", "Camino Real", "Capitol City",
   "Carl Black", "Carrollton", "Chapman", "Charlie", "Chastang", "Cz Agnet", "Dayton Andrews",
@@ -208,6 +385,28 @@ const KNOWN_PROPER_NOUNS = new Set([
   "Berman", "Robbins", "Matt Blatt", "Birdnow", "Beaty", "Stephen Wade", "Reed Lallier",
   "Bert Smith", "Ron Bouchard", "Haley", "Greg Leblanc", "Sunny King", "Jim Taylor", "Jake",
   "Charlie", "Lou Sobh", "Bear Mountain", "NP Lincoln", "Crystal", "Victory"
+=======
+  'Abbots', 'Albany', 'All American', 'Anderson', 'Art Moehn', 'Avis', 'Bear Mountain', 'Bentley',
+  'Berlin City', 'Bill Dube', 'Bob Johnson', 'Bob Walk', 'Brown', 'Camino Real', 'Capitol City',
+  'Carl Black', 'Carrollton', 'Chapman', 'Charlie', 'Chastang', 'Cz Agnet', 'Dayton Andrews',
+  'DeMontrond', 'Devine', 'Dick', 'Don Baker', 'Don Hattan', 'Don Hinds', 'Duval', 'East Hills',
+  'Eckenrod', 'Elway', 'Fletcher', 'Fox', 'Freeport', 'Galean', 'Garlyn', 'Garlyn Shelton',
+  'Gastonia', 'Georgetown', 'Germain', 'Graber', 'Grainger', 'Gregg Young', 'Gus Machado',
+  'Hilltop', 'Ingersoll', 'Jack Powell', 'Jake Sweeney', 'Jay Wolfe', 'Jimmy Britt', 'Kadlec',
+  'Karl Stuart', 'Kennedy', 'Kingston', 'Laurel', 'Larson', 'Lou Sobh', 'Malloy', 'Mariano',
+  'Martin', 'Masano', 'Masten', 'McCarthy', 'McLarty', 'McLarty Daniel', 'Medlin', 'Metro',
+  'Mike Erdman', 'Mike Shaw', 'Mill', 'Naples', 'Pape', 'Parkway', 'Pat Milliken', 'Perillo',
+  'Phil Smith', 'Pinehurst', 'Potamkin', 'Preston', 'Pugmire', 'Ricart', 'Rivera', 'Robert Thorne',
+  'Rod Baker', 'Ron Bouchard', 'Roseville', 'Sansone', 'Sarant', 'Santee', 'Schmelz', 'Scott Clark',
+  'Seawell', 'Sewell', 'Shottenkirk', 'Slidell', 'Smothers', 'Starling', 'Stoops', 'Swant Graber',
+  'Ted Britt', 'Temecula', 'Tom Hesser', 'Tommy Nix', 'Town And Country', 'Trent', 'Tuttle Click',
+  'Valley', 'Vander', 'Westgate', 'Wick Mail', 'Williams', 'Wolfe', 'Young', 'Malouf', 'Tasca',
+  'Davis', 'Taylor', 'Dan Cummins', 'Garber', 'Sunnyside', 'Bulluck', 'Galpin', 'Titus Will',
+  'Galeana', 'Rick Smith', 'Don Jacobs', 'Doug Reh', 'Karl Stuart', 'Jim Falk', 'Jay Wolfe',
+  'Berman', 'Robbins', 'Matt Blatt', 'Birdnow', 'Beaty', 'Stephen Wade', 'Reed Lallier',
+  'Bert Smith', 'Ron Bouchard', 'Haley', 'Greg Leblanc', 'Sunny King', 'Jim Taylor', 'Jake',
+  'Charlie', 'Lou Sobh', 'Bear Mountain', "NP Lincoln", "Crystal", "Victory"
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
 ]);
 
 const KNOWN_CITIES_SET = new Set([
@@ -462,8 +661,12 @@ const KNOWN_CITIES_SET = new Set([
   "sundance", "lusk", "star valley ranch", "pine bluffs", "guernsey", "saratoga", "basin", "mills", "bar nunn", "upton",
   "moorcroft", "dubois", "alpine", "hanna", "diamondville", "shoshoni", "encampment", "baggs", "cokeville", "la barge",
   "folsom", "estero", "sutherlin", "highland park", "woodland hills", "freehold", "carver", "beachwood", "livermore", "waconia", "southtowne", "cedarpark", "westgate", "South Charlotte",
+<<<<<<< HEAD
   "Tuttle Click", "Jimmy Britt", "O'Brien", "Terry", "Tustin", "Nashville", "Chicago", "chattanooga", "gwinnett", "columbus",
   "kingsport", "omaha", "lincoln"
+=======
+  "Tuttle Click", "Jimmy Britt", "O'Brien", "Terry", "Tustin", "Nashville", "Chicago", "Chattanooga", "Gwinnett", "Kingsport", "Omaha", "Lincoln"
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
 ]);
 
 // Token fixes for common parsing errors
@@ -513,6 +716,7 @@ function extractTokens(domain) {
     const cleanDomain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
     let tokens = earlyCompoundSplit(cleanDomain);
     log("debug", "After earlyCompoundSplit", { domain, tokens });
+<<<<<<< HEAD
 
     // Dynamic splitting for nouns, cities, and brands
     tokens = tokens.flatMap(token => {
@@ -610,6 +814,105 @@ function earlyCompoundSplit(text) {
       throw new Error("Invalid text input");
     }
 
+=======
+
+    // Dynamic splitting for nouns, cities, and brands
+    tokens = tokens.flatMap(token => {
+      const lower = token.toLowerCase();
+      if (!CAR_BRANDS.includes(lower) && !KNOWN_CITIES_SET.has(lower) && !KNOWN_PROPER_NOUNS.has(token)) {
+        const splits = [];
+        // Proper noun pairs
+        for (const noun of KNOWN_PROPER_NOUNS) {
+          const nounLower = noun.toLowerCase();
+          if (lower.includes(nounLower)) {
+            const remaining = lower.replace(nounLower, "");
+            if (remaining && KNOWN_PROPER_NOUNS.has(capitalizeName(remaining).name)) {
+              splits.push(capitalizeName(nounLower).name, capitalizeName(remaining).name);
+              return splits;
+            }
+          }
+        }
+        // City patterns
+        for (const city of KNOWN_CITIES_SET) {
+          if (lower.includes(city)) {
+            splits.push(capitalizeName(city).name);
+            const remaining = lower.replace(city, "");
+            if (remaining && !["cars", "sales", "autogroup"].includes(remaining)) {
+              splits.push(capitalizeName(remaining).name);
+            }
+            return splits;
+          }
+        }
+        // Brand patterns
+        for (const brand of CAR_BRANDS) {
+          if (lower.includes(brand)) {
+            splits.push(BRAND_MAPPING[brand] || capitalizeName(brand).name);
+            const remaining = lower.replace(brand, "");
+            if (remaining) {
+              splits.push(capitalizeName(remaining).name);
+            }
+            return splits;
+          }
+        }
+        // Fallback to camel case and "of" splits
+        return token
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .replace(/of([a-z]+)/gi, ' $1')
+          .split(/[^a-zA-Z]+/)
+          .filter(Boolean)
+          .map(t => capitalizeName(t).name);
+      }
+      return [capitalizeName(token).name];
+    });
+    log("debug", "After dynamic splits", { domain, tokens });
+
+    // Apply blob splits
+    tokens = tokens.flatMap(t => blobSplit(t));
+    log("debug", "After blobSplit", { domain, tokens });
+
+    // Validate and clean tokens
+    tokens = tokens
+      .filter(t => {
+        const tLower = t.toLowerCase();
+        const isValid = t && !COMMON_WORDS.includes(tLower) && !["cars", "sales", "autogroup"].includes(tLower);
+        if (!isValid) {
+          log("debug", "Token filtered out", { domain, token: t });
+        }
+        return isValid;
+      });
+
+    // Deduplicate tokens
+    tokens = [...new Set(tokens)];
+    log("debug", "After deduplication", { domain, tokens });
+
+    // Log dropped tokens
+    const expected = [CAR_BRANDS, Array.from(KNOWN_CITIES_SET), Array.from(KNOWN_PROPER_NOUNS)].flat().map(t => t.toLowerCase());
+    const dropped = cleanDomain.split(/[^a-zA-Z]+/).filter(t => expected.includes(t.toLowerCase()) && !tokens.some(tok => tok.toLowerCase().includes(t.toLowerCase())));
+    if (dropped.length) {
+      log("warn", "Tokens dropped", { domain, dropped });
+    }
+
+    log("info", "extractTokens result", { domain, result: tokens });
+    return tokens;
+  } catch (e) {
+    log("error", "extractTokens failed", { domain, error: e.message, stack: e.stack });
+    return [];
+  }
+}
+
+/**
+ * Splits compound words early in the tokenization process
+ * @param {string} text - Text to split
+ * @returns {Array<string>} - Array of tokens
+ */
+function earlyCompoundSplit(text) {
+  try {
+    if (!text || typeof text !== "string") {
+      log("error", "Invalid text in earlyCompoundSplit", { text });
+      throw new Error("Invalid text input");
+    }
+
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
     const lower = text.toLowerCase();
     // Comprehensive overrides for known problem cases
     const overrides = {
@@ -784,6 +1087,7 @@ function blobSplit(text) {
 /**
  * Capitalizes a name with token fixes
  * @param {string} name - Name to capitalize
+<<<<<<< HEAD
  * @returns {Object} - Capitalized name
  */
 function capitalizeName(name) {
@@ -803,6 +1107,39 @@ function capitalizeName(name) {
   } catch (e) {
     log("error", "capitalizeName failed", { name, error: e.message, stack: e.stack });
     throw new Error("capitalizeName failed");
+=======
+ * @returns {Object} - Capitalized name with flags
+ */
+function capitalizeName(name) {
+  try {
+    let words = name;
+    if (typeof words === "string") {
+      words = words.match(/[a-z]+/gi) || [];
+    }
+    if (!Array.isArray(words)) {
+      words = [words];
+    }
+
+    // Apply token fixes
+    const fixedWords = words.map(word => {
+      if (!word || typeof word !== "string") return word;
+      const wordLower = word.toLowerCase();
+      for (const [bad, good] of Object.entries(TOKEN_FIXES)) {
+        if (wordLower.includes(bad)) {
+          return good;
+        }
+      }
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    });
+
+    return {
+      name: fixedWords.join(" "),
+      flags: []
+    };
+  } catch (e) {
+    log("error", "capitalizeName failed", { name, error: e.message, stack: e.stack });
+    return { name: "", flags: ["CapitalizeNameError"] };
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
   }
 }
 
@@ -899,6 +1236,7 @@ function tryBrandCityPattern(tokens) {
     const normalizedTokens = tokens.map(t => t.toLowerCase());
     let brand = null;
     let city = null;
+<<<<<<< HEAD
 
     // Check for city-brand pattern (e.g., "Chattanooga Kia")
     for (let i = 0; i < normalizedTokens.length; i++) {
@@ -913,6 +1251,22 @@ function tryBrandCityPattern(tokens) {
       }
     }
 
+=======
+
+    // Check for city-brand pattern (e.g., "Chattanooga Kia")
+    for (let i = 0; i < normalizedTokens.length; i++) {
+      const token = normalizedTokens[i];
+      if (KNOWN_CITIES_SET.has(token)) {
+        city = token;
+        brand = normalizedTokens.find((t, j) => j !== i && CAR_BRANDS.includes(t.toLowerCase()));
+        if (brand && brand.toLowerCase() !== city.toLowerCase()) {
+          break;
+        }
+        brand = null;
+      }
+    }
+
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
     // Fallback to concatenated brand-city (e.g., "kiachattanooga" → "Chattanooga Kia")
     if (!city || !brand) {
       const concatPattern = normalizedTokens.join("").match(/(\w+?)(\w{3,})$/i);
@@ -1055,6 +1409,7 @@ function tryProperNounPattern(tokens) {
 function tryGenericPattern(tokens, meta) {
   const flags = new Set();
   log("info", "tryGenericPattern started", { tokens });
+<<<<<<< HEAD
 
   try {
     if (!Array.isArray(tokens)) {
@@ -1062,6 +1417,15 @@ function tryGenericPattern(tokens, meta) {
       throw new Error("Invalid tokens input");
     }
 
+=======
+
+  try {
+    if (!Array.isArray(tokens)) {
+      log("error", "Invalid tokens in tryGenericPattern", { tokens });
+      throw new Error("Invalid tokens input");
+    }
+
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
     // Clean tokens: remove spam triggers and deduplicate
     const spamTriggers = ["cars", "sales", "autogroup", "group"];
     let cleanedTokens = tokens
@@ -1112,9 +1476,15 @@ function tryGenericPattern(tokens, meta) {
     if (brand) {
       brand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name;
       // Validate brand against domain or meta
+<<<<<<< HEAD
       const isBrandSafe = brand => CAR_BRANDS.includes(brand.toLowerCase()) &&
         (tokens.some(t => t.toLowerCase().includes(brand.toLowerCase())) ||
          (meta.title || "").toLowerCase().includes(brand.toLowerCase()));
+=======
+      const isBrandSafe = brand => CAR_BRANDS.includes(brand.toLowerCase()) && 
+        (tokens.some(t => t.toLowerCase().includes(brand.toLowerCase())) || 
+         (meta.title || '').toLowerCase().includes(brand.toLowerCase()));
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
       if (!isBrandSafe(brand)) {
         brand = null;
       }
@@ -1155,6 +1525,7 @@ function tryGenericPattern(tokens, meta) {
     return { companyName: "", confidenceScore: 80, flags: Array.from(new Set(["GenericPatternError", "ManualReviewRecommended"])) };
   }
 }
+<<<<<<< HEAD
 
 /**
  * Humanizes a domain into a cold-email-friendly company name
@@ -1183,6 +1554,36 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
       originalDomain = domain;
     }
 
+=======
+
+/**
+ * Humanizes a domain into a cold-email-friendly company name
+ * @param {string} domain - The domain to enrich
+ * @param {string} originalDomain - Original domain for overrides
+ * @param {boolean} useMeta - Whether to fetch meta data
+ * @returns {Object} - Enriched result
+ */
+async function humanizeName(domain, originalDomain, useMeta = false) {
+  const normalizedDomain = domain?.toLowerCase().trim() || "";
+  let companyName = "";
+  let confidenceScore = 80;
+  let flags = [];
+  let tokens = 0;
+
+  try {
+    log("info", "humanizeName started", { domain, originalDomain, useMeta });
+
+    if (!domain || typeof domain !== "string") {
+      log("error", "Invalid domain input", { domain, originalDomain });
+      flags.push("InvalidDomainInput");
+      return { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
+    }
+    if (!originalDomain || typeof originalDomain !== "string") {
+      log("warn", "Invalid originalDomain, using domain as fallback", { originalDomain, domain });
+      originalDomain = domain;
+    }
+
+>>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
     let meta = {};
     if (useMeta) {
       try {
