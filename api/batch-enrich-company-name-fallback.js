@@ -90,11 +90,14 @@ class FallbackError extends Error {
   }
 }
 
+// Inside fallbackName function, after humanizeName and city/brand detection
+// Replace the existing OpenAI and fallback logic (lines ~150–end) with this:
+
 /**
  * Fallback logic for low-confidence or failed humanize results
  * @param {string} domain - Domain to enrich
  * @param {Object} meta - Meta data
- * @returns {Object} - Enriched result
+ * @returns {{companyName: string, confidenceScore: number, flags: Array<string>, tokens: number}} - Enriched result
  */
 async function fallbackName(domain, meta = {}) {
   const normalizedDomain = domain?.toLowerCase().trim() || "";
@@ -162,7 +165,7 @@ async function fallbackName(domain, meta = {}) {
       const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
 
       if (city && metaBrand && !CAR_BRANDS.some(b => cleanDomain.includes(b.toLowerCase()))) {
-        const name = `${capitalizeName(city)} ${BRAND_MAPPING[metaBrand.toLowerCase()] || metaBrand}`;
+        const name = `${capitalizeName(city).name} ${BRAND_MAPPING[metaBrand.toLowerCase()] || metaBrand}`;
         log("info", "City and meta brand applied", { domain: normalizedDomain, name });
         flags.push("CityBrandPattern", "MetaTitleBrandAppended");
         return {
@@ -175,7 +178,7 @@ async function fallbackName(domain, meta = {}) {
       if (city) {
         const brand = CAR_BRANDS.find(b => cleanDomain.includes(b.toLowerCase()));
         if (brand) {
-          const name = `${capitalizeName(city)} ${BRAND_MAPPING[brand.toLowerCase()] || brand}`;
+          const name = `${capitalizeName(city).name} ${BRAND_MAPPING[brand.toLowerCase()] || brand}`;
           log("info", "City and domain brand applied", { domain: normalizedDomain, name });
           flags.push("CityBrandPattern");
           return {
@@ -208,14 +211,33 @@ async function fallbackName(domain, meta = {}) {
       };
     }
 
-    // Clean input tokens before OpenAI
-    const cleanTokens = tokens
-      .filter((t, i, arr) => i === 0 || t !== arr[i - 1]) // Deduplicate
-      .filter(t => CAR_BRANDS.includes(t) || KNOWN_CITIES_SET.has(t) || /^[a-z]+$/.test(t));
-    const inputName = cleanTokens.join(" ");
+    // Blocklist for invalid names
+    const nameBlocklist = ["auto auto", "group auto", "sales auto", "cars auto"];
+    const validateName = (name) => {
+      const nameLower = name.toLowerCase();
+      if (nameBlocklist.some(bad => nameLower.includes(bad))) {
+        log("warn", "Invalid name detected", { domain: normalizedDomain, name, reason: "Blocklist match" });
+        return false;
+      }
+      if (name.split(" ").length > 3) {
+        log("warn", "Name too long", { domain: normalizedDomain, name, reason: "Exceeds word limit" });
+        return false;
+      }
+      if (name.match(/(\b\w+\b)\s+\1/i)) {
+        log("warn", "Duplicate token detected", { domain: normalizedDomain, name, reason: "Repeated word" });
+        return false;
+      }
+      // Relaxed casing check to allow valid generics (e.g., "Victory Auto")
+      if (!name.match(/^[A-Z][a-z]*(\s[A-Z][a-z]*)*(\s[A-Z]+)?$/)) {
+        log("warn", "Invalid casing detected", { domain: normalizedDomain, name, reason: "Incorrect casing" });
+        return false;
+      }
+      return true;
+    };
 
+    // Try OpenAI fallback
     const prompt = `
-      Given a dealership domain "${normalizedDomain}" and cleaned tokens "${inputName}", return a JSON object with a 1–3 word, cold-email-safe name.
+      Given a dealership domain "${normalizedDomain}", return a JSON object with a 1–3 word, cold-email-safe name.
       Rules:
       - Use 1–3 words, prioritizing human names (e.g., "donjacobs.com" → {"name": "Don Jacobs", "brand": null, "flagged": false}).
       - Remove "of", "sales", "cars", "autogroup".
@@ -244,12 +266,14 @@ async function fallbackName(domain, meta = {}) {
         throw new FallbackError("OpenAI returned empty name", { domain: normalizedDomain });
       }
 
-      // Clean and deduplicate name
+      // Clean and validate name
       name = name
         .replace(/['’]s\b/g, "")
         .replace(/\b(cars|sales|autogroup|of)\b/gi, "")
         .replace(/\s+/g, " ")
         .trim();
+
+      // Deduplicate brands
       const nameTokens = name.toLowerCase().split(" ");
       const brandsInName = CAR_BRANDS.filter(b => nameTokens.some(t => t.includes(b.toLowerCase())));
       if (brandsInName.length > 1) {
@@ -257,42 +281,26 @@ async function fallbackName(domain, meta = {}) {
           .filter(t => !brandsInName.slice(1).some(b => t.includes(b.toLowerCase())))
           .join(" ")
           .trim();
-        name = `${capitalizeName(name)} ${BRAND_MAPPING[brandsInName[0]] || capitalizeName(brandsInName[0])}`.trim();
+        name = `${capitalizeName(name).name} ${BRAND_MAPPING[brandsInName[0]] || capitalizeName(brandsInName[0]).name}`.trim();
       }
 
       // Validate name
-      const isValidName = name => {
-        const words = name.toLowerCase().split(" ");
-        return words.every(word => CAR_BRANDS.includes(word) || KNOWN_CITIES_SET.has(word) || /^[a-z]+$/.test(word));
-      };
-      const validateName = name => {
-        if (BLOCKLIST.some(trigger => name.toLowerCase().includes(trigger))) {
-          log("warn", "Spam trigger detected", { domain: normalizedDomain, name });
-          return false;
-        }
-        return true;
-      };
-
-      if (!isValidName(name)) {
-        log("warn", "Invalid OpenAI name", { domain: normalizedDomain, name });
-        flags.push("OpenAIInvalidName", "ManualReviewRecommended");
+      if (!validateName(name) || result.flagged || confidenceScore < 95) {
+        flags.add("FallbackNameError");
+        flags.add("ManualReviewRecommended");
+        log("warn", "Fallback name error flagged", { domain: normalizedDomain, name, reason: "Invalid or low-confidence name" });
         return {
-          companyName: companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]),
+          companyName: companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name,
           confidenceScore: 80,
           flags: Array.from(new Set([...flags, "OpenAIFallbackFailed"])),
           tokens
         };
       }
-      if (!validateName(name)) {
-        flags.push("SpamTriggerDetected", "ManualReviewRecommended");
-        name = companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]);
-        confidenceScore = 80;
-      }
 
       const finalResult = {
         companyName: name,
-        confidenceScore: result.flagged ? 80 : 85,
-        flags: Array.from(new Set([...flags, "OpenAIFallback", result.flagged ? "ManualReviewRecommended" : ""])),
+        confidenceScore: 85,
+        flags: Array.from(new Set([...flags, "OpenAIFallback"])),
         tokens
       };
 
@@ -302,11 +310,16 @@ async function fallbackName(domain, meta = {}) {
     } catch (error) {
       const errorDetails = error instanceof FallbackError ? error.details : { error: error.message };
       log("error", "OpenAI fallback failed", { domain: normalizedDomain, ...errorDetails });
-      const fallbackName = companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]);
+      const fallbackName = companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
+      if (!validateName(fallbackName)) {
+        flags.add("FallbackNameError");
+        flags.add("ManualReviewRecommended");
+        log("warn", "Fallback name error flagged", { domain: normalizedDomain, name: fallbackName, reason: "Invalid fallback name" });
+      }
       const result = {
         companyName: fallbackName,
         confidenceScore: 80,
-        flags: Array.from(new Set([...flags, "OpenAIFallbackFailed", "ManualReviewRecommended"])),
+        flags: Array.from(new Set([...flags, "OpenAIFallbackFailed"])),
         tokens: 0
       };
       openAICache.set(cacheKey, result);
