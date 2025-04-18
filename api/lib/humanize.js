@@ -467,37 +467,54 @@ function extractTokens(domain) {
     }
 
     const cleanDomain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
-    let tokens = [];
+    let tokens = earlyCompoundSplit(cleanDomain);
+    log("debug", "After earlyCompoundSplit", { domain, tokens });
 
-    // Regex-based splitting for city/brand patterns
-    const ofMatch = cleanDomain.match(/(\w+)(?:of)(\w+)/i);
-    if (ofMatch) {
-      const [, prefix, city] = ofMatch;
-      if (CAR_BRANDS.includes(prefix) && KNOWN_CITIES_SET.has(city)) {
-        tokens.push(prefix, city);
-      }
-    }
-
-    // Fallback to general splitting
-    if (!tokens.length) {
-      tokens = cleanDomain
-        .replace(/([a-z])([A-Z])/g, '$1 $2') // Split camel case
-        .replace(/of([a-z]+)/gi, ' $1') // Split "ofCITY"
-        .split(/[^a-zA-Z]+/)
-        .filter(Boolean);
-    }
-
-    // Apply token fixes and capitalize
-    tokens = tokens
-      .map(t => {
-        const tLower = t.toLowerCase();
-        for (const [bad, good] of Object.entries(TOKEN_FIXES)) {
-          if (tLower.includes(bad)) {
-            return good;
+    // Dynamic splitting for cities, nouns, and brands
+    tokens = tokens.flatMap(token => {
+      const lower = token.toLowerCase();
+      if (!CAR_BRANDS.includes(lower) && !KNOWN_CITIES_SET.has(lower) && !KNOWN_PROPER_NOUNS.has(token)) {
+        const splits = [];
+        // Check for proper noun pairs (e.g., donjacobs → ["Don", "Jacobs"])
+        for (const noun of KNOWN_PROPER_NOUNS) {
+          const nounLower = noun.toLowerCase();
+          if (lower.includes(nounLower)) {
+            const remaining = lower.replace(nounLower, "");
+            if (remaining && KNOWN_PROPER_NOUNS.has(capitalizeName(remaining).name)) {
+              splits.push(capitalizeName(nounLower).name, capitalizeName(remaining).name);
+              return splits;
+            }
           }
         }
-        return capitalizeName(t).name;
-      })
+        // Check for city patterns (e.g., lacitycars → ["LA", "City"])
+        for (const city of KNOWN_CITIES_SET) {
+          if (lower.includes(city)) {
+            splits.push(capitalizeName(city).name);
+            const remaining = lower.replace(city, "");
+            if (remaining && !["cars", "sales", "autogroup"].includes(remaining)) {
+              splits.push(capitalizeName(remaining).name);
+            }
+            return splits;
+          }
+        }
+        // Fallback to camel case and "of" splits
+        return token
+          .replace(/([a-z])([A-Z])/g, '$1 $2')
+          .replace(/of([a-z]+)/gi, ' $1')
+          .split(/[^a-zA-Z]+/)
+          .filter(Boolean)
+          .map(t => capitalizeName(t).name);
+      }
+      return [capitalizeName(token).name];
+    });
+    log("debug", "After dynamic splits", { domain, tokens });
+
+    // Apply blob splits
+    tokens = tokens.flatMap(t => blobSplit(t));
+    log("debug", "After blobSplit", { domain, tokens });
+
+    // Validate and clean tokens
+    tokens = tokens
       .filter(t => {
         const tLower = t.toLowerCase();
         const isValid = t && !COMMON_WORDS.includes(tLower) && !["cars", "sales", "autogroup"].includes(tLower);
@@ -509,6 +526,7 @@ function extractTokens(domain) {
 
     // Deduplicate tokens
     tokens = [...new Set(tokens)];
+    log("debug", "After deduplication", { domain, tokens });
 
     // Log dropped tokens
     const expected = [CAR_BRANDS, Array.from(KNOWN_CITIES_SET), Array.from(KNOWN_PROPER_NOUNS)].flat().map(t => t.toLowerCase());
@@ -528,7 +546,7 @@ function extractTokens(domain) {
 /**
  * Splits compound words early in the tokenization process
  * @param {string} text - Text to split
- * @returns {string} - Split text
+ * @returns {Array<string>} - Array of tokens
  */
 function earlyCompoundSplit(text) {
   try {
@@ -536,26 +554,53 @@ function earlyCompoundSplit(text) {
       log("error", "Invalid text in earlyCompoundSplit", { text });
       throw new Error("Invalid text input");
     }
-    const splits = {
-      "billdube": "Bill Dube",
-      "mclartydaniel": "McLarty Daniel",
-      "mccarthyautogroup": "McCarthy Auto",
-      "nplincoln": "NP Lincoln",
-      "autonationusa": "AutoNation",
-      "chevyofcolumbuschevrolet": "Chevy Columbus Chevrolet",
-      "robbynixonbuickgmc": "Robby Nixon Buick GMC",
-      "toyotaofchicago": "Toyota Chicago",
-      "mazdanashville": "Mazda Nashville",
-      "kiachattanooga": "Kia Chattanooga",
-      "subaruofgwinnett": "Subaru Gwinnett"
+
+    const overrides = {
+      "billdube": ["Bill", "Dube"],
+      "mclartydaniel": ["McLarty", "Daniel"],
+      "nplincoln": ["NP", "Lincoln"],
+      "autonationusa": ["AutoNation"],
+      "robbynixonbuickgmc": ["Robby", "Nixon"],
+      "mccarthyautogroup": ["McCarthy", "Auto"]
     };
-    return splits[text.toLowerCase()] || text;
+
+    const lower = text.toLowerCase();
+    if (overrides[lower]) {
+      log("debug", "Override matched in earlyCompoundSplit", { text, split: overrides[lower] });
+      return overrides[lower];
+    }
+
+    // Dynamic splitting for proper noun pairs and brands
+    for (const noun of KNOWN_PROPER_NOUNS) {
+      const nounLower = noun.toLowerCase();
+      if (lower.includes(nounLower) && !KNOWN_CITIES_SET.has(nounLower)) {
+        const remaining = lower.replace(nounLower, "");
+        // Check for second noun (e.g., donjacobs → Don Jacobs)
+        if (remaining && KNOWN_PROPER_NOUNS.has(capitalizeName(remaining).name) && !KNOWN_CITIES_SET.has(remaining)) {
+          const split = [capitalizeName(nounLower).name, capitalizeName(remaining).name];
+          log("debug", "Dynamic noun split in earlyCompoundSplit", { text, split });
+          return split;
+        }
+        // Check for trailing brand (e.g., ricksmithchevrolet → Rick Smith Chevrolet)
+        for (const brand of CAR_BRANDS) {
+          if (remaining.includes(brand)) {
+            const preBrand = remaining.replace(brand, "");
+            if (preBrand && KNOWN_PROPER_NOUNS.has(capitalizeName(preBrand).name) && !KNOWN_CITIES_SET.has(preBrand)) {
+              const split = [capitalizeName(preBrand).name, capitalizeName(nounLower).name, BRAND_MAPPING[brand] || capitalizeName(brand).name];
+              log("debug", "Dynamic noun-brand split in earlyCompoundSplit", { text, split });
+              return split;
+            }
+          }
+        }
+      }
+    }
+
+    return [capitalizeName(text).name];
   } catch (e) {
     log("error", "earlyCompoundSplit failed", { text, error: e.message, stack: e.stack });
-    throw new Error("earlyCompoundSplit failed");
+    return [text];
   }
 }
-
 /**
  * Splits camelCase text into tokens
  * @param {string} text - Text to split
