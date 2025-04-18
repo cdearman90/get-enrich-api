@@ -697,11 +697,6 @@ function extractBrandOfCityFromDomain(domain) {
  * @param {Array<string>} tokens - Tokens to analyze
  * @returns {Object} - Result with company name, confidence score, and flags
  */
-/**
- * Attempts to match a brand-city pattern in tokens
- * @param {Array<string>} tokens - Tokens to analyze
- * @returns {Object} - Result with company name, confidence score, and flags
- */
 function tryBrandCityPattern(tokens) {
   const flags = new Set();
   log("info", "tryBrandCityPattern started", { tokens });
@@ -726,14 +721,34 @@ function tryBrandCityPattern(tokens) {
       }
     }
 
+    // Check for concatenated brand-city (e.g., kiachattanooga.com)
+    if (!brand || !city) {
+      const concatPattern = normalizedTokens.join("").match(/(\w+?)(\w{3,})$/i);
+      if (concatPattern) {
+        const [, potentialBrand, potentialCity] = concatPattern;
+        if (CAR_BRANDS.includes(potentialBrand) && KNOWN_CITIES_SET.has(potentialCity)) {
+          brand = potentialBrand;
+          city = potentialCity;
+        }
+      }
+    }
+
     // Fallback to token-based brand-city or city-brand order
     if (!brand || !city) {
       for (let i = 0; i < normalizedTokens.length; i++) {
         const token = normalizedTokens[i];
-        if (CAR_BRANDS.includes(token) && !/^[A-Z]{2,3}$/.test(token)) {
-          brand = token;
+        // Check if token contains a brand
+        const brandMatch = CAR_BRANDS.find(b => token.includes(b) && !/^[A-Z]{2,3}$/.test(token));
+        if (brandMatch) {
+          brand = brandMatch;
           city = normalizedTokens.find((t, j) => j !== i && KNOWN_CITIES_SET.has(t.toLowerCase()));
           if (city && brand.toLowerCase() !== city.toLowerCase()) {
+            break;
+          }
+          // Check if token itself contains a city
+          const cityInToken = Array.from(KNOWN_CITIES_SET).find(c => token.includes(c));
+          if (cityInToken && token !== brandMatch) {
+            city = cityInToken;
             break;
           }
           city = null;
@@ -751,7 +766,7 @@ function tryBrandCityPattern(tokens) {
     if (brand && city) {
       const formattedBrand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name;
       const formattedCity = capitalizeName(city).name;
-      // Deduplicate brands
+      // Deduplicate and enforce City Brand order
       const nameTokens = [formattedCity, formattedBrand].filter((t, i, arr) => i === 0 || t.toLowerCase() !== arr[i - 1].toLowerCase());
       const output = nameTokens.join(" ");
       flags.add("BrandCityPattern");
@@ -794,13 +809,6 @@ function tryHumanNamePattern(tokens, meta) {
       !KNOWN_CITIES_SET.has(tokens[1].toLowerCase())
     ) {
       const fullName = `${tokens[0]} ${tokens[1]}`;
-      const metaBrand = getMetaTitleBrand(meta);
-      if (metaBrand && !tokens.some(t => t.toLowerCase().includes(metaBrand.toLowerCase()))) {
-        flags.add("MetaTitleBrandAppended");
-        flags.add("ManualReviewRecommended");
-        log("info", "Human name with meta brand", { tokens, name: `${fullName} ${metaBrand}` });
-        return { companyName: `${fullName} ${metaBrand}`, confidenceScore: 95, flags: Array.from(flags) };
-      }
       flags.add("HumanNameDetected");
       log("info", "Human name detected", { tokens, name: fullName });
       return { companyName: fullName, confidenceScore: 125, flags: Array.from(flags) };
@@ -808,11 +816,41 @@ function tryHumanNamePattern(tokens, meta) {
 
     // Single proper noun as human name (e.g., "Tasca")
     if (tokens.length === 1 && KNOWN_PROPER_NOUNS.has(tokens[0]) && !CAR_BRANDS.includes(tokens[0].toLowerCase())) {
-      const metaBrand = getMetaTitleBrand(meta) || "Auto";
       flags.add("SingleProperNoun");
-      flags.add("ManualReviewRecommended");
-      log("info", "Single proper noun with brand", { tokens, name: `${tokens[0]} ${metaBrand}` });
-      return { companyName: `${tokens[0]} ${metaBrand}`, confidenceScore: 95, flags: Array.from(flags) };
+      log("info", "Single proper noun detected", { tokens, name: tokens[0] });
+      return { companyName: tokens[0], confidenceScore: 125, flags: Array.from(flags) };
+    }
+
+    // Check for merged names (e.g., "donjacobs" → "Don Jacobs")
+    for (const token of tokens) {
+      const tokenLower = token.toLowerCase();
+      for (const noun of KNOWN_PROPER_NOUNS) {
+        const nounLower = noun.toLowerCase();
+        if (tokenLower.includes(nounLower)) {
+          const remaining = tokenLower.replace(nounLower, "");
+          if (remaining && KNOWN_PROPER_NOUNS.has(capitalizeName(remaining).name)) {
+            const fullName = `${noun} ${capitalizeName(remaining).name}`;
+            flags.add("HumanNameDetected");
+            flags.add("MergedNameSplit");
+            log("info", "Merged human name detected", { tokens, name: fullName });
+            return { companyName: fullName, confidenceScore: 125, flags: Array.from(flags) };
+          }
+        }
+      }
+    }
+
+    // Partial match with meta brand
+    if (tokens.some(t => KNOWN_PROPER_NOUNS.has(t) && !CAR_BRANDS.includes(t.toLowerCase()))) {
+      const properNoun = tokens.find(t => KNOWN_PROPER_NOUNS.has(t));
+      const metaBrand = getMetaTitleBrand(meta);
+      if (metaBrand) {
+        flags.add("HumanNameDetected");
+        flags.add("MetaTitleBrandAppended");
+        flags.add("ManualReviewRecommended");
+        const name = `${properNoun} ${metaBrand}`;
+        log("info", "Partial human name with meta brand", { tokens, name });
+        return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
+      }
     }
 
     log("debug", "No human name pattern matched", { tokens });
