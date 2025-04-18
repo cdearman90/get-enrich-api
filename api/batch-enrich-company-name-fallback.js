@@ -1,7 +1,7 @@
 // api/company-name-fallback.js
 // Fallback logic using OpenAI with caching
 
-import { humanizeName, getMetaTitleBrand, KNOWN_CITIES_SET, capitalizeName } from "./lib/humanize.js";
+import { humanizeName, getMetaTitleBrand, KNOWN_CITIES_SET, capitalizeName, earlyCompoundSplit } from "./lib/humanize.js";
 import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
 import path from "path";
@@ -92,7 +92,31 @@ const OVERRIDES = {
   "kiaofchattanooga.com": "Chattanooga Kia",
   "mikeerdman.com": "Mike Erdman",
   "tasca.com": "Tasca",
-  "lacitycars.com": "La City"
+  "lacitycars.com": "LA City",
+  "rodbakerford.com": "Rod Baker",
+  "carsatcarlblack.com": "Carl Black",
+  "southcharlottejcd.com": "Charlotte Auto",
+  "oaklandauto.com": "Oakland Auto",
+  "nplincoln.com": "NP Lincoln",
+  "rohrmanhonda.com": "Rohrman Honda",
+  "malouf.com": "Malouf",
+  "prestonmotor.com": "Preston",
+  "demontrond.com": "DeMontrond",
+  "fletcherauto.com": "Fletcher",
+  "davischevrolet.com": "Davis Chevy",
+  "gychevy.com": "Gy Chevy",
+  "potamkinhyundai.com": "Potamkin Hyundai",
+  "tedbritt.com": "Ted Britt",
+  "andersonautogroup.com": "Anderson Auto",
+  "racewayford.com": "Raceway Ford",
+  "donhattan.com": "Don Hattan",
+  "chastangford.com": "Chastang Ford",
+  "machens.com": "Machens",
+  "taylorauto.com": "Taylor",
+  "dancummins.com": "Dan Cummins",
+  "kennedyauto.com": "Kennedy Auto",
+  "artmoehn.com": "Art Moehn",
+  "mbbhm.com": "M.B. BHM"
 };
 
 // Blocklist for spammy patterns
