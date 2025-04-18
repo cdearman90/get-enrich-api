@@ -52,6 +52,14 @@ const BRAND_MAPPING = {
   'volkswagen': 'VW', 'volvo': 'Volvo', 'vw': 'VW', 'chevy': 'Chevy', 'jcd': 'Jeep'
 };
 
+const ABBREVIATION_EXPANSIONS = {
+  "la": "LA",
+  "mb": "M.B.",
+  "gy": "GY",
+  "np": "NP",
+  "rt": "RT"
+};
+
 const COMMON_WORDS = ['to', 'of', 'and', 'the', 'for', 'in', 'on', 'at', 'inc', 'llc', 'corp'];
 
 const OVERRIDES = {
@@ -788,25 +796,37 @@ function blobSplit(text) {
 /**
  * Capitalizes a name with token fixes
  * @param {string} name - Name to capitalize
- * @returns {Object} - Capitalized name
+ * @returns {Object} - Capitalized name with flags
  */
 function capitalizeName(name) {
   try {
-    if (!name || typeof name !== "string") {
-      log("error", "Invalid name in capitalizeName", { name });
-      throw new Error("Invalid name input");
+    let words = name;
+    if (typeof words === "string") {
+      words = words.match(/[a-z]+/gi) || [];
     }
+    if (!Array.isArray(words)) {
+      words = [words];
+    }
+
     // Apply token fixes
-    const nameLower = name.toLowerCase();
-    for (const [bad, good] of Object.entries(TOKEN_FIXES)) {
-      if (nameLower.includes(bad)) {
-        return { name: good };
+    const fixedWords = words.map(word => {
+      if (!word || typeof word !== "string") return word;
+      const wordLower = word.toLowerCase();
+      for (const [bad, good] of Object.entries(TOKEN_FIXES)) {
+        if (wordLower.includes(bad)) {
+          return good;
+        }
       }
-    }
-    return { name: name.charAt(0).toUpperCase() + name.slice(1).toLowerCase() };
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    });
+
+    return {
+      name: fixedWords.join(" "),
+      flags: []
+    };
   } catch (e) {
     log("error", "capitalizeName failed", { name, error: e.message, stack: e.stack });
-    throw new Error("capitalizeName failed");
+    return { name: "", flags: ["CapitalizeNameError"] };
   }
 }
 
