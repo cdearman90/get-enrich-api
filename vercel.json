@@ -1,9 +1,18 @@
 {
   "version": 2,
   "builds": [
-    { "src": "api/**/*.js", "use": "@vercel/node" }
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1.js" }
-  ]
-}
+    {
+      "src": "/api/batch-enrich",
+      "dest": "/api/company-name-fallback.js"
+    }
+  ],
+  "env": {
+    "VERCEL_AUTH_TOKEN": "@vercel_auth_token",
+    "OPENAI_API_KEY": "@openai_api_key"
+  }
