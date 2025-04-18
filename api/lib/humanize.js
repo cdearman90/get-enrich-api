@@ -806,8 +806,16 @@ function extractBrandOfCityFromDomain(domain) {
     }
 
     const tokens = extractTokens(cleanDomain);
-    const brand = tokens.find(t => CAR_BRANDS.includes(t.toLowerCase()));
     const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+    const brand = tokens.find(t => CAR_BRANDS.includes(t.toLowerCase()));
+    if (city && brand) {
+      const formattedBrand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name;
+      const formattedCity = capitalizeName(city).name;
+      flags.add("TokenBasedExtraction");
+      log("info", "Token-based city-brand extraction", { domain, brand: formattedBrand, city: formattedCity });
+      return { brand: formattedBrand, city: formattedCity, flags: Array.from(flags) };
+    }
+
     flags.add("TokenBasedExtraction");
     log("info", "Token-based extraction", { domain, brand, city });
     return {
@@ -883,10 +891,11 @@ function tryBrandCityPattern(tokens) {
 }
 
 /**
- * Attempts to match a human name pattern in tokens
- * @param {Array<string>} tokens - Tokens to analyze
- * @param {Object} meta - Meta data
- * @returns {{companyName: string, confidenceScore: number, flags: Array<string>}} - Result with company name, confidence score, and flags
+ * Humanizes a domain into a cold-email-friendly company name
+ * @param {string} domain - The domain to enrich
+ * @param {string} originalDomain - Original domain for overrides
+ * @param {boolean} useMeta - Whether to fetch meta data
+ * @returns {Object} - Enriched result
  */
 function tryHumanNamePattern(tokens, meta) {
   const flags = new Set();
@@ -1285,7 +1294,11 @@ async function fetchMetaData(domain) {
       "chevyofcolumbuschevrolet.com": { title: "Chevrolet Dealer in Columbus" },
       "mazdanashville.com": { title: "Mazda Dealer in Nashville" },
       "kiachattanooga.com": { title: "Kia Dealer in Chattanooga" },
-      "subaruofgwinnett.com": { title: "Subaru Dealer in Gwinnett" }
+      "subaruofgwinnett.com": { title: "Subaru Dealer in Gwinnett" },
+      "ricksmithchevrolet.com": { title: "Chevrolet Dealer" },
+      "mikeerdman.com": { title: "Toyota Dealer" },
+      "tasca.com": { title: "Ford Dealer" },
+      "crystalautogroup.com": { title: "Auto Dealer" }
     };
     return meta[domain] || {};
   } catch (e) {
