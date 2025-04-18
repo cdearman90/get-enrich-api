@@ -141,12 +141,26 @@ function validateFallbackName(result, domain, domainBrand) {
       return { validatedName: null, flags };
     }
 
-    // Split merged tokens (e.g., "Robertthorne" → "Robert Thorne")
+    // Split merged tokens (e.g., "Drivewithdavis" → "Drive With Davis")
     if (validatedName.split(" ").length === 1) {
       const splitTokens = validatedName.replace(/([a-z])([A-Z])/g, '$1 $2').split(" ").map(t => capitalizeName(t).name);
       if (splitTokens.length > 1 && splitTokens.every(t => KNOWN_PROPER_NOUNS_ARRAY.includes(t))) {
         validatedName = splitTokens.join(" ");
         log("info", "Merged tokens split", { domain, validatedName });
+      } else {
+        validatedName = capitalizeName(validatedName).name;
+      }
+    }
+
+    // Check for city-only or brand-only outputs
+    if (validatedName) {
+      const isBrand = CAR_BRANDS.includes(validatedName.toLowerCase());
+      const isCity = KNOWN_CITIES_SET.has(validatedName.toLowerCase());
+      const isProper = KNOWN_PROPER_NOUNS_ARRAY.includes(validatedName);
+      if (!isProper && (isBrand || isCity)) {
+        log("warn", "City-only or brand-only output detected", { domain, name: validatedName });
+        flags.push(isBrand ? "BrandOnlyFallback" : "CityOnlyFallback");
+        return { validatedName: null, flags };
       }
     }
 
@@ -336,6 +350,17 @@ async function fallbackName(domain, meta = {}) {
             flags: Array.from(new Set(flags)),
             tokens: 0
           };
+        } else {
+          // Handle city-only output by appending "Auto" if no brand
+          const name = `${capitalizeName(city).name} Auto`;
+          log("info", "City-only output, appending Auto", { domain: normalizedDomain, name });
+          flags.push("CityOnlyFallback", "BrandAppendedForClarity");
+          return {
+            companyName: name,
+            confidenceScore: 95,
+            flags: Array.from(new Set(flags)),
+            tokens: 0
+          };
         }
       }
       if (city && !companyName.includes(city)) {
@@ -345,6 +370,51 @@ async function fallbackName(domain, meta = {}) {
     } catch (error) {
       log("error", "Token rescue failed", { domain: normalizedDomain, error: error.message });
       flags.push("LocalFallbackFailed");
+    }
+
+    // Check for brand-only output and append meta or domain context
+    if (companyName && CAR_BRANDS.includes(companyName.toLowerCase())) {
+      const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+      const inferredBrand = companyName;
+      if (city) {
+        companyName = `${capitalizeName(city).name} ${inferredBrand}`;
+        log("info", "Brand-only output, appending city", { domain: normalizedDomain, name: companyName });
+        flags.push("BrandCityAppended");
+        confidenceScore = 125;
+      } else {
+        log("warn", "Brand-only output", { domain: normalizedDomain, name: companyName });
+        flags.push("BrandOnlyFallback");
+        confidenceScore = 95;
+      }
+    }
+
+    // Final token accuracy pass
+    if (companyName) {
+      const isProper = companyName.split(" ").every(t => KNOWN_PROPER_NOUNS_ARRAY.includes(t));
+      if (!isProper && companyName.split(" ").length === 1) {
+        const splitTokens = companyName.replace(/([a-z])([A-Z])/g, '$1 $2').split(" ").map(t => capitalizeName(t).name);
+        if (splitTokens.length > 1) {
+          companyName = splitTokens.join(" ");
+          log("info", "Final token split applied", { domain: normalizedDomain, name: companyName });
+          flags.push("TokenSplitApplied");
+        }
+      }
+
+      // Possessive-friendly rule
+      const POSSESSIVE_SAFE_NAMES = ['Rick Smith', 'Don Jacobs', 'Bill Dube', 'Robby Nixon', 'Robert Thorne'];
+      if (!POSSESSIVE_SAFE_NAMES.includes(companyName)) {
+        const shouldAppendBrand = (domain, name) => {
+          const domainBrand = CAR_BRANDS.find(b => domain.includes(b.toLowerCase()));
+          return domainBrand && !name.toLowerCase().includes(domainBrand.toLowerCase());
+        };
+        if (shouldAppendBrand(normalizedDomain, companyName)) {
+          const domainBrand = CAR_BRANDS.find(b => normalizedDomain.includes(b.toLowerCase()));
+          const inferredBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
+          companyName = `${companyName} ${inferredBrand}`;
+          log("info", "Brand appended for clarity", { domain: normalizedDomain, name: companyName });
+          flags.push("BrandAppendedForClarity");
+        }
+      }
     }
 
     // Check cache
