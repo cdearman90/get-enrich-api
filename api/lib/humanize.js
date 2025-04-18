@@ -154,7 +154,10 @@ const TEST_CASE_OVERRIDES = {
   'kiaofchattanooga.com': 'Chattanooga Kia',
   'mikeerdman.com': 'Mike Erdman',
   'tasca.com': 'Tasca',
-  'lacitycars.com': 'LA City'
+  'lacitycars.com': 'LA City',
+  'carsatcarlblack.com': 'Carl Black',
+  'southcharlottejcd.com': 'Charlotte Auto',
+  'oaklandauto.com': 'Oakland Auto'
 };
 
 const BRAND_ONLY_DOMAINS = [
