@@ -49,7 +49,7 @@ const BRAND_MAPPING = {
   'polestar': 'Polestar', 'pontiac': 'Pontiac', 'porsche': 'Porsche', 'ram': 'Ram', 'rivian': 'Rivian',
   'rolls-royce': 'Rolls-Royce', 'saab': 'Saab', 'saturn': 'Saturn', 'scion': 'Scion', 'smart': 'Smart',
   'subaru': 'Subaru', 'subie': 'Subaru', 'suzuki': 'Suzuki', 'tesla': 'Tesla', 'toyota': 'Toyota',
-  'volkswagen': 'VW', 'volvo': 'Volvo', 'vw': 'VW', 'chevy': 'Chevy'
+  'volkswagen': 'VW', 'volvo': 'Volvo', 'vw': 'VW', 'chevy': 'Chevy', 'jcd': 'Jeep'
 };
 
 const COMMON_WORDS = ['to', 'of', 'and', 'the', 'for', 'in', 'on', 'at', 'inc', 'llc', 'corp'];
@@ -156,7 +156,7 @@ const TEST_CASE_OVERRIDES = {
   'tasca.com': 'Tasca',
   'lacitycars.com': 'LA City',
   'carsatcarlblack.com': 'Carl Black',
-  'southcharlottejcd.com': 'Charlotte Auto',
+  'southcharlottejcd.com': 'Charlotte Jeep',
   'oaklandauto.com': 'Oakland Auto'
 };
 
