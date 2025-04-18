@@ -695,7 +695,7 @@ function extractBrandOfCityFromDomain(domain) {
 /**
  * Attempts to match a brand-city pattern in tokens
  * @param {Array<string>} tokens - Tokens to analyze
- * @returns {Object} - Result with company name, confidence score, and flags
+ * @returns {{companyName: string, confidenceScore: number, flags: Array<string>}} - Result with company name, confidence score, and flags
  */
 function tryBrandCityPattern(tokens) {
   const flags = new Set();
