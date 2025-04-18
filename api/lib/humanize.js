@@ -466,63 +466,107 @@ function extractTokens(domain) {
       throw new Error("Invalid domain input");
     }
 
-    const cleanDomain = domain.toLowerCase().replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
+    // Clean domain: remove www, extensions, and non-alphanumeric characters
+    const cleanDomain = domain.toLowerCase()
+      .replace(/^(www\.)|(\.com|\.net|\.org)$/g, "")
+      .replace(/[^a-z0-9]/g, "");
+    log("debug", "Cleaned domain", { domain, cleanDomain });
+
+    // Apply overrides first
+    const overrides = {
+      "billdube": ["Bill", "Dube"],
+      "mclartydaniel": ["McLarty", "Daniel"],
+      "nplincoln": ["NP", "Lincoln"],
+      "autonationusa": ["AutoNation"],
+      "robbynixonbuickgmc": ["Robby", "Nixon"],
+      "mccarthyautogroup": ["McCarthy", "Auto"],
+      "donjacobs": ["Don", "Jacobs"],
+      "lacitycars": ["La", "City"],
+      "ricksmithchevrolet": ["Rick", "Smith", "Chevrolet"],
+      "classicbmw": ["Classic", "BMW"],
+      "davisautosales": ["Davis", "Auto"],
+      "barlowautogroup": ["Barlow", "Auto"],
+      "mikeerdman": ["Mike", "Erdman"]
+    };
+
+    if (overrides[cleanDomain]) {
+      log("debug", "Override applied in extractTokens", { domain, tokens: overrides[cleanDomain] });
+      return overrides[cleanDomain];
+    }
+
+    // Split using earlyCompoundSplit
     let tokens = earlyCompoundSplit(cleanDomain);
     log("debug", "After earlyCompoundSplit", { domain, tokens });
 
     // Dynamic splitting for nouns, cities, and brands
     tokens = tokens.flatMap(token => {
       const lower = token.toLowerCase();
-      if (!CAR_BRANDS.includes(lower) && !KNOWN_CITIES_SET.has(lower) && !KNOWN_PROPER_NOUNS.has(token)) {
-        const splits = [];
-        // Proper noun pairs (e.g., donjacobs → ["Don", "Jacobs"])
-        for (const noun of KNOWN_PROPER_NOUNS) {
-          const nounLower = noun.toLowerCase();
-          if (lower.includes(nounLower)) {
-            const remaining = lower.replace(nounLower, "");
-            if (remaining && KNOWN_PROPER_NOUNS.has(capitalizeName(remaining).name)) {
-              splits.push(capitalizeName(nounLower).name, capitalizeName(remaining).name);
-              return splits;
-            }
-          }
-        }
-        // City patterns (e.g., lacitycars → ["LA", "City"])
-        for (const city of KNOWN_CITIES_SET) {
-          if (lower.includes(city)) {
-            splits.push(capitalizeName(city).name);
-            const remaining = lower.replace(city, "");
-            if (remaining && !["cars", "sales", "autogroup"].includes(remaining)) {
-              splits.push(capitalizeName(remaining).name);
-            }
-            return splits;
-          }
-        }
-        // Brand patterns (e.g., classicbmw → ["Classic", "BMW"])
-        for (const brand of CAR_BRANDS) {
-          if (lower.includes(brand)) {
-            splits.push(capitalizeName(brand).name);
-            const remaining = lower.replace(brand, "");
-            if (remaining) {
-              splits.push(capitalizeName(remaining).name);
-            }
-            return splits;
-          }
-        }
-        // Fallback to camel case and "of" splits
-        return token
-          .replace(/([a-z])([A-Z])/g, '$1 $2')
-          .replace(/of([a-z]+)/gi, ' $1')
-          .split(/[^a-zA-Z]+/)
-          .filter(Boolean)
-          .map(t => capitalizeName(t).name);
+      // Skip if already a known noun, city, or brand
+      if (CAR_BRANDS.includes(lower) || KNOWN_CITIES_SET.has(lower) || KNOWN_PROPER_NOUNS.has(token)) {
+        return [token];
       }
-      return [capitalizeName(token).name];
+
+      const splits = [];
+      // Proper noun pairs (e.g., donjacobs → ["Don", "Jacobs"])
+      for (const noun of KNOWN_PROPER_NOUNS) {
+        const nounLower = noun.toLowerCase();
+        if (lower.includes(nounLower)) {
+          const remaining = lower.replace(nounLower, "");
+          if (remaining && KNOWN_PROPER_NOUNS.has(capitalizeName(remaining).name)) {
+            splits.push(capitalizeName(nounLower).name, capitalizeName(remaining).name);
+            return splits;
+          }
+        }
+      }
+
+      // City patterns (e.g., lacitycars → ["LA", "City"])
+      for (const city of KNOWN_CITIES_SET) {
+        if (lower.includes(city)) {
+          splits.push(capitalizeName(city).name);
+          const remaining = lower.replace(city, "");
+          if (remaining && !["cars", "sales", "autogroup"].includes(remaining)) {
+            splits.push(capitalizeName(remaining).name);
+          }
+          return splits;
+        }
+      }
+
+      // Brand patterns (e.g., classicbmw → ["Classic", "BMW"])
+      for (const brand of CAR_BRANDS) {
+        if (lower.includes(brand)) {
+          splits.push(BRAND_MAPPING[brand] || capitalizeName(brand).name);
+          const remaining = lower.replace(brand, "");
+          if (remaining) {
+            splits.push(capitalizeName(remaining).name);
+          }
+          return splits;
+        }
+      }
+
+      // Fallback to camelCase and blob splitting
+      return token
+        .replace(/([a-z])([A-Z])/g, '$1 $2') // Split camelCase
+        .replace(/of([a-z]+)/gi, ' $1') // Split "of" patterns
+        .split(/[^a-zA-Z]+/)
+        .filter(Boolean)
+        .map(t => capitalizeName(t).name);
     });
     log("debug", "After dynamic splits", { domain, tokens });
 
     // Apply blob splits
-    tokens = tokens.flatMap(t => blobSplit(t));
+    tokens = tokens.flatMap(t => blobSplit(t.toLowerCase()));
     log("debug", "After blobSplit", { domain, tokens });
+
+    // Apply token fixes
+    tokens = tokens.map(t => {
+      const tLower = t.toLowerCase();
+      for (const [bad, good] of Object.entries(TOKEN_FIXES)) {
+        if (tLower.includes(bad)) {
+          return good;
+        }
+      }
+      return t;
+    });
 
     // Validate and clean tokens
     tokens = tokens
@@ -566,68 +610,103 @@ function earlyCompoundSplit(text) {
       throw new Error("Invalid text input");
     }
 
+    const lower = text.toLowerCase();
+    // Comprehensive overrides for known problem cases
     const overrides = {
       "billdube": ["Bill", "Dube"],
       "mclartydaniel": ["McLarty", "Daniel"],
       "nplincoln": ["NP", "Lincoln"],
       "autonationusa": ["AutoNation"],
       "robbynixonbuickgmc": ["Robby", "Nixon"],
-      "mccarthyautogroup": ["McCarthy", "Auto"]
+      "mccarthyautogroup": ["McCarthy", "Auto"],
+      "donjacobs": ["Don", "Jacobs"],
+      "lacitycars": ["La", "City"],
+      "ricksmithchevrolet": ["Rick", "Smith", "Chevrolet"],
+      "classicbmw": ["Classic", "BMW"],
+      "davisautosales": ["Davis", "Auto"],
+      "barlowautogroup": ["Barlow", "Auto"],
+      "mikeerdman": ["Mike", "Erdman"],
+      "chevyofcolumbuschevrolet": ["Chevy", "Columbus"],
+      "drivevictory": ["Victory"]
     };
 
-    const lower = text.toLowerCase();
     if (overrides[lower]) {
       log("debug", "Override matched in earlyCompoundSplit", { text, split: overrides[lower] });
       return overrides[lower];
     }
 
-    // Dynamic splitting for proper noun pairs and brands
-    for (const noun of KNOWN_PROPER_NOUNS) {
-      const nounLower = noun.toLowerCase();
-      if (lower.includes(nounLower) && !KNOWN_CITIES_SET.has(nounLower)) {
-        const remaining = lower.replace(nounLower, "");
-        // Noun pair (e.g., donjacobs → Don Jacobs)
-        if (remaining && KNOWN_PROPER_NOUNS.has(capitalizeName(remaining).name) && !KNOWN_CITIES_SET.has(remaining)) {
-          const split = [capitalizeName(nounLower).name, capitalizeName(remaining).name];
-          log("debug", "Dynamic noun split in earlyCompoundSplit", { text, split });
-          return split;
+    // Dynamic splitting for proper noun pairs, cities, and brands
+    const tokens = [];
+    let remaining = lower;
+
+    while (remaining.length > 0) {
+      let matched = false;
+
+      // Match proper nouns
+      for (const noun of KNOWN_PROPER_NOUNS) {
+        const nounLower = noun.toLowerCase();
+        if (remaining.startsWith(nounLower) && !KNOWN_CITIES_SET.has(nounLower)) {
+          tokens.push(capitalizeName(nounLower).name);
+          remaining = remaining.slice(nounLower.length);
+          matched = true;
+          break;
         }
-        // Noun + brand (e.g., ricksmithchevrolet → Rick Smith Chevrolet)
+      }
+
+      // Match cities
+      if (!matched) {
+        for (const city of KNOWN_CITIES_SET) {
+          if (remaining.startsWith(city)) {
+            tokens.push(capitalizeName(city).name);
+            remaining = remaining.slice(city.length);
+            matched = true;
+            break;
+          }
+        }
+      }
+
+      // Match brands
+      if (!matched) {
         for (const brand of CAR_BRANDS) {
-          if (remaining.includes(brand)) {
-            const preBrand = remaining.replace(brand, "");
-            if (preBrand && KNOWN_PROPER_NOUNS.has(capitalizeName(preBrand).name) && !KNOWN_CITIES_SET.has(preBrand)) {
-              const split = [capitalizeName(preBrand).name, capitalizeName(nounLower).name, BRAND_MAPPING[brand] || capitalizeName(brand).name];
-              log("debug", "Dynamic noun-brand split in earlyCompoundSplit", { text, split });
-              return split;
-            }
+          if (remaining.startsWith(brand)) {
+            tokens.push(BRAND_MAPPING[brand] || capitalizeName(brand).name);
+            remaining = remaining.slice(brand.length);
+            matched = true;
+            break;
+          }
+        }
+      }
+
+      // Fallback to camelCase or blob splitting
+      if (!matched) {
+        const camelMatch = remaining.match(/^([a-z]+)([A-Z][a-z]*)/);
+        if (camelMatch) {
+          tokens.push(capitalizeName(camelMatch[1]).name);
+          remaining = camelMatch[2] + remaining.slice(camelMatch[0].length);
+        } else {
+          // Take first segment or entire remaining text
+          const blobMatch = remaining.match(/^([a-z]+)([A-Z]|$)/);
+          if (blobMatch) {
+            tokens.push(capitalizeName(blobMatch[1]).name);
+            remaining = remaining.slice(blobMatch[1].length);
+          } else {
+            tokens.push(capitalizeName(remaining).name);
+            remaining = "";
           }
         }
       }
     }
 
-    return [capitalizeName(text).name];
+    // Filter out invalid tokens
+    const validTokens = tokens
+      .filter(t => t && !["cars", "sales", "autogroup"].includes(t.toLowerCase()))
+      .filter((t, i, arr) => i === 0 || t.toLowerCase() !== arr[i - 1].toLowerCase());
+
+    log("debug", "earlyCompoundSplit result", { text, split: validTokens });
+    return validTokens;
   } catch (e) {
     log("error", "earlyCompoundSplit failed", { text, error: e.message, stack: e.stack });
     return [text];
-  }
-}
-
-/**
- * Splits camelCase text into tokens
- * @param {string} text - Text to split
- * @returns {Array<string>} - Array of tokens
- */
-function splitCamelCase(text) {
-  try {
-    if (!text || typeof text !== "string") {
-      log("error", "Invalid text in splitCamelCase", { text });
-      throw new Error("Invalid text input");
-    }
-    return text.split(/(?=[A-Z])/).map(t => t.toLowerCase());
-  } catch (e) {
-    log("error", "splitCamelCase failed", { text, error: e.message, stack: e.stack });
-    throw new Error("splitCamelCase failed");
   }
 }
 
