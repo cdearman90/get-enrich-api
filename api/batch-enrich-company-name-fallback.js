@@ -231,15 +231,17 @@ async function fallbackName(domain, meta = {}) {
       return true;
     };
 
-    // Try OpenAI fallback
+    // Try OpenAI fallback with strict constraints
     const prompt = `
       Given a dealership domain "${normalizedDomain}", return a JSON object with a 1–3 word, cold-email-safe name.
       Rules:
       - Use 1–3 words, prioritizing human names (e.g., "donjacobs.com" → {"name": "Don Jacobs", "brand": null, "flagged": false}).
       - Remove "of", "sales", "cars", "autogroup".
       - Use title case (e.g., "Nashville Mazda").
-      - If a brand is present, use it once: ${CAR_BRANDS.join(", ")}.
-      - Do not repeat brands or invent words.
+      - Brand must exist in domain or meta title: ${CAR_BRANDS.join(", ")}.
+      - If no brand in domain or meta, set brand to null.
+      - Do not repeat brands or invent brands (e.g., no "Mercedes" unless explicitly in domain/meta).
+      - Ensure proper spacing for human names (e.g., "Donjacobs" → "Don Jacobs").
       - Meta title: ${meta.title || "none"}.
       - Response format: {"name": string, "brand": string|null, "flagged": boolean}
     `;
@@ -269,6 +271,20 @@ async function fallbackName(domain, meta = {}) {
         .replace(/\s+/g, " ")
         .trim();
 
+      // Validate brand presence
+      const domainBrands = CAR_BRANDS.filter(b => cleanDomain.includes(b.toLowerCase()));
+      const metaBrand = getMetaTitleBrand(meta) || "";
+      if (result.brand && !domainBrands.includes(result.brand.toLowerCase()) && result.brand.toLowerCase() !== metaBrand.toLowerCase()) {
+        log("warn", "OpenAI hallucinated brand", { domain: normalizedDomain, name, brand: result.brand });
+        flags.add("OpenAIHallucination");
+        return {
+          companyName: companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name,
+          confidenceScore: 80,
+          flags: Array.from(new Set([...flags, "OpenAIFallbackFailed", "ManualReviewRecommended"])),
+          tokens
+        };
+      }
+
       // Deduplicate brands
       const nameTokens = name.toLowerCase().split(" ");
       const brandsInName = CAR_BRANDS.filter(b => nameTokens.some(t => t.includes(b.toLowerCase())));
@@ -281,12 +297,12 @@ async function fallbackName(domain, meta = {}) {
       }
 
       // Validate name
-      if (!validateName(name) || result.flagged || confidenceScore < 95) {
+      if (!validateName(name) || result.flagged) {
         flags.add("FallbackNameError");
         flags.add("ManualReviewRecommended");
-        log("warn", "Fallback name error flagged", { domain: normalizedDomain, name, reason: "Invalid or low-confidence name" });
+        log("warn", "Fallback name error flagged", { domain: normalizedDomain, name, reason: "Invalid or flagged name" });
         return {
-          companyName: companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]).name,
+          companyName: companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name,
           confidenceScore: 80,
           flags: Array.from(new Set([...flags, "OpenAIFallbackFailed"])),
           tokens
@@ -295,7 +311,7 @@ async function fallbackName(domain, meta = {}) {
 
       const finalResult = {
         companyName: name,
-        confidenceScore: 85,
+        confidenceScore: 95,
         flags: Array.from(new Set([...flags, "OpenAIFallback"])),
         tokens
       };
@@ -306,7 +322,7 @@ async function fallbackName(domain, meta = {}) {
     } catch (error) {
       const errorDetails = error instanceof FallbackError ? error.details : { error: error.message };
       log("error", "OpenAI fallback failed", { domain: normalizedDomain, ...errorDetails });
-      const fallbackName = companyName || capitalizeName(normalizedDomain.split(/(?=[A-Z])/)[0]).name;
+      const fallbackName = companyName || capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
       if (!validateName(fallbackName)) {
         flags.add("FallbackNameError");
         flags.add("ManualReviewRecommended");
@@ -322,7 +338,7 @@ async function fallbackName(domain, meta = {}) {
       return result;
     }
   } catch (err) {
-    log("error", "fallbackName failed", {
+    log("error", "falllbackName failed", {
       domain: normalizedDomain || "unknown",
       error: err.message,
       stack: err.stack
