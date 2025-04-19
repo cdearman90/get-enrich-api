@@ -448,7 +448,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
     let lastError;
     for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
       try {
-        logger.debug(`Attempt ${attempt} to call fallback`, { domain });
+        logger.debug(`Attempt ${attempt} to call fallback`, { domain, attempt });
         const fallback = await fallbackName(domain, { title: meta.title });
 
         logger.debug("Fallback result", { domain, fallback });
@@ -462,20 +462,20 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
         };
       } catch (error) {
         lastError = error;
-        logger.warn(`Fallback attempt ${attempt} failed`, { domain, error: error.message });
+        logger.warn(`Fallback attempt ${attempt} failed`, { domain, error: error.message, stack: error.stack });
         if (attempt < RETRY_ATTEMPTS) {
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
         }
       }
     }
-    logger.error("Fallback exhausted retries", { domain, error: lastError.message });
+    logger.error("Fallback exhausted retries", { domain, error: lastError.message, stack: lastError.stack });
     let local;
     try {
       logger.debug("Attempting local humanizeName", { domain });
       local = await humanizeName(domain, domain, true);
       logger.debug("Local humanizeName result", { domain, result: local });
     } catch (humanizeError) {
-      logger.error("Local humanizeName failed", { domain, error: humanizeError.message });
+      logger.error("Local humanizeName failed", { domain, error: humanizeError.message, stack: humanizeError.stack });
       local = { companyName: "", confidenceScore: 80, flags: ["InvalidHumanizeResponse"], tokens: 0 };
     }
 
@@ -525,17 +525,20 @@ function validateLeads(leads) {
 
   try {
     if (!Array.isArray(leads)) {
+      logger.warn("Leads is not an array", { leads: JSON.stringify(leads) });
       validationErrors.push("Leads is not an array");
       return { validatedLeads, validationErrors };
     }
 
     leads.forEach((lead, i) => {
       if (!lead || typeof lead !== "object") {
+        logger.warn(`Index ${i} not object`, { lead: JSON.stringify(lead) });
         validationErrors.push(`Index ${i} not object`);
         return;
       }
       const domain = (lead.domain || "").trim().toLowerCase();
       if (!domain) {
+        logger.warn(`Index ${i} missing domain`, { lead: JSON.stringify(lead) });
         validationErrors.push(`Index ${i} missing domain`);
         return;
       }
@@ -545,9 +548,10 @@ function validateLeads(leads) {
         metaTitle: typeof lead.metaTitle === "string" ? lead.metaTitle : undefined
       });
     });
+    logger.debug("validateLeads completed", { validatedLeadsCount: validatedLeads.length, validationErrors });
     return { validatedLeads, validationErrors };
   } catch (err) {
-    logger.error("validateLeads failed", { error: err.message, stack: err.stack });
+    logger.error("validateLeads failed", { error: err.message, stack: err.stack, leads: JSON.stringify(leads) });
     validationErrors.push("Validation error");
     return { validatedLeads, validationErrors };
   }
@@ -562,10 +566,14 @@ export default async function handler(req, res) {
     logger.info(`Received auth header: ${authHeader}, Expected: Bearer ${authToken}`);
     if (!authHeader || authHeader !== `Bearer ${authToken}`) {
       logger.warn("Unauthorized request", { authHeader, expected: `Bearer ${authToken}` });
-      return res.status(401).json({ error: "Unauthorized", message: "Invalid or missing authorization token" });
+      return res.status(401).json({ 
+        error: "Unauthorized", 
+        message: "Invalid or missing authorization token",
+        details: "Please provide a valid Bearer token in the Authorization header"
+      });
     }
 
-    logger.debug("Handler started", { method: req.method, bodyLength: req.body ? JSON.stringify(req.body).length : 0 });
+    logger.debug("Handler started", { method: req.method });
 
     if (req.method !== "POST") {
       logger.warn("Invalid method, expected POST", { method: req.method });
@@ -575,16 +583,28 @@ export default async function handler(req, res) {
     // Safely access req.body with manual parsing for vercel dev mode
     try {
       const rawBody = await buffer(req);
+      logger.debug("Raw body received", { rawBody: rawBody.toString() });
       body = JSON.parse(rawBody.toString() || "{}");
-      logger.debug("Received body", { bodyLength: JSON.stringify(body).length });
+      logger.debug("Parsed body", { bodyLength: JSON.stringify(body).length, body: JSON.stringify(body) });
     } catch (err) {
       logger.error("Failed to parse request body", { error: err.message, stack: err.stack });
-      return res.status(400).json({ error: "Invalid request body" });
+      return res.status(400).json({ error: "Invalid JSON body", details: err.message });
     }
 
-    if (!body) {
+    if (!body || (Object.keys(body).length === 0 && body.constructor === Object)) {
       logger.warn("Empty body detected", {});
       return res.status(400).json({ error: "Empty body" });
+    }
+
+    const leads = body.leads || body.leadList || body.domains || body;
+    logger.debug("Extracted leads", { leadCount: Array.isArray(leads) ? leads.length : 0, leads: JSON.stringify(leads) });
+
+    const { validatedLeads, validationErrors } = validateLeads(leads);
+    logger.debug("Validated leads", { validatedLeads: validatedLeads.length, validationErrors });
+
+    if (validatedLeads.length === 0) {
+      logger.warn("No valid leads", { validationErrors });
+      return res.status(400).json({ error: "No valid leads", details: validationErrors });
     }
 
     const successful = [];
@@ -626,7 +646,7 @@ export default async function handler(req, res) {
           cityDetected = match.city || null;
           logger.debug("extractBrandOfCityFromDomain result", { domain: domainKey, brandDetected, cityDetected });
         } catch (error) {
-          logger.error("extractBrandOfCityFromDomain failed", { domain: domainKey, error: error.message });
+          logger.error("extractBrandOfCityFromDomain failed", { domain: domainKey, error: error.message, stack: error.stack });
         }
 
         if (BRAND_ONLY_DOMAINS.includes(`${domainKey}.com`)) {
@@ -656,7 +676,7 @@ export default async function handler(req, res) {
               break;
             } catch (error) {
               if (error.message.includes("BrandOnlyError")) {
-                logger.info(`🚨 Retrying fallback for ${domain} due to ${error.message}`);
+                logger.info(`Retrying fallback for ${domain} due to ${error.message}`);
                 try {
                   // Retry with relaxed possessive rules
                   initialResult = await humanizeName(domain, domain, !!metaTitle, false);
@@ -671,12 +691,12 @@ export default async function handler(req, res) {
                   humanizeError = null;
                   break;
                 } catch (retryErr) {
-                  logger.warn(`Fallback retry failed for ${domain}`, { error: retryErr.message });
+                  logger.warn(`Fallback retry failed for ${domain}`, { error: retryErr.message, stack: retryErr.stack });
                   humanizeError = retryErr;
                 }
               } else {
                 humanizeError = error;
-                logger.warn(`Humanize attempt ${attempt} failed`, { domain, error: error.message });
+                logger.warn(`Humanize attempt ${attempt} failed`, { domain, error: error.message, stack: error.stack });
               }
               if (attempt < RETRY_ATTEMPTS) {
                 await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
