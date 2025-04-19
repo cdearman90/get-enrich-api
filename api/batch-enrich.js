@@ -242,6 +242,7 @@ export default async function handler(req, res) {
       logger.warn("Unauthorized request", { authHeader, expected: `Bearer ${authToken}` });
       return res.status(401).json({ error: "Unauthorized", message: "Invalid or missing authorization token" });
     }
+
     logger.debug("Handler started", { method: req.method, bodyLength: req.body ? JSON.stringify(req.body).length : 0 });
 
     if (req.method !== "POST") {
@@ -278,6 +279,11 @@ export default async function handler(req, res) {
     const manualReviewQueue = [];
     const fallbackTriggers = [];
     let totalTokens = 0;
+
+    const processLead = async (lead) => {
+      const { domain, rowNum, metaTitle } = lead;
+      const domainKey = domain.toLowerCase();
+      logger.debug("Processing lead", { domain, rowNum });
 
     const processLead = async (lead) => {
       const { domain, rowNum, metaTitle } = lead;

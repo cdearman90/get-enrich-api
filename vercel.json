@@ -19,9 +19,5 @@
       "src": "/public-api/batch-clean-titles-and-locations",
       "dest": "/api/batch-clean-titles-and-locations.js"
     }
-  ],
-  "env": {
-    "VERCEL_AUTH_TOKEN": "@vercel_auth_token",
-    "OPENAI_API_KEY": "@openai_api_key"
-  }
+  ]
 }

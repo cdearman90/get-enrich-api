@@ -1,0 +1,35 @@
+{
+  "leads": [
+    { "domain": "ford.com", "rowNum": 1 },
+    { "domain": "donjacobs.com", "rowNum": 2 },
+    { "domain": "fordtustin.com", "rowNum": 3 },
+    { "domain": "robbynixonbuickgmc.com", "rowNum": 4 },
+    { "domain": "mazdanashville.com", "rowNum": 5 },
+    { "domain": "toyotaofchicago.com", "rowNum": 6 },
+    { "domain": "nplincoln.com", "rowNum": 7 },
+    { "domain": "autonationusa.com", "rowNum": 8 },
+    { "domain": "chevyofcolumbuschevrolet.com", "rowNum": 9 },
+    { "domain": "kiachattanooga.com", "rowNum": 10 },
+    { "domain": "subaruofgwinnett.com", "rowNum": 11 },
+    { "domain": "billdube.com", "rowNum": 12 },
+    { "domain": "mclartydaniel.com", "rowNum": 13 },
+    { "domain": "tasca.com", "rowNum": 14 },
+    { "domain": "chicagocars.com", "rowNum": 15, "metaTitle": "Toyota Dealer in Chicago" },
+    { "domain": "teamford.com", "rowNum": 16 },
+    { "domain": "ehchevy.com", "rowNum": 17 },
+    { "domain": "classicbmw.com", "rowNum": 18 },
+    { "domain": "sunsetmitsubishi.com", "rowNum": 19 },
+    { "domain": "donhindsford.com", "rowNum": 20 },
+    { "domain": "mccarthyautogroup.com", "rowNum": 21 },
+    { "domain": "drivevictory.com", "rowNum": 22 },
+    { "domain": "prestoncars.com", "rowNum": 23 },
+    { "domain": "classicchevrolet.com", "rowNum": 24 },
+    { "domain": "northwestcars.com", "rowNum": 25, "metaTitle": "Toyota Dealer" },
+    { "domain": "dougrehchevrolet.com", "rowNum": 26 },
+    { "domain": "penskeautomotive.com", "rowNum": 27 },
+    { "domain": "lacitycars.com", "rowNum": 28 },
+    { "domain": "helloautogroup.com", "rowNum": 29 },
+    { "domain": "crossroadscars.com", "rowNum": 30 }
+  ]
+}
+

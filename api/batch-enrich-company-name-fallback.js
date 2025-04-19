@@ -1,4 +1,4 @@
-// api/company-name-fallback.js
+// api/batch-enrich-company-name-fallback.js
 // Fallback logic using OpenAI with caching
 
 import { humanizeName, getMetaTitleBrand, KNOWN_CITIES_SET, capitalizeName, earlyCompoundSplit } from "./lib/humanize.js";
@@ -53,23 +53,25 @@ const BRAND_MAPPING = {
   "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
   "lincoln": "Ford", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
   "mb": "Mercedes", "merc": "Mercedes", "mercedes": "Mercedes", "mercedes-benz": "Mercedes", "mercedesbenz": "Mercedes",
-<<<<<<< HEAD
-  "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile", "plymouth": "Plymouth",
-  "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram", "rivian": "Rivian",
-  "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion", "smart": "Smart",
-  "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
-  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW"
-=======
   "merk": "Mercedes", "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile",
   "plymouth": "Plymouth", "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram",
   "rivian": "Rivian", "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion",
   "smart": "Smart", "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
-  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW", "chevy": "Chevy"
->>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
+  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW"
 };
 
 // Abbreviation expansions for normalization
 const ABBREVIATION_EXPANSIONS = {
+  "lv": "LV Auto",
+  "ba": "BA Auto",
+  "mb": "M.B.",
+  "dv": "DV Auto",
+  "jm": "JM Auto",
+  "jt": "JT Auto",
+  "dv": "Don Vandercraft", 
+  "sc": "South County", 
+  "nc": "North County", 
+  "np": "North Park",
   "la": "LA",
   "mb": "M.B.",
   "gy": "GY",
@@ -136,40 +138,6 @@ const OVERRIDES = {
   "mbbhm.com": "M.B. BHM"
 };
 
-/**
- * Splits merged tokens using earlyCompoundSplit from humanize.js.
- * @param {string} name - The name to split.
- * @returns {string} - The split name.
- */
-function splitMergedTokens(name) {
-  try {
-    if (!name || typeof name !== "string") {
-      log("error", "Invalid name in splitMergedTokens", { name });
-      return name;
-    }
-
-    const splitTokens = earlyCompoundSplit(name);
-    const result = splitTokens.join(" ");
-    log("debug", "splitMergedTokens result", { name, result });
-    return result;
-  } catch (e) {
-    log("error", "splitMergedTokens failed", { name, error: e.message });
-    return name;
-  }
-}
-
-<<<<<<< HEAD
-  // Check OpenAI cache
-  const cacheKey = `${domain}:${meta.title || ""}`;
-  if (openAICache.has(cacheKey)) {
-    const cached = openAICache.get(cacheKey);
-    return {
-      companyName: cached.companyName,
-      confidenceScore: cached.confidenceScore,
-      flags: [...cached.flags, "OpenAICacheHit"],
-      tokens: 0
-    };
-=======
 // Blocklist for spammy patterns
 const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
 
@@ -192,7 +160,28 @@ class FallbackError extends Error {
     super(message);
     this.name = "FallbackError";
     this.details = details;
->>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
+  }
+}
+
+/**
+ * Splits merged tokens using earlyCompoundSplit from humanize.js.
+ * @param {string} name - The name to split.
+ * @returns {string} - The split name.
+ */
+function splitMergedTokens(name) {
+  try {
+    if (!name || typeof name !== "string") {
+      log("error", "Invalid name in splitMergedTokens", { name });
+      return name;
+    }
+
+    const splitTokens = earlyCompoundSplit(name);
+    const result = splitTokens.join(" ");
+    log("debug", "splitMergedTokens result", { name, result });
+    return result;
+  } catch (e) {
+    log("error", "splitMergedTokens failed", { name, error: e.message });
+    return name;
   }
 }
 
@@ -229,21 +218,6 @@ function validateFallbackName(result, domain, domainBrand) {
       }
     }
 
-<<<<<<< HEAD
-    // Post-process
-    name = name.replace(/['’]s\b/g, "");
-    name = name.replace(/\b(cars|sales|autogroup)\b/gi, "");
-    name = name.replace(/\bof\b/gi, "");
-
-    const brandsInName = CAR_BRANDS.filter(b => name.toLowerCase().includes(b.toLowerCase()));
-    if (brandsInName.length > 1) {
-      const firstBrand = BRAND_MAPPING[brandsInName[0]] || brandsInName[0];
-      name = name.replace(new RegExp(brandsInName.slice(1).join("|"), "gi"), "").replace(/\s+/g, " ").trim();
-      name = `${name} ${firstBrand}`.trim();
-    } else if (brandsInName.length === 0 && !initialResult.flags.includes("HumanNameDetected")) {
-      const metaBrand = getMetaTitleBrand(meta) || "Auto";
-      name = `${name} ${metaBrand}`.trim();
-=======
     // Check for city-only or brand-only outputs
     if (validatedName) {
       const isBrand = CAR_BRANDS.includes(validatedName.toLowerCase());
@@ -261,7 +235,6 @@ function validateFallbackName(result, domain, domainBrand) {
       log("warn", "OpenAI brand mismatch", { domain, openAIBrand: result.brand, domainBrand });
       flags.push("FallbackNameError", "ReviewNeeded");
       return { validatedName: null, flags };
->>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
     }
 
     // Validate brand against CAR_BRANDS
@@ -278,19 +251,6 @@ function validateFallbackName(result, domain, domainBrand) {
       validatedName = null;
     }
 
-<<<<<<< HEAD
-    return result;
-  } catch (error) {
-    console.error(`OpenAI fallback failed for ${domain}: ${error.message}`);
-    const result = {
-      companyName: initialResult.name || domain.split(".")[0] + " Auto",
-      confidenceScore: 85,
-      flags: ["OpenAIFallbackFailed", "ManualReviewRecommended"],
-      tokens: 0
-    };
-    openAICache.set(cacheKey, result);
-    return result;
-=======
     // Check token count (1–3 words)
     if (validatedName && validatedName.split(" ").length > 3) {
       log("warn", "OpenAI output too long", { domain, name: validatedName });
@@ -355,7 +315,6 @@ function validateFallbackName(result, domain, domainBrand) {
     log("error", "validateFallbackName failed", { domain, error: e.message, stack: e.stack });
     flags.push("FallbackNameError", "ReviewNeeded");
     return { validatedName: null, flags };
->>>>>>> 6714cd8293509cdff03ca570d9a82daeb846187b
   }
 }
 
@@ -374,6 +333,19 @@ async function fallbackName(domain, meta = {}) {
 
   try {
     log("info", "Starting fallback processing", { domain: normalizedDomain });
+
+    // Check OpenAI cache
+    const cacheKey = `${normalizedDomain}:${meta.title || ""}`;
+    if (openAICache.has(cacheKey)) {
+      const cached = openAICache.get(cacheKey);
+      log("info", "Cache hit", { domain: normalizedDomain, companyName: cached.companyName });
+      return {
+        companyName: cached.companyName,
+        confidenceScore: cached.confidenceScore,
+        flags: [...cached.flags, "OpenAICacheHit"],
+        tokens: 0
+      };
+    }
 
     // Check OVERRIDES first
     if (OVERRIDES[normalizedDomain]) {
@@ -592,20 +564,6 @@ async function fallbackName(domain, meta = {}) {
       }
     }
 
-    // Check cache
-    const cacheKey = `${normalizedDomain}:${(meta.title || "").toLowerCase().trim()}`;
-    if (openAICache.has(cacheKey)) {
-      const cached = openAICache.get(cacheKey);
-      log("info", "Cache hit", { domain: normalizedDomain, companyName: cached.companyName });
-      flags.push("OpenAICacheHit");
-      return {
-        companyName: cached.companyName,
-        confidenceScore: cached.confidenceScore,
-        flags: Array.from(new Set([...flags, ...cached.flags])),
-        tokens: 0
-      };
-    }
-
     // Try OpenAI fallback for spacing/casing only
     if (companyName && (companyName.split(" ").length < 2 || /\b[a-z]+[A-Z]/.test(companyName))) {
       const prompt = `
@@ -735,9 +693,9 @@ async function handler(req, res) {
   // Validate authentication token
   const authToken = process.env.VERCEL_AUTH_TOKEN;
   const authHeader = req.headers.authorization;
-
+  log("info", `Received auth header: ${authHeader}, Expected: Bearer ${authToken}`);
   if (!authHeader || authHeader !== `Bearer ${authToken}`) {
-    log("warn", "Unauthorized request", { authHeader });
+    log("warn", "Unauthorized request", { authHeader, expected: `Bearer ${authToken}` });
     return res.status(401).json({ error: "Unauthorized", message: "Invalid or missing authorization token" });
   }
 
