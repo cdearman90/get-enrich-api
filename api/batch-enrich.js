@@ -12,6 +12,14 @@ import { fallbackName, clearOpenAICache } from "./batch-enrich-company-name-fall
 import winston from "winston";
 import path from "path";
 import fs from "fs";
+import { buffer } from "micro";
+
+// Disable Vercel's default body parser for manual parsing in vercel dev mode
+export const config = {
+  api: {
+    bodyParser: false
+  }
+};
 
 // Initialize Winston logger
 const logger = winston.createLogger({
@@ -92,6 +100,7 @@ const BRAND_ONLY_DOMAINS = [
   "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
 ];
 
+// Local constants for extractBrandOfCityFromDomain (not exported)
 const CAR_BRANDS = [
   'acura', 'alfa romeo', 'amc', 'aston martin', 'audi', 'bentley', 'bmw', 'bugatti', 'buick',
   'cadillac', 'carmax', 'cdj', 'cdjrf', 'cdjr', 'chev', 'chevvy', 'chevrolet', 'chrysler', 'cjd', 'daewoo',
@@ -563,9 +572,10 @@ export default async function handler(req, res) {
       return res.status(405).json({ error: "Method not allowed, use POST" });
     }
 
-    // Safely access req.body
+    // Safely access req.body with manual parsing for vercel dev mode
     try {
-      body = req.body || {};
+      const rawBody = await buffer(req);
+      body = JSON.parse(rawBody.toString() || "{}");
       logger.debug("Received body", { bodyLength: JSON.stringify(body).length });
     } catch (err) {
       logger.error("Failed to parse request body", { error: err.message, stack: err.stack });
