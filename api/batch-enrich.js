@@ -8,7 +8,7 @@ import {
   expandInitials,
   earlyCompoundSplit
 } from "./lib/humanize.js";
-import { fallbackName, clearOpenAICache } from "./company-name-fallback.js";
+import { fallbackName, clearOpenAICache } from "./batch-enrich-company-name-fallback.js";
 import winston from "winston";
 import path from "path";
 import fs from "fs";
@@ -279,11 +279,6 @@ export default async function handler(req, res) {
     const manualReviewQueue = [];
     const fallbackTriggers = [];
     let totalTokens = 0;
-
-    const processLead = async (lead) => {
-      const { domain, rowNum, metaTitle } = lead;
-      const domainKey = domain.toLowerCase();
-      logger.debug("Processing lead", { domain, rowNum });
 
     const processLead = async (lead) => {
       const { domain, rowNum, metaTitle } = lead;

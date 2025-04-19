@@ -123,7 +123,7 @@ const OVERRIDES = {
   "demontrond.com": "DeMontrond",
   "fletcherauto.com": "Fletcher",
   "davischevrolet.com": "Davis Chevy",
-  "gychevy.com": "Gy Chevy",
+  "gychevy.com": "GY Chevy",
   "potamkinhyundai.com": "Potamkin Hyundai",
   "tedbritt.com": "Ted Britt",
   "andersonautogroup.com": "Anderson Auto",
@@ -569,7 +569,7 @@ async function fallbackName(domain, meta = {}) {
       const prompt = `
         Given a name "${companyName}", return a JSON object with the name properly spaced and capitalized.
         Rules:
-        - Only fix spacing and casing (e.g., "Jimmybritt" → {"name": "Jimmy Britt", "flagged": false}).
+        - Only fix spacing and casing (e.g., "Jimmybritt" -> {"name": "Jimmy Britt", "flagged": false}).
         - Do not add or invent new words (e.g., do not add "Auto", "Group", "Mall").
         - Use title case (e.g., "Rod Baker").
         - Response format: {"name": string, "flagged": boolean}
