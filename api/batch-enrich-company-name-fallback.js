@@ -1,4 +1,4 @@
-// api/batch-enrich-company-name-fallback.js
+// api/company-name-fallback.js
 // Fallback logic using OpenAI with caching
 
 import { humanizeName, getMetaTitleBrand, KNOWN_CITIES_SET, capitalizeName, earlyCompoundSplit } from "./lib/humanize.js";
@@ -46,7 +46,7 @@ const BRAND_MAPPING = {
   "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
   "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
   "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevy",
-  "chevy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
+  "chevvy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
   "dodge": "Dodge", "eagle": "Eagle", "ferrari": "Ferrari", "fiat": "Fiat", "ford": "Ford", "genesis": "Genesis",
   "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
   "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
@@ -57,7 +57,7 @@ const BRAND_MAPPING = {
   "plymouth": "Plymouth", "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram",
   "rivian": "Rivian", "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion",
   "smart": "Smart", "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
-  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW"
+  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW", "chevy": "Chevy"
 };
 
 // Abbreviation expansions for normalization
@@ -68,9 +68,9 @@ const ABBREVIATION_EXPANSIONS = {
   "dv": "DV Auto",
   "jm": "JM Auto",
   "jt": "JT Auto",
-  "dv": "Don Vandercraft", 
-  "sc": "South County", 
-  "nc": "North County", 
+  "dv": "Don Vandercraft",
+  "sc": "South County",
+  "nc": "North County",
   "np": "North Park",
   "la": "LA",
   "mb": "M.B.",
@@ -138,6 +138,28 @@ const OVERRIDES = {
   "mbbhm.com": "M.B. BHM"
 };
 
+/**
+ * Splits merged tokens using earlyCompoundSplit from humanize.js.
+ * @param {string} name - The name to split.
+ * @returns {string} - The split name.
+ */
+function splitMergedTokens(name) {
+  try {
+    if (!name || typeof name !== "string") {
+      log("error", "Invalid name in splitMergedTokens", { name });
+      return name;
+    }
+
+    const splitTokens = earlyCompoundSplit(name);
+    const result = splitTokens.join(" ");
+    log("debug", "splitMergedTokens result", { name, result });
+    return result;
+  } catch (e) {
+    log("error", "splitMergedTokens failed", { name, error: e.message });
+    return name;
+  }
+}
+
 // Blocklist for spammy patterns
 const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
 
@@ -160,28 +182,6 @@ class FallbackError extends Error {
     super(message);
     this.name = "FallbackError";
     this.details = details;
-  }
-}
-
-/**
- * Splits merged tokens using earlyCompoundSplit from humanize.js.
- * @param {string} name - The name to split.
- * @returns {string} - The split name.
- */
-function splitMergedTokens(name) {
-  try {
-    if (!name || typeof name !== "string") {
-      log("error", "Invalid name in splitMergedTokens", { name });
-      return name;
-    }
-
-    const splitTokens = earlyCompoundSplit(name);
-    const result = splitTokens.join(" ");
-    log("debug", "splitMergedTokens result", { name, result });
-    return result;
-  } catch (e) {
-    log("error", "splitMergedTokens failed", { name, error: e.message });
-    return name;
   }
 }
 
@@ -334,19 +334,6 @@ async function fallbackName(domain, meta = {}) {
   try {
     log("info", "Starting fallback processing", { domain: normalizedDomain });
 
-    // Check OpenAI cache
-    const cacheKey = `${normalizedDomain}:${meta.title || ""}`;
-    if (openAICache.has(cacheKey)) {
-      const cached = openAICache.get(cacheKey);
-      log("info", "Cache hit", { domain: normalizedDomain, companyName: cached.companyName });
-      return {
-        companyName: cached.companyName,
-        confidenceScore: cached.confidenceScore,
-        flags: [...cached.flags, "OpenAICacheHit"],
-        tokens: 0
-      };
-    }
-
     // Check OVERRIDES first
     if (OVERRIDES[normalizedDomain]) {
       log("info", "Using override", { domain: normalizedDomain, companyName: OVERRIDES[normalizedDomain] });
@@ -498,7 +485,7 @@ async function fallbackName(domain, meta = {}) {
       }
 
       // Possessive-friendly rule
-      const POSSESSIVE_SAFE_NAMES = ['Rick Smith', 'Don Jacobs', 'Bill Dube', 'Robby Nixon', 'Robert Thorne', 'Team'];
+      const POSSESSIVE_SAFE_NAMES = ["Rick Smith", "Don Jacobs", "Bill Dube", "Robby Nixon", "Robert Thorne", "Team"];
       if (!POSSESSIVE_SAFE_NAMES.includes(companyName)) {
         const shouldAppendBrand = (domain, name) => {
           const domainBrand = CAR_BRANDS.find(b => domain.includes(b.toLowerCase()));
@@ -562,6 +549,20 @@ async function fallbackName(domain, meta = {}) {
         log("info", "Applied abbreviation and brand normalization", { domain: normalizedDomain, companyName });
         flags.push("NormalizationApplied");
       }
+    }
+
+    // Check cache
+    const cacheKey = `${normalizedDomain}:${(meta.title || "").toLowerCase().trim()}`;
+    if (openAICache.has(cacheKey)) {
+      const cached = openAICache.get(cacheKey);
+      log("info", "Cache hit", { domain: normalizedDomain, companyName: cached.companyName });
+      flags.push("OpenAICacheHit");
+      return {
+        companyName: cached.companyName,
+        confidenceScore: cached.confidenceScore,
+        flags: Array.from(new Set([...flags, ...cached.flags])),
+        tokens: 0
+      };
     }
 
     // Try OpenAI fallback for spacing/casing only
@@ -693,9 +694,9 @@ async function handler(req, res) {
   // Validate authentication token
   const authToken = process.env.VERCEL_AUTH_TOKEN;
   const authHeader = req.headers.authorization;
-  log("info", `Received auth header: ${authHeader}, Expected: Bearer ${authToken}`);
+
   if (!authHeader || authHeader !== `Bearer ${authToken}`) {
-    log("warn", "Unauthorized request", { authHeader, expected: `Bearer ${authToken}` });
+    log("warn", "Unauthorized request", { authHeader });
     return res.status(401).json({ error: "Unauthorized", message: "Invalid or missing authorization token" });
   }
 
