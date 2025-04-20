@@ -2210,6 +2210,83 @@ function dedupeBrands(tokens) {
 }
 
 /**
+ * Attempts to match a generic pattern in tokens
+ * @param {Array<string>} tokens - Tokens to analyze
+ * @param {Object} meta - Metadata object
+ * @returns {{companyName: string, confidenceScore: number, flags: Array<string>}} - Result
+ */
+function tryGenericPattern(tokens, meta = {}) {
+  const flags = new Set(["GenericPattern"]);
+  log("info", "tryGenericPattern started", { tokens });
+
+  try {
+    if (!Array.isArray(tokens)) throw new Error("Invalid tokens");
+
+    const spamTriggers = ["cars", "sales", "autogroup", "group"];
+    const cleanedTokens = dedupeBrands(tokens)
+      .map(t => t.toLowerCase())
+      .filter(t => !spamTriggers.includes(t));
+
+    if (!cleanedTokens.length) {
+      const fallbackBrand = getMetaTitleBrand(meta) || "Auto";
+      const name = BRAND_MAPPING[fallbackBrand.toLowerCase()] || capitalizeName(fallbackBrand).name;
+      flags.add("GenericAppended");
+      flags.add("ManualReviewRecommended");
+      return { companyName: name, confidenceScore: 50, flags: Array.from(flags) };
+    }
+
+    const city = cleanedTokens.find(t => KNOWN_CITIES_SET.has(t));
+    const brand = cleanedTokens.find(t => CAR_BRANDS.includes(t));
+    const proper = cleanedTokens.find(t => KNOWN_PROPER_NOUNS.has(t));
+    const genericTerms = ["auto", "automotive", "motors", "dealer", "dealers", "motor", "group"];
+    const generic = cleanedTokens.find(t => genericTerms.includes(t));
+
+    if (city && brand) {
+      const cityName = capitalizeName(city).name;
+      const brandName = BRAND_MAPPING[brand] || capitalizeName(brand).name;
+      flags.add("CityBrandPattern");
+      return { companyName: `${cityName} ${brandName}`, confidenceScore: 125, flags: Array.from(flags) };
+    }
+
+    if (proper && brand) {
+      const name = `${capitalizeName(proper).name} ${BRAND_MAPPING[brand] || capitalizeName(brand).name}`;
+      flags.add("ProperNounBrandPattern");
+      return { companyName: name, confidenceScore: 125, flags: Array.from(flags) };
+    }
+
+    if (proper && generic) {
+      const name = `${capitalizeName(proper).name} ${capitalizeName(generic).name}`;
+      flags.add("ProperNounGenericPattern");
+      return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
+    }
+
+    if (cleanedTokens.length === 1) {
+      const fallback = cleanedTokens[0];
+      if (KNOWN_PROPER_NOUNS.has(fallback) || KNOWN_CITIES_SET.has(fallback)) {
+        flags.add("SingleTokenFallback");
+        return { companyName: capitalizeName(fallback).name, confidenceScore: 80, flags: Array.from(flags) };
+      } else {
+        flags.add("TooGeneric");
+        return { companyName: capitalizeName(fallback).name, confidenceScore: 55, flags: Array.from(flags) };
+      }
+    }
+
+    // Final fallback: First token + brand from meta
+    const metaBrand = getMetaTitleBrand(meta);
+    const token = cleanedTokens[0];
+    const name = metaBrand
+      ? `${capitalizeName(token).name} ${BRAND_MAPPING[metaBrand] || capitalizeName(metaBrand).name}`
+      : capitalizeName(token).name;
+
+    if (metaBrand) flags.add("MetaTitleBrandAppended");
+    return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
+  } catch (e) {
+    log("error", "tryGenericPattern failed", { tokens, error: e.message, stack: e.stack });
+    return { companyName: "", confidenceScore: 80, flags: Array.from(new Set(["GenericPatternError", "ManualReviewRecommended"])) };
+  }
+}
+
+/**
  * Humanizes a domain name into a cold-email-friendly company name
  * @param {string} domain - The domain to humanize
  * @param {string} originalDomain - The original domain for override lookup
