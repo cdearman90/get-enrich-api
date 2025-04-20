@@ -1,16 +1,17 @@
 // api/lib/humanize.js v5.0.9
-// Comprehensive list of car brands (unchanged)
+// Logger configuration with Vercel-safe transports only
 
-import path from "path";
+import winston from "winston";
 
 const logger = winston.createLogger({
   level: "debug",
   format: winston.format.combine(
     winston.format.timestamp(),
-    winston.format.json()
+    winston.format.printf(({ level, message, timestamp }) => {
+      return `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+    })
   ),
   transports: [
-    new winston.transports.File({ filename: path.join("logs", "enrich.log"), maxsize: 5242880, maxFiles: 5 }),
     new winston.transports.Console()
   ]
 });
