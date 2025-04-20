@@ -26,6 +26,8 @@ function log(level, message, context = {}) {
   logger[level]({ message, ...context });
 }
 
+import { KNOWN_FIRST_NAMES, KNOWN_LAST_NAMES } from './constants.js';
+
 // Comprehensive list of car brands
 const CAR_BRANDS = [
   "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
