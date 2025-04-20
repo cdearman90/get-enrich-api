@@ -1716,24 +1716,20 @@ function blobSplit(text) {
 }
 
 /**
- * Capitalizes a name with token fixes and formatting logic
- * @param {string | Array<string>} name - Name or words to capitalize
- * @returns {{ name: string, flags: Array<string> }} - Capitalized name and flags
+ * Capitalizes a name with token fixes
+ * @param {string} name - Name to capitalize
+ * @returns {Object} - Capitalized name with flags
  */
 function capitalizeName(name) {
   try {
     let words = name;
-
     if (typeof words === "string") {
-      // Match tokens (e.g., "billdube" → ["bill", "dube"])
       words = words.match(/[a-z]+/gi) || [];
     }
-
     if (!Array.isArray(words)) {
       words = [words];
     }
 
-    // Token deduplication and cleaning
     const seen = new Set();
     const fixedWords = words
       .map(word => {
@@ -1749,7 +1745,7 @@ function capitalizeName(name) {
         // Default title case
         return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
       })
-      .filter((word, i, arr) => {
+      .filter(word => {
         if (!word) return false;
         const lower = word.toLowerCase();
         if (seen.has(lower)) return false;
