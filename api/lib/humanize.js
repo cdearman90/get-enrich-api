@@ -2505,9 +2505,9 @@ async function fetchMetaData(domain) {
 }
 
 /**
- * Extracts a valid brand or human name from meta.title
+ * Extracts a brand-safe or human name from meta.title
  * @param {Object} meta - Metadata object
- * @returns {string|null} - Brand name or human name
+ * @returns {string|null} - Human name or brand
  */
 function getMetaTitleBrand(meta) {
   try {
@@ -2519,20 +2519,33 @@ function getMetaTitleBrand(meta) {
     const title = meta.title.toLowerCase().replace(/[^a-z0-9\s]/gi, '');
     const words = title.split(/\s+/).filter(Boolean);
 
-    // First: look for any valid car brand
-    for (const word of words) {
-      const w = word.toLowerCase();
-      if (CAR_BRANDS.includes(w) || BRAND_MAPPING[w]) {
-        return BRAND_MAPPING[w] || capitalizeName(w).name;
-      }
-    }
-
-    // Then: detect human names in title (e.g., "Don Jacobs Chevrolet")
+    // Priority 1: Match full human name (first + last)
     for (let i = 0; i < words.length - 1; i++) {
       const first = words[i];
       const last = words[i + 1];
       if (KNOWN_FIRST_NAMES.has(first) && KNOWN_LAST_NAMES.has(last)) {
-        return `${capitalizeName(first).name} ${capitalizeName(last).name}`;
+        const fullName = `${capitalizeName(first).name} ${capitalizeName(last).name}`;
+        log("debug", "MetaTitle human name match", { fullName });
+        return fullName;
+      }
+    }
+
+    // Priority 2: Match standalone last or first name (if no brand present)
+    for (const word of words) {
+      if (KNOWN_LAST_NAMES.has(word) || KNOWN_FIRST_NAMES.has(word)) {
+        const name = capitalizeName(word).name;
+        log("debug", "MetaTitle single human name match", { name });
+        return name;
+      }
+    }
+
+    // Priority 3: Match only one car brand
+    for (const word of words) {
+      const w = word.toLowerCase();
+      if (CAR_BRANDS.includes(w) || BRAND_MAPPING[w]) {
+        const brand = BRAND_MAPPING[w] || capitalizeName(w).name;
+        log("debug", "MetaTitle brand match", { brand });
+        return brand;
       }
     }
 
