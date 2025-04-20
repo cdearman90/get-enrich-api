@@ -1530,24 +1530,23 @@ const overrides = {
   "robertthorne": ["Robert", "Thorne"]
 };
 
-   // Check global KNOWN_PROPER_NOUNS (includes merged overrides)
-    for (const noun of KNOWN_PROPER_NOUNS) {
-      const nounLower = noun.toLowerCase().replace(/\s+/g, '');
-      if (lower === nounLower) {
-        const split = noun.split(' ');
-        log('debug', 'Proper noun split', { text, split });
-        return split;
-      }
-    }
+ // Check global KNOWN_PROPER_NOUNS (includes merged overrides)
+for (const noun of KNOWN_PROPER_NOUNS) {
+  const nounLower = noun.toLowerCase().replace(/\s+/g, '');
+  if (lower === nounLower) {
+    const split = noun.split(' ');
+    log('debug', 'Proper noun split', { text, split });
+    return split;
+  }
+}
 
 let normalized = lower;
 for (const [abbr, expansion] of Object.entries(ABBREVIATION_EXPANSIONS)) {
   const regex = new RegExp(`\\b${abbr}\\b`, 'g');
-  // Preserve original casing of expansion (e.g., "BMW", "VW") for consistency
   normalized = normalized.replace(regex, expansion.replace(/\s+/g, '').toLowerCase());
 }
 
-// Check for longest known proper noun prefix match
+// Longest prefix match from KNOWN_PROPER_NOUNS
 const lowerClean = normalized.replace(/\s+/g, '');
 const sortedNouns = Array.from(KNOWN_PROPER_NOUNS).sort((a, b) => b.length - a.length);
 for (const noun of sortedNouns) {
@@ -1581,101 +1580,96 @@ for (const first of KNOWN_FIRST_NAMES) {
   }
 }
 
-    // Regex-based human name fallback
-    const humanNameMatch = normalized.match(/^([a-z]{2,})([a-z]{3,})$/);
-    if (humanNameMatch) {
-      const [, first, last] = humanNameMatch;
-      if (KNOWN_FIRST_NAMES.has(first) && KNOWN_LAST_NAMES.has(last)) {
-        const split = [
-          first.charAt(0).toUpperCase() + first.slice(1),
-          last.charAt(0).toUpperCase() + last.slice(1)
-        ];
-        log('debug', 'Regex-based human name split', { text, split });
-        return split;
-      }
-    }
-
-    const tokens = [];
-    let remaining = normalized;
-
-    while (remaining.length > 0) {
-      let matched = false;
-
-      // City + Auto
-      for (const city of KNOWN_CITIES_SET) {
-        if (remaining.startsWith(city)) {
-          const rest = remaining.slice(city.length);
-          if (rest === 'auto') {
-            tokens.push(
-              city.charAt(0).toUpperCase() + city.slice(1),
-              'Auto'
-            );
-            remaining = '';
-            matched = true;
-            log('debug', 'City+Auto split', { text, split: tokens });
-            break;
-          }
-        }
-      }
-
-      // Brand + Generic
-      if (!matched) {
-        for (const brand of CAR_BRANDS) {
-          const brandLower = brand.toLowerCase();
-          if (remaining.startsWith(brandLower)) {
-            const rest = remaining.slice(brandLower.length);
-            const genericTerms = ['auto', 'automotive', 'motors', 'dealers', 'group'];
-            if (genericTerms.includes(rest)) {
-              tokens.push(
-                BRAND_MAPPING[brandLower] || (brandLower.charAt(0).toUpperCase() + brandLower.slice(1)),
-                rest.charAt(0).toUpperCase() + rest.slice(1)
-              );
-              remaining = '';
-              matched = true;
-              log('debug', 'Brand+Generic split', { text, split: tokens });
-              break;
-            }
-          }
-        }
-      }
-
-      // Enhanced camelCase and blob splitting
-      if (!matched) {
-        const camelMatch = remaining.match(/^([a-z]+)([A-Z][a-z]*)/);
-        if (camelMatch) {
-          tokens.push(camelMatch[1].charAt(0).toUpperCase() + camelMatch[1].slice(1));
-          remaining = camelMatch[2].toLowerCase() + remaining.slice(camelMatch[0].length);
-        } else {
-          const blobMatch = remaining.match(/^([a-z]+)([A-Z]|$)/);
-          if (blobMatch) {
-            tokens.push(blobMatch[1].charAt(0).toUpperCase() + blobMatch[1].slice(1));
-            remaining = remaining.slice(blobMatch[1].length);
-          } else {
-            // Chunk long blobs (>10 chars)
-            if (remaining.length > 10) {
-              const chunk = remaining.slice(0, 5);
-              tokens.push(chunk.charAt(0).toUpperCase() + chunk.slice(1));
-              remaining = remaining.slice(5);
-            } else {
-              tokens.push(remaining.charAt(0).toUpperCase() + remaining.slice(1));
-              remaining = '';
-            }
-          }
-        }
-      }
-    }
-
-    const validTokens = tokens
-      .filter(t => t && !['cars', 'sales', 'autogroup'].includes(t.toLowerCase()))
-      .filter((t, i, arr) => i === 0 || t.toLowerCase() !== arr[i - 1].toLowerCase());
-
-    log('debug', 'earlyCompoundSplit result', { text, split: validTokens });
-    return validTokens;
-  } catch (e) {
-    log('error', 'earlyCompoundSplit failed', { text, error: e.message, stack: e.stack });
-    return [text];
+// Regex-based human name fallback
+let humanNameMatch = normalized.match(/^([a-z]{2,})([a-z]{3,})$/);
+if (humanNameMatch) {
+  const [, first, last] = humanNameMatch;
+  if (KNOWN_FIRST_NAMES.has(first) && KNOWN_LAST_NAMES.has(last)) {
+    const split = [
+      first.charAt(0).toUpperCase() + first.slice(1),
+      last.charAt(0).toUpperCase() + last.slice(1)
+    ];
+    log('debug', 'Regex-based human name split', { text, split });
+    return split;
   }
 }
+
+// Final tokenization fallback
+const tokens = [];
+let remaining = normalized;
+
+while (remaining.length > 0) {
+  let matched = false;
+
+  // City + Auto
+  for (const city of KNOWN_CITIES_SET) {
+    if (remaining.startsWith(city)) {
+      const rest = remaining.slice(city.length);
+      if (rest === 'auto') {
+        tokens.push(
+          city.charAt(0).toUpperCase() + city.slice(1),
+          'Auto'
+        );
+        remaining = '';
+        matched = true;
+        log('debug', 'City+Auto split', { text, split: tokens });
+        break;
+      }
+    }
+  }
+
+  // Brand + Generic
+  if (!matched) {
+    for (const brand of CAR_BRANDS) {
+      const brandLower = brand.toLowerCase();
+      if (remaining.startsWith(brandLower)) {
+        const rest = remaining.slice(brandLower.length);
+        const genericTerms = ['auto', 'automotive', 'motors', 'dealers', 'group'];
+        if (genericTerms.includes(rest)) {
+          tokens.push(
+            BRAND_MAPPING[brandLower] || (brandLower.charAt(0).toUpperCase() + brandLower.slice(1)),
+            rest.charAt(0).toUpperCase() + rest.slice(1)
+          );
+          remaining = '';
+          matched = true;
+          log('debug', 'Brand+Generic split', { text, split: tokens });
+          break;
+        }
+      }
+    }
+  }
+
+  // Enhanced camelCase or blob split
+  if (!matched) {
+    const camelMatch = remaining.match(/^([a-z]+)([A-Z][a-z]*)/);
+    if (camelMatch) {
+      tokens.push(camelMatch[1].charAt(0).toUpperCase() + camelMatch[1].slice(1));
+      remaining = camelMatch[2].toLowerCase() + remaining.slice(camelMatch[0].length);
+    } else {
+      const blobMatch = remaining.match(/^([a-z]+)([A-Z]|$)/);
+      if (blobMatch) {
+        tokens.push(blobMatch[1].charAt(0).toUpperCase() + blobMatch[1].slice(1));
+        remaining = remaining.slice(blobMatch[1].length);
+      } else {
+        if (remaining.length > 10) {
+          const chunk = remaining.slice(0, 5);
+          tokens.push(chunk.charAt(0).toUpperCase() + chunk.slice(1));
+          remaining = remaining.slice(5);
+        } else {
+          tokens.push(remaining.charAt(0).toUpperCase() + remaining.slice(1));
+          remaining = '';
+        }
+      }
+    }
+  }
+}
+
+const validTokens = tokens
+  .filter(t => t && !['cars', 'sales', 'autogroup'].includes(t.toLowerCase()))
+  .filter((t, i, arr) => i === 0 || t.toLowerCase() !== arr[i - 1].toLowerCase());
+
+log('debug', 'earlyCompoundSplit result', { text, split: validTokens });
+return validTokens;
 
 /**
  * Splits camelCase text into tokens
