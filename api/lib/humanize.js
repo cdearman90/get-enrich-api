@@ -58,29 +58,72 @@ const BRAND_MAPPING = {
   "volkswagen": "VW", "volvo": "Volvo", "vw": "VW", "chevy": "Chevy", "jcd": "Jeep"
 };
 
+
 const ABBREVIATION_EXPANSIONS = {
-  "la": "LA",
-  "mb": "M.B.",
+  "audiof": "Audi",
+  "ba": "BA Auto",
+  "bmwof": "BMW",
+  "cdj": "Dodge",
+  "cdjr": "Dodge",
+  "chevroletof": "Chevy",
+  "chevyof": "Chevy",
+  "ch": "CH",
+  "dv": "Don Vandercraft",
+  "ec": "EC",
+  "eh": "East Hills",
+  "fordof": "Ford",
+  "gh": "Green Hills",
   "gy": "GY",
-  "np": "NP",
-  "rt": "RT"
+  "hgreg": "HGreg",
+  "hondaof": "Honda",
+  "inf": "Infiniti",
+  "jlr": "Jaguar",
+  "jm": "JM",
+  "jt": "JT",
+  "kia": "Kia",
+  "la": "LA",
+  "lh": "La Habra",
+  "lv": "LV",
+  "mb": "M.B.",
+  "mbof": "M.B.",
+  "mc": "MC",
+  "mercedesbenzof": "M.B.",
+  "mercedesof": "M.B.",
+  "mv": "Mountain View",
+  "nc": "North County",
+  "np": "North Park",
+  "nv": "North Valley",
+  "rt": "RT",
+  "sb": "Santa Barbara",
+  "sc": "South County",
+  "sp": "SP",
+  "sv": "South Valley",
+  "toyotaof": "Toyota",
+  "tv": "Treasure Valley",
+  "vc": "Valley Chevy",
+  "vw": "VW",
+  "wc": "WC",
+  "wg": "WG"
 };
+
 
 const COMMON_WORDS = ["to", "of", "and", "the", "for", "in", "on", "at", "inc", "llc", "corp"];
 
 const OVERRIDES = {
-  "eh": "East Hills",
-  "mb": "M.B.",
-  "robertthorne": "Robert Thorne",
-  "crystal": "Crystal",
-  "young": "Young",
-  "victory": "Victory"
+  "billdube.com": "Bill Dube",
+  "patmillikenford.com": "Pat Milliken",
+  "jakesweeney.com": "Jake Sweeney",
+  "jimmybrittchevrolet.com": "Jimmy Britt",
+  "jaywolfe.com": "Jay Wolfe",
+  "philsmithkia.com": "Phil Smith",
+  "dicklovett.co.uk": "Dick Lovett",
+  "tomhesser.com": "Tom Hesser",
+  "goldcoastcadillac.com": "Gold Coast"
 };
 
 const TEST_CASE_OVERRIDES = {
-  "duvalford.com": "Duval",
-  "patmillikenford.com": "Pat Milliken",
   "athensford.com": "Athens Ford",
+  "patmilliken.com": "Pat Milliken",
   "gusmachadoford.com": "Gus Machado",
   "geraldauto.com": "Gerald Auto",
   "mbofbrooklyn.com": "M.B. Brooklyn",
@@ -91,7 +134,7 @@ const TEST_CASE_OVERRIDES = {
   "donhindsford.com": "Don Hinds Ford",
   "unionpark.com": "Union Park",
   "jackpowell.com": "Jack Powell",
-  "teamford.com": "Team",
+  "teamford.com": "Team Ford",
   "miamilakesautomall.com": "Miami Lakes Auto",
   "mclartydaniel.com": "McLarty Daniel",
   "autobyfox.com": "Fox Auto",
@@ -178,7 +221,7 @@ const TEST_CASE_OVERRIDES = {
   "malouf.com": "Malouf",
   "prestonmotor.com": "Preston",
   "demontrond.com": "DeMontrond",
-  "fletcherauto.com": "Fletcher",
+  "fletcherauto.com": "Fletcher Auto",
   "davischevrolet.com": "Davis Chevy",
   "gychevy.com": "Gy Chevy",
   "potamkinhyundai.com": "Potamkin Hyundai",
@@ -187,12 +230,125 @@ const TEST_CASE_OVERRIDES = {
   "racewayford.com": "Raceway Ford",
   "donhattan.com": "Don Hattan",
   "chastangford.com": "Chastang Ford",
-  "machens.com": "Machen",
+  "machens.com": "Machens",
   "taylorauto.com": "Taylor",
   "dancummins.com": "Dan Cummins",
   "kennedyauto.com": "Kennedy Auto",
   "artmoehn.com": "Art Moehn",
-  "mbbhm.com": "M.B. BHM"
+  "mbbhm.com": "M.B. BHM",
+  "carlblack.com": "Carl Black",
+  "crewschevrolet.com": "Crews Chevy",
+  "chuckfairbankschevy.com": "Fairbanks Chevy",
+  "kcmetroford.com": "Metro Ford",
+  "keatinghonda.com": "Keating Honda",
+  "phofnash": "Porsche Nashville",
+  "cadillacoflasvegas.com": "Vegas Cadillac",
+  "vscc.com": "VSCC",
+  "kiaofcerritos.com": "Cerritos Kia",
+  "teamsewell.com": "Sewell",
+  "vannuyscdjr.com": "Van Nuys CDJR",
+  "cincyjlr.com": "Cincy Jaguar",
+  "cadillacnorwood.com": "Norwood Cadillac",
+  "alsopchevrolet.com": "Alsop Chevy",
+  "joycekoons.com": "Joyce Koons",
+  "radleyautogroup.com": "Radley Auto Group",
+  "vinart.com": "Vinart",
+  "towneauto.com": "Towne Auto",
+  "lauraautogroup.com": "Laura Auto",
+  "hoehnmotors.com": "Hoehn Motor",
+  "westherr.com": "West Herr",
+  "looklarson.com": "Larson",
+  "kwic.com": "KWIC",
+  "maverickmotorgroup.com": "Maverick Motor",
+  "donalsonauto.com": "Donalson Auto",
+  "tflauto.com": "TFL Auto",
+  "sharpecars.com": "Sharpe",
+  "secorauto.com": "Secor",
+  "beckmasten.net": "Beck Masten",
+  "moreheadautogroup.com": "Morehead",
+  "firstautogroup.com": "First Auto",
+  "lexusoftulsa.com": "Tulsa Lexus",
+  "jetchevrolet.com": "Jet Chevy",
+  "teddynissan.com": "Teddy Nissan",
+  "autonationusa.com": "AutoNation",
+  "robbynixonbuickgmc.com": "Robby Nixon",
+  "classicchevrolet.com": "Classic Chevy",
+  "penskeautomotive.com": "Penske Auto",
+  "helloautogroup.com": "Hello Auto",
+  "sunsetmitsubishi.com": "Sunset Mitsubishi",
+  "bmwofnorthhaven.com": "North Haven BMW",
+  "monadnockford.com": "Monadnock Ford",
+  "johnsondodge.com": "Johnson Dodge",
+  "hgreglux.com": "HGreg Lux",
+  "lamesarv.com": "La Mesa RV",
+  "mcdanielauto.com": "McDaniel",
+  "toyotaworldnewton.com": "Newton Toyota",
+  "lexusofnorthborough.com": "Northborough Lexus",
+  "eagleautomall.com": "Eagle Auto Mall",
+  "edwardsgm.com": "Edwards GM",
+  "nissanofcookeville.com": "Cookeville Nissan",
+  "daytonahyundai.com": "Daytona Hyundai",
+  "daystarchrysler.com": "Daystar Chrysler",
+  "sansoneauto.com": "Sansone Auto",
+  "germaincars.com": "Germain Cars",
+  "steelpointeauto.com": "Steel Pointe",
+  "tomlinsonmotorco.com": "Tomlinson Motor",
+  "kerbeck.net": "Kerbeck",
+  "jacksoncars.com": "Jackson",
+  "bighorntoyota.com": "Big Horn",
+  "hondaoftomsriver.com": "Toms River",
+  "faireychevrolet.com": "Fairey Chevy",
+  "tomhesser.com": "Tom Hesser",
+  "saabvw.com": "Scmelz",
+  "philsmithkia.com": "Phil Smith",
+  "dicklovett.co.uk": "Dick Lovett",
+  "jtscars.com": "JT Auto",
+  "street-toyota.com": "Street",
+  "jakesweeney.com": "Jake Sweeney",
+  "jimmybrittchevrolet.com": "Jimmy Britt",
+  "jaywolfe.com": "Jay Wolfe",
+  "toyotacedarpark.com": "Cedar Park",
+  "bulldogkia.com": "Bulldog Kia",
+  "bentleyauto.com": "Bentley Auto",
+  "obrienauto.com": "O'Brien Auto",
+  "hmtrs.com": "HMTR",
+  "delandkia.net": "Deland Kia",
+  "eckenrodford.com": "Eckenrod",
+  "curriemotors.com": "Currie Motor",
+  "aldermansvt.com": "Aldermans VT",
+  "goldcoastcadillac.com": "Gold Coast",
+  "mterryautogroup.com": "M Terry Auto",
+  "mikeerdmantoyota.com": "Mike Erdman",
+  "jimfalkmotorsofmaui.com": "Jim Falk",
+  "serpentinichevy.com": "Serpentini",
+  "deaconscdjr.com": "Deacons CDJR",
+  "golfmillchevrolet.com": "Golf Mill",
+  "rossihonda.com": "Rossi Honda",
+  "stadiumtoyota.com": "Stadium Toyota",
+  "cavendercadillac.com": "Cavender",
+  "carterhonda.com": "Carter Honda",
+  "fairoaksford.com": "Fair Oaks Ford",
+  "tvbuickgmc.com": "TV Buick",
+  "chevyland.com": "Chevy Land",
+  "carvertoyota.com": "Carver",
+  "wernerhyundai.com": "Werner Hyundai",
+  "memorialchevrolet.com": "Memorial Chevy",
+  "mbofsmithtown.com": "M.B. Smithtown",
+  "wideworldbmw.com": "Wide World BMW",
+  "destinationkia.com": "Destination Kia",
+  "eastcjd.com": "East CJD",
+  "pinehurstautomall.com": "Pinehurst Auto",
+  "bramanmc.com": "Braman MC",
+  "laurelchryslerjeep.com": "Laurel",
+  "porschewoodlandhills.com": "Porsche Woodland",
+  "kingsfordinc.com": "Kings Ford",
+  "carusofordlincoln.com": "Caruso",
+  "billsmithbuickgmc.com": "Bill Smith",
+  "mclartydanielford.com": "McLarty Daniel",
+  "mcgeorgetoyota.com": "McGeorge",
+  "rosenautomotive.com": "Rosen Auto",
+  "valleynissan.com": "Valley Nissan",
+  "perillobmw.com": "Perillo BMW"
 };
 
 const BRAND_ONLY_DOMAINS = [
@@ -206,289 +362,382 @@ const BRAND_ONLY_DOMAINS = [
 ];
 
 const KNOWN_PROPER_NOUNS = new Set([
-  "Abbots", "Albany", "All American", "Anderson", "Art Moehn", "Avis", "Bear Mountain", "Bentley",
-  "Berlin City", "Bill Dube", "Bob Johnson", "Bob Walk", "Brown", "Camino Real", "Capitol City",
-  "Carl Black", "Carrollton", "Chapman", "Charlie", "Chastang", "Cz Agnet", "Dayton Andrews",
-  "DeMontrond", "Devine", "Dick", "Don Baker", "Don Hattan", "Don Hinds", "Duval", "East Hills",
-  "Eckenrod", "Elway", "Fletcher", "Fox", "Freeport", "Galean", "Garlyn", "Garlyn Shelton",
-  "Gastonia", "Georgetown", "Germain", "Graber", "Grainger", "Gregg Young", "Gus Machado",
-  "Hilltop", "Ingersoll", "Jack Powell", "Jake Sweeney", "Jay Wolfe", "Jimmy Britt", "Kadlec",
-  "Karl Stuart", "Kennedy", "Kingston", "Laurel", "Larson", "Lou Sobh", "Malloy", "Mariano",
-  "Martin", "Masano", "Masten", "McCarthy", "McLarty", "McLarty Daniel", "Medlin", "Metro",
-  "Mike Erdman", "Mike Shaw", "Mill", "Naples", "Pape", "Parkway", "Pat Milliken", "Perillo",
-  "Phil Smith", "Pinehurst", "Potamkin", "Preston", "Pugmire", "Ricart", "Rivera", "Robert Thorne",
-  "Rod Baker", "Ron Bouchard", "Roseville", "Sansone", "Sarant", "Santee", "Schmelz", "Scott Clark",
-  "Seawell", "Sewell", "Shottenkirk", "Slidell", "Smothers", "Starling", "Stoops", "Swant Graber",
-  "Ted Britt", "Temecula", "Tom Hesser", "Tommy Nix", "Town And Country", "Trent", "Tuttle Click",
-  "Valley", "Vander", "Westgate", "Wick Mail", "Williams", "Wolfe", "Young", "Malouf", "Tasca",
-  "Davis", "Taylor", "Dan Cummins", "Garber", "Sunnyside", "Bulluck", "Galpin", "Titus Will",
-  "Galeana", "Rick Smith", "Don Jacobs", "Doug Reh", "Karl Stuart", "Jim Falk", "Jay Wolfe",
-  "Berman", "Robbins", "Matt Blatt", "Birdnow", "Beaty", "Stephen Wade", "Reed Lallier",
-  "Bert Smith", "Ron Bouchard", "Haley", "Greg Leblanc", "Sunny King", "Jim Taylor", "Jake",
-  "Charlie", "Lou Sobh", "Bear Mountain", "NP Lincoln", "Crystal", "Victory"
+  "rt128", "abbotsford", "acdealergroup", "airportkianaples", "albany", "allamerican", "anderson",
+  "artmoehn", "atamian", "autobyfox", "avis", "barnettauto", "beaty", "beckmasten", "bentley",
+  "berlincity", "berman", "bertsmith", "bespokemotorgroup", "billdube", "birdnow", "bobwalk",
+  "bobjohnson", "bochtoyotasouth", "bulluck", "byersauto", "calavan", "caldwell", "caminoreal",
+  "capitolcity", "carlblack", "carrollton", "chapman", "charlie", "chastang", "ciocca", "classic",
+  "concord", "criswell", "crossroads", "crystal", "curriemotors", "czag", "dancummins", "davis",
+  "daytonandrews", "demontrond", "devine", "diamond", "dicklovett", "donalsonauto", "donbaker",
+  "donhattan", "donhinds", "donjacobs", "doupreh", "duval", "easthills", "eckenrod", "elway",
+  "executiveag", "exprealty", "faireychevrolet", "fletcher", "fordofdalton", "fox", "frankleta",
+  "freeport", "galpin", "galeana", "garlyn", "garlynshelton", "gastonia", "georgetown", "germain",
+  "golden", "graber", "grainger", "gravity", "greggyoung", "gregleblanc", "greenwich", "gusmachado",
+  "haley", "hgreglux", "hilltop", "hoehnmotors", "hmotors", "huntingtonbeach", "ingersoll", "ingrid",
+  "jackpowell", "jake", "jakesweeney", "jaywolfe", "jerryseiner", "jimfalk", "jimtaylor", "jimmybritt",
+  "joycekoons", "jt", "kadlec", "kalidykia", "karlstuart", "keating", "kennedy", "kerbeck", "kingston",
+  "kwic", "lacity", "lauraautogroup", "laurel", "lawautomotive", "leblancauto", "looklarson", "lousobh",
+  "luxuryautoscottsdale", "malloy", "malouf", "mariano", "martin", "masano", "masten", "mattiacio",
+  "maita", "maverickmotorgroup", "mbbhm", "mbcherryhill", "mbofbrooklyn", "mbofcaldwell", "mbofstockton",
+  "mccarthy", "mclartydaniel", "medlin", "metro", "mikeerdman", "mikeshaw", "mill", "milnes", "morehead",
+  "mterryauto", "murfreesboro", "naples", "newholland", "nplincoln", "npsubaru", "oaklandauto", "oceanauto",
+  "parkerauto", "pape", "patmilliken", "perillo", "philsmith", "pinehurst", "potamkin", "preston",
+  "prestoncars", "pugmire", "queencitymotors", "radleyautogroup", "racewaykia", "raser", "ray", "razor",
+  "rbmw", "rbnissan", "rbtoyota", "readylallier", "regal", "ricart", "ricksmith", "rivera", "robbins",
+  "robertthorne", "rodbaker", "ronbouchard", "roseville", "saffordauto", "saffordbrown", "sansone",
+  "sansoneauto", "sarant", "santee", "schmelz", "scottclark", "seawell", "secorauto", "sewell", "sharpecars",
+  "sheehy", "shottenkirk", "slidell", "smartdrive", "smothers", "starling", "stiversonline", "steponeauto",
+  "stoops", "strongautogroup", "sunbelt", "sunbeltautomotive", "sunnyking", "sunrise", "sunnyside", "suntrup",
+  "swantgraber", "tasca", "taylor", "tedbritt", "thechevyteam", "thepremiercollection", "tflauto", "tituswill",
+  "tomcadlec", "tomlinsonmotorco", "tomhesser", "tommynix", "townandcountry", "towneauto", "trent", "tsands",
+  "tuttleclick", "unionpark", "valley", "vanderhyde", "victory", "vinart", "vscc", "waldorf", "westgate",
+  "westherr", "wickmail", "williams", "wilsonville", "wolfe", "yorkauto", "bearmountain", "bmwwestspringfield",
+  "cavalier", "charlestonkia", "liberty", "concordtoyota", "firstauto", "graingernissan", "haywardhonda", "hmtr",
+  "hyundaiofnorthcharleston", "infinitiofbeachwood", "jet", "lexusofneworleans", "lexusofnorthborough", "lynch",
+  "midway", "monadnock", "morristown", "nfwauto", "nissanofathens", "northcounty", "oxmoorautogroup", "phofnash",
+  "riveratoyota", "rosevillekia", "sarantcadillac", "scottnissan", "teddy", "totaloffroad", "toyotaofgastonia",
+  "toyotaofhermiston", "toyotaworldnewton", "vivaautogroup", "vwsouthcharlotte", "vwsouthtowne", "alanbyer",
+  "albrechtauto", "ancira", "asag", "audimv", "banksauto", "billingsford", "blakefauto", "bloomingtoncjd",
+  "bmwoffreeport", "butlercdjr", "calavancars", "cedarcitymotorcompany", "chevyland", "cincyjlr", "dayton",
+  "drivesuperior", "hillsboro", "hyundaioforangepark", "kiaofauburn", "lousobhkia", "markkia", "newsmyrnachevy",
+  "nissanofcookeville", "smithtown", "bighorn", "tomsriver", "fairey", "briswell", "barlow", "billsmith", "braman",
+  "carver", "carter", "cavender", "century", "charleston", "crevier", "deacons", "destination", "ferguson", "gateway",
+  "irvine", "killeen", "leblanc", "mclartydanielford", "mcgeorgetoyota", "mterry", "naples", "northbakersfield",
+  "parkway", "perillo", "pinehurst", "qarmstpete", "raceway", "redland", "rosenautomotive", "rossi", "shults",
+  "stadium", "stephenwade", "stivers", "strong", "tampa", "valleynissan", "waldorf", "werner", "wideworld",
+  "williamsauto", "zumbrota", "bill", "autonation", "daniel", "dyer", "gold", "karl", "koons", "larry", "miller",
+  "nixon", "norwood", "robby", "rohman", "serpentini", "vannuys", "billsmith", "bramanmc", "carterhonda",
+  "caruso", "carvertoyota", "cavender", "chevyland", "deaconscdjr", "destinationkia", "eastcjd", "fairoaksford",
+  "golfmill", "kingsford", "laurelchrysler", "mbsmithtown", "mcgeorge", "memorialchevy", "perillobmw", "pinehurst",
+  "porschewoodland", "rosenauto", "rossihonda", "serpentini", "stadiumtoyota", "tvbuick", "valleynissan",
+  "wernerhyundai", "wideworldbmw"
 ]);
 
 const KNOWN_CITIES_SET = new Set([
+// Alabama (top 50)
   "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "hoover", "dothan", "auburn", "decatur", "madison",
   "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "alabaster", "opelika", "northport", "enterprise", "daphne",
   "homewood", "bessemer", "athens", "pelham", "fairhope", "anniston", "mountain brook", "troy", "trussville", "talladega",
   "selma", "oxford", "alexander city", "millbrook", "helena", "sylacauga", "scottsboro", "hueytown", "gardendale", "foley",
   "jasper", "cullman", "prichard", "irondale", "eufaula", "saraland", "fort payne", "albertville", "ozark", "wetumpka",
+  // Alaska (top 50, limited by population)
   "anchorage", "juneau", "fairbanks", "ketchikan", "sitka", "wasilla", "kenai", "kodiak", "bethel", "palmer",
   "homer", "soldotna", "valdez", "nome", "barrow", "kotzebue", "seward", "cordova", "dillingham", "petersburg",
   "wrangell", "north pole", "delta junction", "hoonah", "unalaska", "craig", "metlakatla", "skagway", "king cove", "sand point",
-  "klawock", "seldovia", "togiak", "mountain village", "emmonak", "akutan", "gambell", "alakanuk", "st. mary's", "shaktoolik",
+  "klawock", "seldovia", "togiak", "mountain village", "emmonak", "akutan", "gambell", "alakanuk", "st. marys", "shaktoolik",
   "koyuk", "hooper bay", "st. paul", "chevak", "kivalina", "kwethluk", "mekoryuk", "napakiak", "savoonga", "quinhagak",
+  // Arizona (top 50)
   "phoenix", "tucson", "mesa", "chandler", "gilbert", "glendale", "scottsdale", "peoria", "tempe", "surprise",
   "yuma", "avondale", "goodyear", "flagstaff", "buckeye", "casa grande", "lake havasu city", "maricopa", "sierra vista", "prescott",
   "bullhead city", "apache junction", "prescott valley", "marana", "el mirage", "queen creek", "kingman", "san luis", "sahuarita", "florence",
   "fountain hills", "nogales", "douglas", "elooy", "payson", "somerton", "paradise valley", "coolidge", "cottonwood", "camp verde",
   "chito valley", "show low", "safford", "sedona", "winslow", "globe", "page", "tolleson", "wickenburg", "youngtown",
+  // Arkansas (top 50)
   "little rock", "fort smith", "fayetteville", "springdale", "jonesboro", "north little rock", "conway", "rogers", "bentonville", "pine bluff",
   "hot springs", "benton", "sherwood", "texarkana", "russellville", "bella vista", "west memphis", "paragould", "cabot", "searcy",
   "van buren", "el dorado", "maumelle", "bryant", "siloam springs", "jacksonville", "forrest city", "harrison", "mountain home", "magnolia",
-  "hope", "centerton", "stuttgart", "arkadelphia", "greenwood", "clarksville", "heber springs", "mena",
-  "batesville", "osceola", "lowell", "beebe", "trumann", "camden", "white hall", "crossett", "morrilton", "de queen", "warren",
+  "hope", "centerton", "stuttgart", "arkadelphia", "greenwood", "clarksville", "heber springs", "mena", "osceola", "lowell",
+  "beebe", "morrilton", "de queen", "farmington", "alma", "berryville", "white hall", "warren", "crossett", "camden",
+  // California (top 50)
   "los angeles", "san diego", "san jose", "san francisco", "fresno", "sacramento", "long beach", "oakland", "bakersfield", "anaheim",
-  "santa ana", "riverside", "stockton", "chula vista", "irvine", "fremont", "san bernardino", "modesto", "fontana", "oxnard",
-  "moreno valley", "huntington beachward", "glendale", "santa clarita", "garden grove", "oceanside", "rancho cucamonga", "santa rosa", "ontario", "elk grove",
-  "corona", "hayward", "lancaster", "salinas", "palmdale", "sunnyvale", "pomona", "escondido", "torrance", "pasadena",
-  "orange", "fullerton", "thousand oaks", "simi valley", "concord", "roseville", "santa clara", "vallejo", "victorville", "berkeley",
+  "santa ana", "riverside", "stockton", "chula vista", "irvine", "fremont", "san bernardino", "modesto", "oxnard", "fontana",
+  "huntington beach", "glendale", "santa clarita", "garden grove", "santa rosa", "southbay", "oceanside", "rancho cucamonga", "ontario", "elk grove",
+  "corona", "hayward", "lancaster", "palmdale", "sunnyvale", "pomona", "escondido", "torrance", "pasadena", "orange",
+  "fullerton", "thousand oaks", "visalia", "simi valley", "concord", "roseville", "santa clara", "vallejo", "victorville", "berkeley",
+  "cerritos", "redlands",
+  // Colorado (top 50)
   "denver", "colorado springs", "aurora", "fort collins", "lakewood", "thornton", "arvada", "westminster", "pueblo", "centennial",
   "boulder", "greeley", "longmont", "loveland", "broomfield", "grand junction", "castle rock", "commerce city", "parker", "littleton",
-  "northglenn", "brighton", "englewood", "wheat ridge", "fountain", "lafayette", "montrose", "durango", "golden", "louisville",
-  "windsor", "evans", "erie", "federal heights", "greenwood village", "sterling", "lone tree", "johnstown", "superior", "fruit",
-  "steamboat springs", "fort morgan", "avon", "glendale", "woodland park", "aspen", "trinidad", "canon city", "brush", "delta",
+  "northglenn", "brighton", "englewood", "wheat ridge", "lafayette", "windsor", "erie", "golden", "louisville", "sheridan",
+  "montrose", "durango", "canon city", "greenwood village", "sterling", "lone tree", "johnstown", "superior", "fruitvale", "steamboat springs",
+  "federal heights", "firestone", "fort lupton", "trinidad", "woodland park", "aspen", "avon", "glendale", "delta", "rifle",
+  // Connecticut (top 50)
   "bridgeport", "new haven", "stamford", "hartford", "waterbury", "norwalk", "danbury", "new britain", "west hartford", "greenwich",
   "fairfield", "hamden", "bristol", "meriden", "manchester", "west haven", "milford", "stratford", "east hartford", "middletown",
-  "wallingford", "southington", "shelton", "norwich", "torrington", "trumbull", "glastonbury", "naugatuck", "newington", "cheshire",
-  "vernon", "windsor", "new london", "branford", "new milford", "westport", "wethersfield", "ridgefield", "farmington", "simsbury",
-  "guilford", "south windsor", "north haven", "watertown", "darien", "brookfield", "new canaan", "monroe", "ansonia", "bethel",
+  "wallingford", "southington", "shelton", "norwich", "torrington", "trumbull", "naugatuck", "newington", "vernon", "windsor",
+  "westport", "east haven", "new london", "wethersfield", "farmington", "ridgefield", "new milford", "simsbury", "watertown", "guilford",
+  "south windsor", "north haven", "darien", "ansonia", "windsor locks", "rocky hill", "plainville", "brookfield", "wolcott", "seymour",
+  // Delaware (top 50, limited by population)
   "wilmington", "dover", "newark", "middletown", "smyrna", "milford", "seaford", "georgetown", "elsmere", "new castle",
-  "clayton", "laurel", "harrington", "lewes", "milford", "rehoboth beach", "delmar", "camden", "wyoming", "felton",
-  "greenwood", "delaware city", "blades", "frederica", "millsboro", "milton", "bridgeville", "selbyville", "townsend", "ocean view",
-  "cheswold", "dagsboro", "frankford", "bethany beach", "claymont", "south bethany", "ardsley", "ellendale", "fenwick island", "houston",
-  "dewey beach", "newport", "magnolia", "slaughter beach", "ardentown", "kent", "sussex", "odessa", "hartly", "little creek",
-  "jacksonville", "miami", "tampa", "orlando", "st. petersburg", "hialeah", "port st. lucie", "tallahassee", "cape coral", "fort lauderdale",
-  "pembroke pines", "hollywood", "miramar", "coral springs", "gainesville", "clearwater", "palm bay", "west palm beach", "pompano beach", "lakeland",
-  "davie", "miami gardens", "sunrise", "boca raton", "deltona", "plantation", "fort myers", "delray beach", "largo", "melbourne",
-  "palm coast", "deerfield beach", "boynton beach", "lauderhill", "weston", "kissimmee", "homestead", "north port", "tamarac", "daytona beach",
-  "wellington", "north miami", "jupiter", "port orange", "coconut creek", "sanford", "bradenton", "margate", "ocoee", "sarasota",
+  "millsboro", "laurel", "harrington", "camden", "clayton", "lewes", "milton", "selbyville", "townsend", "ocean view",
+  "bridgeville", "delmar", "delaware city", "felton", "wyoming", "blades", "greenwood", "frederica", "south bethany", "cheswold",
+  "millville", "dagsboro", "frankford", "bethany beach", "newport", "rehoboth beach", "ellendale", "fenwick island", "ardsley", "slaughter beach",
+  "houston", "dewey beach", "bowers", "magnolia", "south bowers", "little creek", "odessa", "claymont", "ardentown", "kentmere",
+  // Florida (top 50)
+  "jacksonville", "miami", "tampa", "orlando", "st. petersburg", "hialeah", "port st. lucie", "cape coral", "tallahassee", "fort lauderdale",
+  "pembroke pines", "hollywood", "miramar", "gainesville", "coral springs", "clearwater", "palm bay", "lakeland", "west palm beach", "pompano beach",
+  "davie", "miami gardens", "sunrise", "boca raton", "deltona", "miamilakes", "palmcoast", "plantation", "weston", "boynton beach",
+  "north miami", "lauderhill", "doral", "homestead", "deerfield beach", "tamarac", "delray beach", "daytona beach", "wellington", "north port",
+  "jupiter", "port orange", "coconut creek", "ocala", "sanford", "margate", "bradenton", "apopka", "sarasota", "palm beach gardens",
+  "naples", "orangepark",
+  // Georgia (top 50)
   "atlanta", "augusta", "columbus", "macon", "savannah", "athens", "sandy springs", "roswell", "johns creek", "albany",
-  "warner robins", "marietta", "smyrna", "valdosta", "dunwoody", "north atlanta", "mableton", "rome", "martinez", "peachtree corners",
-  "east point", "peachtree city", "gainesville", "hinesville", "dalton", "newton", "kennesaw", "duluth", "lawrenceville", "mcdonough",
-  "decatur", "cumming", "alpharetta", "carrollton", "douglasville", "woodstock", "statesboro", "lagrange", "canton", "griffin",
-  "stockbridge", "newnan", "cartersville", "calhoun", "milledgeville", "forest park", "thomasville", "winder", "snellville", "norcross",
-  "honolulu", "east honolulu", "pearl city", "hilo", "kailua", "waipahu", "kaneohe", "mililani town", "kahului", "ewa gentry",
-  "mililani mauka", "kihei", "makakilo", "wahiawa", "schofield barracks", "kapolei", "wailuku", "ewa beach", "halawa", "kailua-kona",
-  "kapaa", "nanakuli", "lahaina", "waipio", "hawaiian paradise park", "makawao", "maili", "puhi", "kula", "waikoloa village",
-  "aiea", "hanalei", "haleiwa", "ocean pointe", "waialua", "haiku-pauwela", "waianae", "laie", "waimalu", "kalaoa",
-  "kekaha", "hana", "waimea", "kapaau", "lanai city", "kaunakakai", "paia", "kilauea", "lihue", "puako",
-  "boise", "meridian", "nampa", "idaho falls", "pocatello", "caldwell", "coeur d'alene", "twin falls", "lewiston", "post falls",
-  "rexburg", "moscow", "eagle", "kuna", "ammon", "chubbuck", "hayden", "jerome", "blackfoot", "garden city",
-  "mountain home", "burley", "star", "sandpoint", "rathdrum", "hailey", "payette", "emmett", "middleton", "weiser",
-  "preston", "fruitland", "rupert", "american falls", "victor", "mccall", "buhl", "lincoln", "rigby", "orofino",
-  "hidden springs", "st. anthony", "gooding", "shelley", "kimberly", "filer", "salmon", "grangeville", "soda springs", "ketchum",
+  "warner robins", "alpharetta", "marietta", "valdosta", "smyrna", "dunwoody", "brookhaven", "peachtree corners", "mableton", "milton",
+  "evans", "east point", "peachtree city", "rome", "tucker", "hinesville", "dalton", "woodstock", "canton", "duluth",
+  "kennesaw", "gainesville", "newnan", "douglasville", "lawrenceville", "statesboro", "lagrange", "stockbridge", "carrollton", "decatur",
+  "griffin", "cumming", "acworth", "union city", "pooler", "riverdale", "sugar hill", "forest park", "snellville", "fayetteville",
+  // Hawaii (top 50, limited by population)
+  "honolulu", "east honolulu", "pearl city", "hilo", "kailua", "waipahu", "kaneohe", "mililani", "kahului", "ewa gentry",
+  "mililani mauka", "kihei", "makakilo", "wahiawa", "schofield barracks", "kapolei", "kapaa", "kailua-kona", "lahaina", "wailuku",
+  "nanakuli", "waianae", "halawa", "kalaheo", "aiea", "waimea", "kaneohe station", "maili", "waipio", "kapahulu",
+  "waimalu", "hanalei", "puhi", "kula", "waikoloa village", "kalaoa", "eleele", "hawi", "kilauea", "kekaha",
+  "haleiwa", "kaunakakai", "lanai city", "hana", "paia", "koloa", "wailua homesteads", "makawao", "anahola", "hanapepe",
+  // Idaho (top 50)
+  "boise", "meridian", "nampa", "idaho falls", "pocatello", "caldwell", "coeur dalene", "twin falls", "lewiston", "post falls",
+  "rexburg", "moscow", "eagle", "kuna", "ammon", "chubbuck", "hayden", "mountain home", "blackfoot", "garden city",
+  "jerome", "burley", "star", "sandpoint", "rathdrum", "hailey", "payette", "emmett", "middleton", "weiser",
+  "preston", "fruitland", "shelley", "buhl", "rigby", "american falls", "lincoln", "st. anthony", "gooding", "kimberly",
+  "filer", "salmon", "grangeville", "soda springs", "ketchum", "mccall", "homedale", "bonners ferry", "dalton gardens", "victor",
+  // Illinois (top 50)
   "chicago", "aurora", "naperville", "joliet", "rockford", "springfield", "elgin", "peoria", "waukegan", "cicero",
-  "champaign", "bloomington", "arlington heights", "evanston", "decatur", "schaumburg", "bolingbrook", "palatine", "skokie", "des plaines",
-  "orland park", "tinley park", "oak lawn", "berwyn", "mount prospect", "normal", "wheaton", "hoffman estates", "oak park", "downers grove",
-  "elmhurst", "glenview", "lombard", "buffalo grove", "bartlett", "crystal lake", "carol stream", "streamwood", "quincy", "urbana",
-  "plainfield", "hanover park", "carpentersville", "wheeling", "park ridge", "addison", "calumet city", "northbrook", "elk grove village", "danville",
+  "champaign", "bloomington", "decatur", "arlington heights", "evanston", "schaumburg", "bolingbrook", "palatine", "skokie", "des plaines",
+  "orland park", "tinley park", "oak lawn", "berwyn", "mount prospect", "wheaton", "normal", "hoffman estates", "oak park", "downers grove",
+  "glenview", "belleville", "elmhurst", "dekalb", "moline", "urbana", "buffalo grove", "bartlett", "hanover park", "carpentersville",
+  "wheeling", "park ridge", "addison", "northbrook", "elk grove village", "danville", "gurnee", "mundelein", "oswego", "highland park",
+  // Indiana (top 50)
   "indianapolis", "fort wayne", "evansville", "south bend", "carmel", "fishers", "bloomington", "hammond", "gary", "lafayette",
-  "muncie", "terre haute", "kokomo", "noblesville", "anderson", "greenwood", "elkhart", "mishawaka", "lawrence", "jeffersonville",
-  "columbus", "west lafayette", "portage", "new albany", "richmond", "valparaiso", "goshen", "michigan city", "westfield", "marion",
-  "east chicago", "zionsville", "brownsburg", "plainfield", "schererville", "hobart", "crown point", "highland", "franklin", "munster",
-  "la porte", "clarksville", "seymour", "shelbyville", "griffith", "dyer", "logansport", "vincennes", "crawfordsville", "new castle",
+  "muncie", "noblesville", "terre haute", "greenwood", "kokomo", "anderson", "elkhart", "west lafayette", "mishawaka", "lawrence",
+  "jeffersonville", "columbus", "westfield", "new albany", "portage", "richmond", "valparaiso", "goshen", "michigan city", "zionsville",
+  "merrillville", "crown point", "schererville", "hobart", "east chicago", "marion", "plainfield", "highland", "munster", "granger",
+  "franklin", "clarksville", "seymour", "griffith", "dyer", "shelbyville", "logansport", "vincennes", "huntington", "lebanon",
+  // Iowa (top 50)
   "des moines", "cedar rapids", "davenport", "sioux city", "iowa city", "waterloo", "ames", "west des moines", "council bluffs", "dubuque",
-  "ankeny", "urbandale", "cedar falls", "marion", "bettendorf", "mason city", "marshalltown", "clinton", "burlington", "fort dodge",
-  "ottumwa", "muscatine", "coralville", "johnston", "clive", "newton", "indianola", "altoona", "norwalk", "boone",
-  "spencer", "storm lake", "carroll", "grinnell", "fairfield", "le mars", "pella", "denison", "decorah", "clear lake",
-  "webster city", "charles city", "knoxville", "atlantic", "nevada", "crestview", "estheville", "washington", "eldora", "mount pleasant",
+  "ankeny", "urbandale", "cedar falls", "marion", "bettendorf", "mason city", "clinton", "burlington", "ottumwa", "fort dodge",
+  "muscatine", "coralville", "johnston", "clive", "newton", "indianola", "altoona", "norwalk", "boone", "spencer",
+  "storm lake", "carroll", "le mars", "fairfield", "grinnell", "perry", "mount pleasant", "denison", "webster city", "decorah",
+  "clear lake", "knoxville", "charles city", "atlantic", "creston", "estonia", "oskaloosa", "waverly", "cherokee", "centerville",
+  // Kansas (top 50)
   "wichita", "overland park", "kansas city", "olathe", "topeka", "lawrence", "shawnee", "manhattan", "lenexa", "salina",
-  "hutchinson", "leavenworth", "leawood", "dodge city", "garden city", "emporia", "derby", "prairie village", "junction city", "hays",
-  "pittsburg", "liberal", "newton", "gardner", "great bend", "mcpherson", "el dorado", "ottawa", "arkansas city", "winfield",
-  "andover", "lansing", "merriam", "haysville", "atchison", "parsons", "coffeyville", "mission", "chanute", "independence",
-  "augusta", "beloit", "valley center", "fort scott", "concordia", "mulvane", "abilene", "bonner springs", "wellington", "pratt",
-  "louisville", "lexington", "bowling green", "owensboro", "covington", "richmond", "hopkinsville", "florence", "georgetown", "elizabethtown",
-  "henderson", "nicholasville", "jeffersontown", "frankfort", "paducah", "independence", "radcliff", "ashland", "madisonville", "murray",
-  "erlanger", "winchester", "st. matthews", "danville", "fort thomas", "newport", "shively", "shelbyville", "berea", "glasgow",
-  "bardstown", "shepherdsville", "somerset", "lyndon", "lawrenceburg", "middlesborough", "mayfield", "mount washington", "campbellsville", "paris",
-  "versailles", "alexandria", "hillview", "harrodsburg", "pikeville", "london", "burlington", "cynthiana", "lagrange", "leitchfield",
-  "new orleans", "baton rouge", "shreveport", "lafayette", "lake charles", "kenner", "bossier city", "monCms", "monroe", "slidell", "alexandria",
-  "hammond", "houma", "marrero", "harvey", "ruston", "thibodaux", "natchitoches", "gretna", "denham springs", "west monroe", "morgan city",
-  "mandeville", "covington", "crowley", "abbeville", "bogalusa", "bastrop", "minden", "zachary", "eunice", "baker",
-  "gonzales", "luling", "destrehan", "broussard", "pineville", "westwego", "walker", "scott", "jennings", "franklin",
-  "plaquemine", "rayne", "youngsville", "carencro", "ville platte", "de ridder", "donaldsonville", "oakdale", "pearl river", "kaplan", "church point",
-  "portland", "lewiston", "bangor", "south portland", "auburn", "biddeford", "sanford", "brunswick", "saco", "westbrook",
-  "augusta", "waterville", "brewer", "presque isle", "bath", "caribou", "old town", "rockland", "belfast", "gardiner",
-  "calais", "hallowell", "eastport", "machias", "bar harbor", "camden", "boothbay harbor", "orono", "farmington", "rumford",
-  "fort kent", "madawaska", "van buren", "limestone", "jackman", "kittery", "york", "freeport", "kennebunk", "kennebunkport",
-  "bethel", "bridgton", "north windham", "millinocket", "lincoln", "fairfield", "oakland", "skowhegan", "dover-foxcroft", "wiscasset",
-  "baltimore", "columbia", "germantown", "silver spring", "waldorf", "glen burnie", "ellicott city", "dundalk", "rockville", "gaithersburg",
-  "frederick", "towson", "bel air", "catonsville", "essex", "annapolis", "hagerstown", "cumberland", "bethesda", "salisbury",
-  "laurel", "greenbelt", "bowie", "hyattsville", "westminster", "easton", "elkton", "ocean city", "cockeysville", "owings mills",
-  "parkville", "pikesville", "montgomery village", "odenton", "severn", "severna park", "lanham", "potomac", "lutherville-timonium", "reisterstown",
-  "edgewood", "aberdeen", "havre de grace", "takoma park", "crofton", "fort washington", "landover", "olney", "clinton", "lexington park",
+  "hutchinson", "leavenworth", "leawood", "dodge city", "garden city", "emporia", "derby", "junction city", "prairie village", "liberal",
+  "hays", "pittsburg", "newton", "gardner", "great bend", "mcpherson", "el dorado", "ottawa", "winfield", "arkansas city",
+  "andover", "lansing", "merriam", "haysville", "atchison", "parsons", "coffeyville", "chanute", "independence", "augusta",
+  "fort scott", "welllington", "mission", "park city", "bonner springs", "valley center", "beloit", "roeland park", "abilene", "eudora",
+  // Kentucky (top 50)
+  "louisville", "lexington", "bowling green", "owensboro", "covington", "richmond", "georgetown", "florence", "hopkinsville", "nicholasville",
+  "elizabethtown", "henderson", "frankfort", "independence", "jeffersontown", "paducah", "radcliff", "ashland", "madisonville", "murray",
+  "erlanger", "winchester", "st. matthews", "danville", "fort thomas", "newport", "shively", "shelbyville", "glasgow", "berea",
+  "mount washington", "shepherdsville", "bardstown", "campbellsville", "lawrenceburg", "paris", "versailles", "alexandria", "harrodsburg", "pikeville",
+  "london", "franklin", "mayfield", "middlesboro", "corbin", "burlington", "oak grove", "maysville", "morehead", "hazard",
+  // Louisiana (top 50)
+  "new orleans", "baton rouge", "shreveport", "lafayette", "lake charles", "kenner", "bossier city", "monroe", "alexandria", "houma",
+  "hammond", "slidell", "gonzales", "zachary", "new iberia", "laplace", "thibodaux", "pineville", "crowley", "baker",
+  "sulphur", "west monroe", "gretna", "harvey", "opelousas", "ruston", "natchitoches", "deridder", "morgan city", "abbeville",
+  "bogalusa", "mandeville", "bastrop", "eunice", "jennings", "denham springs", "westwego", "minden", "covington", "port allen",
+  "marksville", "franklin", "patterson", "donaldsonville", "oakdale", "plaquemine", "tallulah", "ville platte", "springhill", "winnfield",
+  "neworleans",
+  // Maine (top 50, limited by population)
+  "portland", "lewiston", "bangor", "south portland", "auburn", "biddeford", "sanford", "saco", "westbrook", "augusta",
+  "waterville", "brewer", "presque isle", "bath", "caribou", "old town", "rockland", "ellsworth", "belfast", "gardiner",
+  "calais", "hallowell", "eastport", "machias", "bar harbor", "camden", "millinocket", "skowhegan", "madawaska", "boothbay harbor",
+  "orono", "farmington", "kittery", "rumford", "mexico", "paris", "norway", "fort kent", "lincoln", "dover-foxcroft",
+  "berwick", "buxton", "freeport", "topsham", "yarmouth", "kennebunk", "falmouth", "bridgton", "houlton", "pittsfield",
+  // Maryland (top 50)
+  "baltimore", "columbia", "germantown", "silver spring", "waldorf", "glen burnie", "ellicott city", "dundalk", "rockville", "bethesda",
+  "frederick", "gaithersburg", "towson", "bowie", "aspin hill", "wheaton", "bel air", "north bethesda", "montgomery village", "odenton",
+  "catonsville", "hagerstown", "annapolis", "potomac", "north laurel", "severn", "essex", "hanover", "st. charles", "clinton",
+  "laurel", "south laurel", "college park", "greenbelt", "cumberland", "hyattsville", "takoma park", "westminster", "langley park", "camp springs",
+  "east riverdale", "landover", "olney", "seabrook", "arnold", "largo", "fairland", "arbutus", "lake shore", "aberdeen",
+  // Massachusetts (top 50)
   "boston", "worcester", "springfield", "cambridge", "lowell", "brockton", "new bedford", "quincy", "lynn", "fall river",
-  "somerville", "lawrence", "newton", "framingham", "waltham", "haverhill", "malden", "brookline", "plymouth", "medford",
-  "taunton", "chicopee", "weymouth", "revere", "peabody", "methuen", "barnstable", "pittsfield", "attleboro", "arlington",
-  "everett", "salem", "westfield", "leominster", "fitchburg", "holyoke", "beverly", "marlborough", "woburn", "amherst",
-  "chelsea", "braintree", "natick", "randolph", "watertown", "franklin", "north attleborough", "gloucester", "northampton", "agawam",
+  "newton", "somerville", "lawrence", "framingham", "waltham", "haverhill", "malden", "medford", "taunton", "chicopee",
+  "weymouth", "revere", "peabody", "methuen", "barnstable", "pittsfield", "attleboro", "arlington", "everett", "salem",
+  "westfield", "leominster", "fitchburg", "holyoke", "beverly", "marlborough", "woburn", "chelsea", "braintree", "natick",
+  "randolph", "watertown", "franklin", "north attleborough", "gloucester", "northampton", "agawam", "west springfield", "gardner", "belmont",
+  "northborough",
+  // Michigan (top 50)
   "detroit", "grand rapids", "warren", "sterling heights", "ann arbor", "lansing", "flint", "dearborn", "livonia", "troy",
-  "westland", "farmington hills", "kalamazoo", "wyoming", "southfield", "rochester hills", "taylor", "pontiac", "novi", "royal oak",
-  "dearborn heights", "battle creek", "saginaw", "kentwood", "east lansing", "redford", "roseville", "portage", "midland", "muskegon",
-  "lincoln park", "bay city", "jackson", "holland", "burton", "jenison", "highland park", "ypsilanti", "norton shores", "okemos",
-  "allendale", "walker", "romulus", "hamtramck", "auburn hills", "inkster", "birmingham", "adrian", "ferndale", "monroe",
-  "minneapolis", "st. paul", "rochester", "duluth", "bloomington", "brooklyn park", "plymouth", "woodbury", "maple grove", "st. cloud",
-  "eden prairie", "epping", "blaine", "lakeville", "minnetonka", "burnsville", "apple valley", "edina", "st. louis park", "mankato",
-  "moorhead", "shakopee", "maplewood", "cottage grove", "richfield", "roseville", "inver grove heights", "andover", "brooklyn center", "savage",
-  "fridley", "oakdale", "chaska", "ramsey", "prior lake", "shoreview", "winona", "chanhassen", "champlin", "elk river",
-  "faribault", "rosemount", "hastings", "crystal", "new brighton", "golden valley", "new hope", "columbia heights", "willmar", "west st. paul",
-  "jackson", "gulfport", "southaven", "hattiesburg", "biloxi", "meridian", "tupelo", "olive branch", "horn lake", "clinton",
-  "pearl", "madison", "ridgeland", "starkville", "columbus", "vicksburg", "pascagoula", "brandon", "oxford", "laurel",
-  "gautier", "ocean springs", "hernando", "long beach", "natchez", "corinth", "greenville", "clarksdale", "byram", "greenwood",
-  "yazoo city", "cleveland", "west point", "brookhaven", "canton", "moss point", "mccomb", "grenada", "d'iberville", "petal",
-  "picayune", "indianola", "new albany", "flowood", "bay st. louis", "booneville", "senatobia", "richland", "louisville", "philadelphia",
-  "kansas city", "st. louis", "springfield", "columbia", "independence", "lee's summit", "o'fallon", "st. joseph", "st. charles", "st. peters",
+  "westland", "farmington hills", "kalamazoo", "wyoming", "southfield", "rochester hills", "taylor", "royal oak", "st. clair shores", "pontiac",
+  "dearborn heights", "novi", "battle creek", "saginaw", "kentwood", "east lansing", "redford", "roseville", "muskegon", "portage",
+  "midland", "lincoln park", "holland", "bay city", "jackson", "eastpointe", "madison heights", "oak park", "southgate", "burton",
+  "port huron", "northville", "garden city", "inkster", "allen park", "ferndale", "wyandotte", "mount pleasant", "traverse city", "hamtramck",
+  // Minnesota (top 50)
+  "minneapolis", "st. paul", "rochester", "duluth", "bloomington", "brooklyn park", "plymouth", "maple grove", "woodbury", "st. cloud",
+  "eden prairie", "lakeville", "eagan", "blaine", "coon rapids", "burnsville", "minnetonka", "apple valley", "edina", "st. louis park",
+  "mankato", "moorhead", "shakopee", "maplewood", "cottage grove", "inver grove heights", "richfield", "andover", "brooklyn center", "savage",
+  "fridley", "oakdale", "chaska", "ramsey", "prior lake", "shoreview", "winona", "chanhassen", "white bear lake", "champlin",
+  "elk river", "faribault", "rosemount", "crystal", "farmington", "hastings", "new brighton", "golden valley", "lino lakes", "northfield",
+  // Mississippi (top 50)
+  "jackson", "gulfport", "southaven", "biloxi", "hattiesburg", "olive branch", "tupelo", "meridian", "greenville", "madison",
+  "clinton", "pearl", "horn lake", "oxford", "brandon", "starkville", "ridgeland", "columbus", "vicksburg", "pascagoula",
+  "gautier", "laurel", "hernando", "long beach", "natchez", "corinth", "diberville", "greenwood", "ocean springs", "moss point",
+  "mccomb", "grenada", "brookhaven", "cleveland", "byram", "yazoo city", "west point", "picayune", "petal", "indianola",
+  "new albany", "flowood", "bay st. louis", "canton", "booneville", "senatobia", "holly springs", "amory", "kosciusko", "richland",
+  // Missouri (top 50)
+  "kansas city", "st. louis", "springfield", "columbia", "independence", "lees summit", "ofallon", "st. joseph", "st. charles", "st. peters",
   "blue springs", "florissant", "joplin", "chesterfield", "jefferson city", "cape girardeau", "wildwood", "university city", "ballwin", "raytown",
-  "liberty", "wentzville", "mehlville", "kirkwood", "maryland heights", "hazelwood", "gladstone", "grandview", "belton", "raymore",
-  "nixa", "webster groves", "sedalia", "arnold", "rolla", "warrensburg", "farmington", "manchester", "poplar bluff", "kirksville",
-  "ozark", "creve coeur", "ferguson", "hannibal", "sikeston", "dardenne prairie", "clayton", "troy", "lake st. louis", "carthage",
+  "liberty", "wentzville", "mehlville", "kirkwood", "maryland heights", "hazelwood", "gladstone", "grandview", "belton", "webster groves",
+  "sedalia", "ferguson", "arnold", "affton", "nixa", "warrensburg", "rolla", "ozark", "raymore", "creve coeur",
+  "farmington", "manchester", "kirksville", "hannibal", "poplar bluff", "sikeston", "lemay", "concord", "clayton", "branson",
+  // Montana (top 50, limited by population)
   "billings", "missoula", "great falls", "bozeman", "butte", "helena", "kalispell", "havre", "anaconda", "miles city",
-  "belgrade", "livingston", "laurel", "whitefish", "sidney", "lewistown", "glendive", "dillon", "hardin", "glasgow",
-  "shelby", "deer lodge", "cut bank", "libby", "wolf point", "conrad", "colstrip", "hamilton", "polson", "ronan",
-  "red lodge", "columbia falls", "malta", "east helena", "townsend", "three forks", "baker", "choteau", "big timber", "manhattan",
-  "fort benton", "thompson falls", "west yellowstone", "chinook", "scobey", "plentywood", "forsyth", "circle", "stanford", " Roundup",
-  "omaha", "lincoln", "bellevue", "grand island", "kearney", "fremont", "hastings", "north platte", "norfolk", "papillion",
-  "columbus", "la vista", "scottsbluff", "south sioux city", "beatrice", "lexington", "gering", "alliance", "blair", "york",
-  "seward", "crete", "sidney", "plattsmouth", "schuyler", "ralston", "wayne", "holdrege", "chadron", "aurora",
-  "gretna", "nebraska city", "wahoo", "ogallala", "cozad", "central city", "david city", "valentine", "west point", "auburn",
-  "falls city", "ashland", "kimball", "minden", "broken bow", "gothenburg", "fairbury", "syracuse", "alma", "hebron",
+  "belgrade", "livingston", "laurel", "whitefish", "sidney", "lewistown", "glendive", "columbia falls", "polson", "hamilton",
+  "dillon", "hardin", "shelby", "glasgow", "deer lodge", "cut bank", "libby", "wolf point", "conrad", "malta",
+  "east helena", "colstrip", "three forks", "red lodge", "ronan", "baker", "choteau", "manhattan", "plentywood", "eureka",
+  "roundup", "forsyth", "thompson falls", "big timber", "townsend", "stevensville", "browning", "west yellowstone", "white sulphur springs", "lolo",
+  // Nebraska (top 50)
+  "omaha", "lincoln", "bellevue", "grand island", "kearney", "fremont", "hastings", "north platte", "norfolk", "columbus",
+  "papillion", "la vista", "scottsbluff", "south sioux city", "beatrice", "lexington", "gering", "alliance", "blair", "york",
+  "mccook", "nebraska city", "seward", "sidney", "crete", "plattsmouth", "schuyler", "ralston", "wayne", "holdrege",
+  "chadron", "ogallala", "wahoo", "aurora", "falls city", "cozad", "fairbury", "oneill", "broken bow", "gothenburg",
+  "west point", "minden", "central city", "david city", "valentine", "ashland", "kimball", "madison", "st. paul", "milford",
+  // Nevada (top 50)
   "las vegas", "henderson", "reno", "north las vegas", "sparks", "carson city", "fernley", "elko", "mesquite", "boulder city",
   "fallon", "winnemucca", "west wendover", "ely", "yerington", "carlin", "lovelock", "wells", "caliente", "tonopah",
-  "virginia city", "pioche", "eureka", "goldfield", "hawthorne", "battle mountain", "laughlin", "dayton", "incline village", "stateline",
-  "minden", "gardnerville", "sun valley", "spring creek", "lemmon valley", "silver springs", "stagecoach", "cold springs", "topaz ranch estates", "kingsbury",
-  "johnson lane", "spanish springs", "verdi", "washoe valley", "smith valley", "jackpot", "overton", "pahrump", "moapa valley", "enterprise",
-  "manchester", "nashua", "concord", "derry", "dover", "rochester", "salem", "merrimack", "hudson", "londonderry",
-  "milford", "hampton", "exeter", "windham", "goffstown", "durham", "bedford", "portsmouth", "laconia", "keene",
-  "lebanon", "claremont", "somersworth", "hanover", "amherst", "raymond", "conway", "berlin", "newmarket", "weare",
-  "seabrook", "littleton", "franklin", "epsom", "plaistow", "barrington", "bow", "belmont", "stratham", "swanzey",
-  "pembroke", "rumney", "meredith", "jaffrey", "atkinson", "pelham", "hooksett", "kingston", "rindge", "new boston",
-  "newark", "jersey city", "paterson", "elizabeth", "edison", "woodbridge", "lakewood", "toms river", "hamilton", "trenton",
-  "clifton", "camden", "brick", "cherry hill", "passaic", "middletown", "union city", "north bergen", "irvington", "vineland",
-  "bayonne", "east orange", "north brunswick", "hoboken", "wayne", "west new york", "howell", "perth amboy", "east brunswick", "plainfield",
-  "west orange", "hackensack", "sayreville", "kearny", "linden", "marlboro", "teaneck", "north arlington", "montclair", "belleville",
-  "bloomfield", "westfield", "livingston", "nutley", "rahway", "west milford", "paramus", "ridgewood", "lodi", "cliffside park",
-  "albuquerque", "las cruces", "rio rancho", "santa fe", "roswell", "farmington", "south valley", "clovis", "hobbs", "alamogordo",
-  "carlsbad", "gallup", "deming", "los lunas", "chaparral", "sunland park", "las vegas", "portales", "los alamos", "north valley",
-  "artesia", "lovington", "espanola", "silver city", "bernalillo", "grants", "aztec", "bloomfield", "raton", "truth or consequences",
-  "belen", "socorro", "shiprock", "corrales", "ruidoso", "kirtland", "taos", "tucumcari", "placitas", "eldorado at santa fe",
-  "white rock", "los ranchos de albuquerque", "tijeras", "edgewood", "santa teresa", "ranchos de taos", "milan", "moriarty", "sandia heights", "mesa del sol",
+  "round mountain", "pioche", "eureka", "virginia city", "goldfield", "hawthorne", "laughlin", "pahrump", "incline village", "dayton",
+  "spring creek", "sun valley", "silver springs", "gardnerville", "minden", "battle mountain", "jackpot", "overton", "moapa valley", "panaca",
+  "alamo", "amargosa valley", "beatty", "gabbs", "henderson valley", "indian springs", "logandale", "mesquite heights", "nellis afb", "sloan",
+  // New Hampshire (top 50, limited by population)
+  "manchester", "nashua", "concord", "dover", "rochester", "keene", "portsmouth", "laconia", "lebanon", "claremont",
+  "somersworth", "berlin", "franklin", "durham", "hampton", "exeter", "merrimack", "londonderry", "hudson", "milford",
+  "newmarket", "swanzey", "pembroke", "plymouth", "littleton", "conway", "newport", "farmington", "jaffrey", "raymond",
+  "goffstown", "peterborough", "barrington", "epping", "kingston", "rindge", "northfield", "hinsdale", "winchester", "hooksett",
+  "bristol", "gilford", "belfast", "deerfield", "north conway", "wolfeboro", "meredith", "hanover", "henniker", "charlestown",
+  "bedford",
+  // New Jersey (top 50)
+  "newark", "jersey city", "paterson", "elizabeth", "lakewood", "edison", "woodbridge", "toms river", "hamilton", "trenton",
+  "clifton", "camden", "brick", "cherry hill", "passaic", "middletown", "union city", "old bridge", "gloucester township", "north bergen",
+  "vineland", "bayonne", "piscataway", "new brunswick", "perth amboy", "east orange", "west new york", "plainfield", "hackensack", "sayreville",
+  "kearny", "linden", "north brunswick", "atlantic city", "howell", "ewing", "long branch", "westfield", "garfield", "egg harbor",
+  "west orange", "orange", "pennsauken", "fair lawn", "bergenfield", "paramus", "livingston", "millville", "nutley", "rahway",
+  "newton", "freehold",
+  // New Mexico (top 50)
+  "albuquerque", "las cruces", "rio rancho", "santa fe", "roswell", "farmington", "clovis", "hobbs", "alamogordo", "carlsbad",
+  "gallup", "deming", "los lunas", "chaparral", "sunland park", "las vegas", "portales", "artesia", "lovington", "española",
+  "silver city", "bernalillo", "ruidoso", "aztec", "bloomfield", "truth or consequences", "anthony", "los ranchos de albuquerque", "taos", "el cerro",
+  "placitas", "tucumcari", "raton", "belen", "corrales", "grants", "eldorado at santa fe", "north valley", "kirtland", "socorro",
+  "lee acres", "paradise hills", "shiprock", "white rock", "la cienega", "bosque farms", "milan", "holloman afb", "zuni pueblo", "peralta",
+  // New York (top 50)
   "new york", "buffalo", "rochester", "yonkers", "syracuse", "albany", "new rochelle", "mount vernon", "schenectady", "utica",
-  "white plains", "hempstead", "troy", "niagara falls", "binghamton", "freeport", "valley stream", "long beach", "spring valley", "rome",
-  "north tonawanda", "port chester", "ithaca", "middletown", "poughkeepsie", "newburgh", "elmira", "kiryas joel", "west babylon", "hicksville",
-  "east meadow", "brighton", "uniondale", "central islip", "commack", "huntington station", "levittown", "west islip", "north amityville", "west hempstead",
-  "franklin square", "oceanside", "north bay shore", "north bellmore", "baldwin", "massapequa", "merrick", "east massapequa", "plainview", "lockport",
-  "charlotte", "raleigh", "greensboro", "durham", "winston-salem", "fayetteville", "cary", "wilmington", "high point", "greenville",
-  "asheville", "concord", "gastonia", "jacksonville", "rocky mount", "chapel hill", "burlington", "huntersville", "hickory", "apex",
-  "wake forest", "indian trail", "mooresville", "goldsboro", "monroe", "salisbury", "matthews", "sanford", "new bern", "cornelius",
-  "garner", "thomasville", "statesville", "asheboro", "mint hill", "kinston", "lumberton", "carrboro", "havlock", "shelby",
-  "clemmons", "lexington", "clayton", "boone", "elizabeth city", "laurinburg", "kernersville", "hope mills", "albemarle", "morganton",
+  "white plains", "hempstead", "troy", "niagara falls", "binghamton", "freeport", "valley stream", "long beach", "north tonawanda", "spring valley",
+  "rome", "ithaca", "poughkeepsie", "north hempstead", "elmira", "lindenhurst", "auburn", "watertown", "glen cove", "saratoga springs",
+  "middletown", "kingston", "peekskill", "lockport", "plattsburgh", "corning", "lackawanna", "west babylon", "north bay shore", "ossining",
+  "uniondale", "amsterdam", "north massapequa", "north bellmore", "massapequa", "huntington station", "east meadow", "central islip", "farmingdale", "port chester",
+  "brooklyn",
+  // North Carolina (top 50)
+  "charlotte", "raleigh", "greensboro", "durham", "winston-salem", "fayetteville", "cary", "wilmington", "high point", "concord",
+  "asheville", "greenville", "gastonia", "jacksonville", "chapel hill", "huntersville", "apex", "burlington", "rocky mount", "kannapolis",
+  "mooresville", "wake forest", "wilson", "sanford", "hickory", "matthews", "monroe", "salisbury", "new bern", "goldsboro",
+  "cornelius", "garner", "thomasville", "statesville", "morrisville", "kernersville", "lumberton", "kinston", "carrboro", "asheboro",
+  "clemmons", "lexington", "elizabeth city", "boone", "hope mills", "clayton", "henderson", "eden", "laurinburg", "albemarle",
+  "southcharlotte",
+  // North Dakota (top 50, limited by population)
   "fargo", "bismarck", "grand forks", "minot", "west fargo", "williston", "dickinson", "mandan", "jamestown", "wahpeton",
-  "valley city", "grafton", "beulah", "rugby", "horace", "stanley", "lisbon", "casselton", "new town", "langdon",
-  "hazen", "bottineau", "carrington", "larimore", "mayville", "oakes", "park river", "harvey", "bowman", "tioga",
-  "cavalier", "hettinger", "new rockford", "rolla", "washburn", "crosby", "ellendale", "surrey", "dunseith", "cooperstown",
-  "parshall", "killdeer", "mohall", "beach", "lakota", "underwood", "velva", "kenmare", "new england", "lamoure",
+  "devils lake", "valley city", "grafton", "beulah", "rugby", "lisbon", "carrington", "hazen", "bottineau", "langdon",
+  "mayville", "harvey", "bowman", "tioga", "garrison", "stanley", "new town", "cavalier", "park river", "new rockford",
+  "rolla", "sibley", "cooperstown", "larimore", "casselton", "washburn", "ellendale", "crosby", "surrey", "hetlinger",
+  "wishek", "lakota", "dunseith", "mohall", "lamoure", "kenmare", "mott", "beach", "underwood", "velva",
+  // Ohio (top 50)
   "columbus", "cleveland", "cincinnati", "toledo", "akron", "dayton", "parma", "canton", "youngstown", "lorain",
   "hamilton", "springfield", "kettering", "elyria", "lakewood", "cuyahoga falls", "middletown", "euclid", "newark", "mansfield",
-  "mentor", "beavercreek", "cleveland heights", "dublin", "north olmsted", "north royalton", "findlay", "fairfield", "westerville", "medina",
-  "upper arlington", "gahanna", "north ridgeville", "strongsville", "fairborn", "stow", "brunswick", "massillon", "westlake", "north canton",
-  "tiffin", "sylvania", "athens", "ashland", "trotwood", "green", "barberton", "xenia", "wooster", "zanesville",
+  "mentor", "beavercreek", "cleveland heights", "strongsville", "dublin", "fairfield", "findlay", "warren", "lancaster", "lima",
+  "hubber heights", "westerville", "marion", "grove city", "reynoldsburg", "delaware", "brunswick", "upper arlington", "stow", "north olmsted",
+  "gahanna", "westlake", "north royalton", "massillon", "north ridgeville", "mason", "fairborn", "bowling green", "garfield heights", "shaker heights",
+  "beachwood",
+  // Oklahoma (top 50)
   "oklahoma city", "tulsa", "norman", "broken arrow", "edmond", "lawton", "moore", "midwest city", "stillwater", "enid",
-  "muskogee", "bartlesville", "owasso", "shawnee", "yukon", "ardmore", "ponca city", "duncan", "del city", "jenks",
-  "sapulpa", "mustang", "sand springs", "bethany", "altus", "el reno", "ada", "durant", "tahlequah", "chickasha",
-  "mcalester", "claremore", "miami", "woodward", "elk city", "guymon", "weatherford", "okmulgee", "choctaw", "guthrie",
-  "warr acres", "pryor creek", "coweta", "the village", "cushing", "seminole", "wagoner", "pauls valley", "skiatook", "idabel",
+  "muskogee", "bartlesville", "owasso", "shawnee", "yukon", "ardmore", "ponca city", "duncan", "del city", "bixby",
+  "sapulpa", "altus", "bethany", "sand springs", "claremore", "chickasha", "mcalester", "mustang", "jenks", "el reno",
+  "ada", "durant", "tahlequah", "elgin", "woodward", "elk city", "okmulgee", "choctaw", "weatherford", "guymon",
+  "guthrie", "warr acres", "coweta", "pryor creek", "wagoner", "miami", "sallisaw", "cushing", "seminole", "poteau",
+  // Oregon (top 50)
   "portland", "eugene", "salem", "gresham", "hillsboro", "beaverton", "bend", "medford", "springfield", "corvallis",
   "albany", "tigard", "lake oswego", "keizer", "grants pass", "oregon city", "mcminnville", "redmond", "tualatin", "west linn",
-  "woodburn", "newberg", "forest grove", "roseburg", "klamath falls", "ashland", "milwaukie", "sherwood", "happy valley", "central point",
-  "wilsonville", "canby", "troutdale", "lebanon", "coos bay", "dallas", "pendleton", "hermiston", "the dalles", "la grande",
-  "ontario", "gladstone", "north bend", "newport", "prineville", "baker city", "cottage grove", "sandy", "florence", "scappoose",
+  "woodburn", "forest grove", "newberg", "roseburg", "wilsonville", "klamath falls", "ashland", "milwaukie", "sherwood", "happy valley",
+  "central point", "canby", "hermiston", "pendleton", "troutdale", "coos bay", "the dalles", "lebanon", "st. helens", "dallas",
+  "la grande", "cornelius", "gladstone", "ontario", "newport", "monmouth", "damascus", "prineville", "cottage grove", "silverton",
+  // Pennsylvania (top 50)
   "philadelphia", "pittsburgh", "allentown", "erie", "reading", "scranton", "bethlehem", "lancaster", "harrisburg", "york",
-  "state college", "wilkes-barre", "altoona", "chester", "williamsport", "easton", "lebanon", "hazleton", "new castle", "johnstown",
-  "mckeesport", "hermitage", "greensburg", "pottsville", "sharon", "butler", "washington", "meadville", "new kensington", "st. marys",
-  "lower burrell", "oil city", "nanticoke", "uniontown", "jeannette", "aliquippa", "baldwin", "beaver falls", "monroeville", "carbondale",
-  "butler township", "west mifflin", "murrysville", "kingston", "carlisle", "chambersburg", "hanover", "bloomsburg", "elizabeth township", "west chester",
-  "providence", "warwick", "cranston", "pawtucket", "east providence", "woonsocket", "coventry", "north providence", "cumberland", "west warwick",
-  "north kingstown", "south kingstown", "johnston", "newport", "bristol", "lincoln", "smithfield", "central falls", "portsmouth", "burrillville",
-  "barrington", "middletown", "tiverton", "narragansett", "east greenwich", "north smithfield", "scituate", "glocester", "charlestown", "richmond",
-  "hopkinton", "west greenwich", "exeter", "new shoreham", "little compton", "foster", "jamestown", "westerly", "warren", "block island",
-  "north scituate", "wakefield", "kingston", "saunderstown", "peace dale", "bradford", "wyoming", "carolina", "hope valley", "chepachet",
-  "charleston", "columbia", "north charleston", "mount pleasant", "rock hill", "greenville", "summerville", "goose creek", "hilton head island", "sumter",
-  "florence", "spartanburg", "myrtle beach", "aiken", "anderson", "greer", "mauldin", "hanahan", "conway", "simpsonville",
-  "lexington", "easley", "greenwood", "north augusta", "taylors", "fort mill", "bluffton", "lancaster", "seneca", "gaffney",
-  "clemson", "west columbia", "beaufort", "orangeburg", "cayce", "moncks corner", "port royal", "newberry", "bennettsville", "hartsville",
-  "york", "irmo", "ladson", "hardeeville", "camden", "marion", "dillon", "chester", "walterboro", "union",
+  "altoona", "wilkes-barre", "chester", "williamsport", "easton", "lebanon", "hazelton", "new castle", "johnstown", "mckeesport",
+  "west mifflin", "chambersburg", "carlisle", "hanover", "pottsville", "greensburg", "natrona heights", "washington", "butler", "indiana",
+  "meadville", "uniontown", "oil city", "beaver falls", "sharon", "coatesville", "st. marys", "lower burrell", "hermitage", "aliquippa",
+  "sunbury", "bloomsburg", "lock haven", "warren", "jeannette", "latrobe", "bradford", "lewistown", "connellsville", "tamaqua",
+  // Rhode Island (top 50, limited by population)
+  "providence", "warwick", "cranston", "pawtucket", "east providence", "woonsocket", "coventry", "cumberland", "north providence", "south kingstown",
+  "west warwick", "johnston", "north kingstown", "bristol", "lincoln", "smithfield", "central falls", "portsmouth", "barrington", "middletown",
+  "burrillville", "tiverton", "narragansett", "east greenwich", "north smithfield", "valley falls", "warren", "scituate", "glocester", "hopkinton",
+  "charlestown", "richmond", "exeter", "west greenwich", "jamestown", "foster", "little compton", "new shoreham", "block island", "kingston",
+  "wakefield", "peace dale", "carolina", "hope valley", "ashaway", "bradford", "greene", "wyoming", "chepachet", "pascoag",
+  // South Carolina (top 50)
+  "charleston", "columbia", "north charleston", "mount pleasant", "rock hill", "greenville", "summerville", "goose creek", "sumter", "hilton head island",
+  "florence", "spartanburg", "myrtle beach", "aiken", "anderson", "mauldin", "greenwood", "north augusta", "easley", "simpsonville",
+  "hanahan", "lexington", "conway", "west columbia", "north myrtle beach", "clemson", "orangeburg", "cayce", "bluffton", "beaufort",
+  "irmo", "fort mill", "port royal", "forest acres", "newberry", "laurens", "camden", "lancaster", "georgetown", "hartsville",
+  "york", "union", "seneca", "tega cay", "gaffney", "clinton", "bennettsville", "marion", "dillon", "darlington",
+  "southcharlotte",
+  // South Dakota (top 50, limited by population)
   "sioux falls", "rapid city", "aberdeen", "brookings", "watertown", "mitchell", "yankton", "pierre", "huron", "spearfish",
-  "vermillion", "brandon", "box elder", "sturgis", "madison", "belle fourche", "hot springs", "milbank", "winner", "canton",
-  "north sioux city", "lead", "dell rapids", "mobridge", "lemmon", "redfield", "fort pierre", "custer", "chamberlain", "elks point",
-  "beresford", "flandreau", "garretson", "miller", "salem", "tea", "hartford", "baltic", "crooks", "sisseton",
-  "webster", "parkston", "freeman", "britton", "clear lake", "gregory", "de smet", "eagle butte", "mission", "platte",
+  "vermillion", "brandon", "box elder", "madison", "sturgis", "belle fourche", "harrisburg", "tea", "dell rapids", "mobridge",
+  "canton", "hot springs", "milbank", "lead", "north sioux city", "winner", "chamberlain", "sisseton", "flandreau", "redfield",
+  "fort pierre", "beresford", "elks point", "springfield", "custer", "webster", "parkston", "salem", "gregory", "eagle butte",
+  "miller", "clear lake", "platte", "garretson", "de smet", "britton", "lemmon", "mission", "tyndall", "gettyburg",
+  // Tennessee (top 50)
   "memphis", "nashville", "knoxville", "chattanooga", "clarksville", "murfreesboro", "franklin", "jackson", "johnson city", "bartlett",
-  "hendersonville", "kingsport", "collierville", "smyrna", "cleveland", "brentwood", "germantown", "columbia", "gallatin", "la vergne",
-  "cookeville", "morristown", "oak ridge", "maryville", "bristol", "farragut", "shelbyville", "east ridge", "tullahoma", "spring hill",
-  "goodlettsville", "dyersburg", "dickson", "seymour", "greeneville", "lebanon", "athens", "soddy-daisy", "mcminnville", "martin",
-  "portland", "union city", "lewisburg", "crossville", "lawrenceburg", "paris", "millington", "ripley", "covington", "savannah",
+  "hendersonville", "kingsport", "collierville", "smyrna", "cleveland", "brentwood", "germantown", "columbia", "la vergne", "gallatin",
+  "cookeville", "oak ridge", "morristown", "bristol", "farragut", "shelbyville", "east ridge", "tullahoma", "spring hill", "maryville",
+  "dyersburg", "sevierville", "athens", "greeneville", "lebanon", "dickson", "mcminnville", "soddy-daisy", "lakeland", "red bank",
+  "martin", "union city", "lawrenceburg", "paris", "crossville", "clinton", "springfield", "covington", "millington", "pulaski",
+  // Texas (top 50)
   "houston", "san antonio", "dallas", "austin", "fort worth", "el paso", "arlington", "corpus christi", "plano", "laredo",
   "lubbock", "garland", "irving", "amarillo", "grand prairie", "brownsville", "mckinney", "frisco", "pasadena", "killeen",
-  "mcallen", "mesquite", "midland", "carrollton", "denton", "abilene", "beaumont", "odessa", "round rock", "the woodlands",
-  "wichita falls", "lewisville", "tyler", "pearland", "college station", "league city", "allen", "sugar land", "edinburg", "mission",
-  "longview", "bryan", "pharr", "baytown", "missouri city", "temple", "flower mound", "north richland hills", "new braunfels", "conroe",
+  "mcallen", "mesquite", "midland", "denton", "carrollton", "round rock", "abilene", "pearland", "richardson", "odessa",
+  "sugar land", "beaumont", "waco", "lewisville", "tyler", "league city", "college station", "edinburg", "san angelo", "allen",
+  "wichita falls", "north richland hills", "longview", "mission", "pharr", "bryan", "baytown", "temple", "missouri city", "flower mound",
+  "centralhouston",
+  // Utah (top 50)
   "salt lake city", "west valley city", "provo", "west jordan", "orem", "sandy", "st. george", "ogden", "layton", "south jordan",
-  "lehi", "millcreek", "taylorsville", "logan", "murray", "draper", "bountiful", "riverton", "herriman", "eagle mountain",
-  "spanish fork", "roy", "pleasant grove", "kearns", "tooele", "cottonwood heights", "north ogden", "midvale", "cedar city", "springville",
-  "kaysville", "holladay", "clearfield", "syracuse", "south salt lake", "farmington", "clinton", "north salt lake", "payson", "hurricane",
-  "heber city", "west haven", "ivins", "grantsville", "price", "riverdale", "washington terrace", "lindon", "santaquin", "smithfield",
-  "burlington", "south burlington", "rutland", "essex junction", "barre", "montpelier", "winooski", "st. albans", "newport", "vergennes",
-  "middlebury", "brattleboro", "bennington", "st. johnsbury", "lyndonville", "morristown", "waterbury", "northfield", "swanton", "fair haven",
-  "milton", "colchester", "essex", "hartford", "shelburne", "williston", "jericho", "richmond", "charlotte", "underhill",
-  "hinesburg", "ferrisburgh", "georgia", "westford", "cambridge", "johnson", "enosburg falls", "manchester", "woodstock", "ludlow",
-  "hardwick", "brandon", "poultney", "fairlee", "orleans", "albany", "barton", "troy", "west burke", "derby",
+  "lehi", "millcreek", "taylorsville", "logan", "murray", "draper", "bountiful", "riverton", "herriman", "spanish fork",
+  "roy", "pleasant grove", "kearns", "tooele", "cottonwood heights", "springville", "cedar city", "midvale", "kaysville", "holladay",
+  "american fork", "clearfield", "syracuse", "south salt lake", "farmington", "saratoga springs", "washington", "clinton", "north ogden", "payson",
+  "north salt lake", "brigham city", "highland", "centerville", "hurricane", "south ogden", "heber", "west haven", "kanab", "eagle mountain",
+  // Vermont (top 50, limited by population)
+  "burlington", "south burlington", "rutland", "barre", "montpelier", "winooski", "st. albans", "newport", "vergennes", "middlebury",
+  "bennington", "brattleboro", "hartford", "milton", "essex junction", "williston", "springfield", "jericho", "swanton", "northfield",
+  "waterbury", "fair haven", "randolph", "morristown", "johnson", "lyndonville", "rockingham", "hardwick", "shelburne", "enosburg falls",
+  "richford", "ludlow", "windsor", "poultney", "manchester center", "west rutland", "woodstock", "proctorsville", "white river junction", "west brattleboro",
+  "orleans", "newport center", "north bennington", "east montpelier", "bristol", "albany", "chester", "wilder", "derby center", "saxtons river",
+  // Virginia (top 50)
   "virginia beach", "norfolk", "chesapeake", "richmond", "newport news", "alexandria", "hampton", "roanoke", "portsmouth", "suffolk",
-  "lynchburg", "harrisonburg", "leesburg", "charlottesville", "danville", "manassas", "fredericksburg", "winchester", "salem", "herndon",
-  "fairfax", "hopewell", "christiansburg", "woodbridge", "waynesboro", "bristol", "colonial heights", "radford", "culpeper", "vienna",
-  "front royal", "staunton", "williamsburg", "falls church", "poquoson", "warrenton", "purcellville", "farmville", "abingdon", "smithfield",
-  "lexington", "galax", "buena vista", "bedford", "covington", "marion", "emporia", "big stone gap", "bluefield", "richlands",
+  "lynchburg", "harrisonburg", "leesburg", "charlottesville", "danville", "manassas", "petersburg", "fredericksburg", "winchester", "salem",
+  "staunton", "herndon", "hopewell", "fairfax", "christiansburg", "colonial heights", "radford", "culpeper", "vienna", "williamsburg",
+  "front royal", "warrenton", "martinsville", "falls church", "poquoson", "abingdon", "bristol", "covington", "manassas park", "waynesboro",
+  "purcellville", "galax", "lexington", "buena vista", "bedford", "farmville", "strasburg", "bluefield", "richlands", "big stone gap",
+  // Washington (top 50)
   "seattle", "spokane", "tacoma", "vancouver", "bellevue", "kent", "everett", "renton", "spokane valley", "federal way",
-  "yakima", "bellingham", "kennewick", "auburn", "pasco", "marysville", "lakewood", "redmond", "shoreline", "richland",
-  "kirkland", "burien", "olympia", "sammamish", "lacey", "edmonds", "puyallup", "bremerton", "lynnwood", "bothell",
-  "issaquah", "wenatchee", "mount vernon", "university place", "wallawalla", "pullman", "des moines", "lake stevens", "longview", "anacortes",
-  "moses lake", "camas", "mill creek", "port angeles", "centralia", "tumwater", "mukilteo", "oak harbor", "battle ground", "covington",
-  "charleston", "huntington", "morgantown", "parkersburg", "wheeling", "weirton", "martinsburg", "fairmont", "beckley", "clarksburg",
-  "south charleston", "teays valley", "st. albans", "vienna", "bluefield", "cross lanes", "moundsville", "oak hill", "dunbar", "elkins",
-  "hurricane", "pea ridge", "princeton", "ranson", "buckhannon", "keyser", "new martinsville", "grafton", "weston", "barboursville",
-  "bridgeport", "lewisburg", "summersville", "ripley", "kingwood", "williamson", "kenova", "follansbee", "welch", "richwood",
-  "fayetteville", "philippi", "madison", "petersburg", "shinnston", "mullens", "oceana", "rainelle", "spencer", "man",
+  "yakima", "kirkland", "bellingham", "kennewick", "auburn", "pasco", "marysville", "sammamish", "redmond", "lakewood",
+  "richland", "shoreline", "olympia", "lacey", "burien", "bothell", "edmonds", "puyallup", "bremerton", "lynnwood",
+  "issaquah", "longview", "mount vernon", "wenatchee", "pullman", "des moines", "lake stevens", "sea-tac", "mercer island", "bainbridge island",
+  "moses lake", "camas", "tukwila", "mukilteo", "oak harbor", "east wenatchee", "union gap", "mill creek", "snohomish", "port angeles",
+  // West Virginia (top 50, limited by population)
+  "charleston", "huntington", "morgantown", "parkersburg", "wheeling", "weirton", "fairmont", "martinsburg", "beckley", "clarksburg",
+  "south charleston", "st. albans", "vienna", "bluefield", "moundsville", "bridgeport", "oak hill", "dunbar", "elkins", "nitro",
+  "hurricane", "princeton", "charles town", "buckhannon", "keyser", "new martinsville", "grafton", "ranson", "point pleasant", "weston",
+  "barboursville", "ravenswood", "summersville", "ripley", "kenova", "welch", "follansbee", "bethany", "williamson", "madison", "logan", "mullens",
+  "kingwood", "paden city", "chester", "spencer", "shinnston", "philippi", "richwood", "williamstown", "montgomery", "salem", "rainelle", "mcmachan",
+  "alderon", "marmet",
+  // Wisconsin (top 50)
   "milwaukee", "madison", "green bay", "kenosha", "racine", "appleton", "waukesha", "eau claire", "oshkosh", "janesville",
-  "west allis", "la crosse", "sheboygan", "wausau", "fond du lac", "new berlin", "waupun", "beloit", "greenfield", "manitowoc",
-  "west bend", "sun prairie", "superior", "stevens point", "neenah", "muskego", "hartford", "middleton", "mequon", "cedarburg",
-  "marshfield", "wisconsin rapids", "menasha", "oconomowoc", "kaukauna", "ashwaubenon", "menomonie", "river falls", "port washington", "baraboo",
-  "verona", "waterford", "delafield", "platteville", "whitewater", "fort atkinson", "stoughton", "chippewa falls", "pewaukee", "sussex",
+  "west allis", "la crosse", "sheboygan", "wausau", "fond du lac", "new berlin", "wauwatosa", "brookfield", "beloit", "greenfield",
+  "menomonee falls", "oak creek", "manitowoc", "west bend", "sun prairie", "superior", "stevens point", "neenah", "fitchburg", "muskego",
+  "watertown", "de pere", "mequon", "south milwaukee", "cudahy", "wisconsin rapids", "ashwaubenon", "howard", "middleton", "menasha",
+  "weston", "beaver dam", "oconomowoc", "kaukauna", "marshfield", "wisconsin dells", "platteville", "whitewater", "verona", "allouez",
+  // Wyoming (top 50, limited by population)
   "cheyenne", "casper", "laramie", "gillette", "rock springs", "sheridan", "green river", "evanston", "riverton", "jackson",
-  "cody", "rawlins", "lander", "torrington", "powell", "douglas", "worland", "buffalo", "wheatland", "newcastle",
-  "thermopolis", "glenrock", "lovell", "mountain view", "lyman", "afton", "pinedale", "kemmerer", "greybull", "wright",
-  "sundance", "lusk", "star valley ranch", "pine bluffs", "guernsey", "saratoga", "basin", "mills", "bar nunn", "upton",
-  "moorcroft", "dubois", "alpine", "hanna", "diamondville", "shoshoni", "encampment", "baggs", "cokeville", "la barge",
-  "folsom", "estero", "sutherlin", "highland park", "woodland hills", "freehold", "carver", "beachwood", "livermore", "waconia", "southtowne", "cedarpark", "westgate", "South Charlotte",
-  "Tuttle Click", "Jimmy Britt", "O'Brien", "Terry", "Tustin", "Nashville", "Chicago", "chattanooga", "gwinnett", "columbus",
-  "kingsport", "omaha", "lincoln"
+  "cody", "rawlins", "lander", "torrington", "douglas", "powell", "worland", "buffalo", "wheatland", "newcastle",
+  "mills", "thermopolis", "kemmerer", "afton", "greybull", "glenrock", "lovell", "lyman", "pinedale", "star valley ranch",
+  "mountain view", "sundance", "basin", "saratoga", "pine bluffs", "guernsey", "wright", "moorcroft", "upton", "encampment",
+  "dubois", "alpine", "bar nunn", "hanna", "diamondville", "shoshoni", "burlington", "cowley", "byron", "big piney",
+  // Additional cities/regions from domains
+  "riverview", "northwest", "southwest", "downtown", "uptown", "midtown", "miamilakes", "westchester", "alhambra", "san leandro",
+  "union park", "ventura", "sterling", "hemet", "selma", "wakefield", "gwinnett", "deland", "waconia", "kingston",
+  "lakewood", "brookhaven", "caldwell", "manhattan", "lagrange", "beachwood", "bedford", "cookeville", "freehold", "newton",
+  "northborough", "bloomington", "bristol", "cuyahoga", "dalton", "elyria", "midland", "milwaukee", "pinehurst", "st. petersburg", "tuscaloosa",
+  "waco", "woodland hills"
 ]);
 
 // Token fixes for common parsing errors
 const TOKEN_FIXES = {
   coluus: "Columbus",
   classicche: "Classic Chevy",
-  chevroletof: "Chevy",
   nplinc: "NP Lincoln",
   helloauto: "Hello Auto",
   autonati: "AutoNation",
@@ -570,6 +819,19 @@ function extractTokens(domain) {
       return [capitalizeName(token).name];
     });
 
+    // Apply abbreviation expansions
+    tokens = tokens.map(token => {
+      let normalizedToken = token;
+      Object.keys(ABBREVIATION_EXPANSIONS).forEach(abbr => {
+        const regex = new RegExp(`\\b${abbr}\\b`, "gi");
+        if (regex.test(normalizedToken.toLowerCase())) {
+          normalizedToken = normalizedToken.replace(regex, ABBREVIATION_EXPANSIONS[abbr]);
+          log("debug", "Applied abbreviation expansion in extractTokens", { domain, token, normalizedToken });
+        }
+      });
+      return normalizedToken;
+    });
+
     // Apply blob splits
     tokens = tokens.flatMap(t => blobSplit(t));
 
@@ -604,35 +866,192 @@ function earlyCompoundSplit(text) {
     }
 
     const lower = text.toLowerCase();
-    const overrides = {
-      "billdube": ["Bill", "Dube"],
-      "mclartydaniel": ["McLarty", "Daniel"],
-      "nplincoln": ["NP", "Lincoln"],
-      "autonationusa": ["AutoNation"],
-      "robbynixonbuickgmc": ["Robby", "Nixon"],
-      "mccarthyautogroup": ["McCarthy", "Auto"],
-      "donjacobs": ["Don", "Jacobs"],
-      "lacitycars": ["La", "City"],
-      "ricksmithchevrolet": ["Rick", "Smith"],
-      "classicbmw": ["Classic", "BMW"],
-      "davisautosales": ["Davis", "Auto"],
-      "barlowautogroup": ["Barlow", "Auto"],
-      "mikeerdman": ["Mike", "Erdman"],
-      "chevyofcolumbuschevrolet": ["Chevy", "Columbus"],
-      "drivevictory": ["Victory"],
-      "sunsetmitsubishi": ["Sunset", "Mitsubishi"],
-      "northwestcars": ["Northwest"],
-      "kiaofchattanooga": ["Chattanooga", "Kia"],
-      "mazdanashville": ["Nashville", "Mazda"],
-      "tasca": ["Tasca"],
-      "crystalautogroup": ["Crystal", "Auto"],
-      "robertthorne": ["Robert", "Thorne"]
-    };
 
-    if (overrides[lower]) {
-      log("debug", "Override matched in earlyCompoundSplit", { text, split: overrides[lower] });
-      return overrides[lower];
+    // Define known first and last names for human name splitting
+    const KNOWN_FIRST_NAMES = new Set([
+      "adam", "alan", "alex", "andrew", "anthony", "ben", "bill", "billy", "bob", "brad", "brandon",
+      "brian", "bryan", "caleb", "carl", "chad", "charles", "chris", "christian", "clark", "clayton",
+      "cody", "colin", "connor", "craig", "dan", "daniel", "david", "dean", "dennis", "derek", "devin",
+      "dick", "don", "doug", "drew", "dustin", "ed", "edward", "eli", "eric", "ethan", "evan", "frank",
+      "fred", "gary", "george", "greg", "gregory", "jacob", "jake", "james", "jared", "jason", "jay",
+      "jeff", "jeffrey", "jeremy", "jerome", "jerry", "jim", "jimmy", "joel", "john", "johnny", "jon",
+      "jonathan", "jordan", "joseph", "josh", "joshua", "justin", "keith", "ken", "kenneth", "kevin",
+      "kyle", "larry", "lee", "logan", "luke", "mark", "matt", "matthew", "michael", "mike", "nathan",
+      "nick", "nicholas", "noah", "pat", "paul", "peter", "phil", "randy", "ray", "rick", "robert",
+      "ron", "ronald", "ryan", "sam", "scott", "sean", "shawn", "steve", "steven", "terry", "thomas",
+      "tim", "timothy", "tom", "tony", "travis", "trevor", "tyler", "zach",
+      // Previous 500 first names for White Caucasian male business owners, aged 25–65
+      "aaron", "abel", "abraham", "adrian", "albert", "alden", "alexander", "alfred", "allan", "allen",
+      "alvin", "amos", "andre", "andy", "angus", "archie", "arnold", "arthur", "asa", "austin",
+      "avery", "barney", "barrett", "barry", "bart", "basil", "beau", "benjamin", "bennie", "benny",
+      "bernard", "bert", "blaine", "blair", "blake", "bobbie", "bobby", "bradford", "bradley", "brant",
+      "brent", "brett", "brock", "bruce", "bryce", "bud", "buddy", "burton", "byron", "cal",
+      "calvin", "cameron", "carey", "carlton", "carson", "casey", "cecil", "cedric", "chadwick", "charlie",
+      "chester", "chip", "chuck", "clarence", "claude", "clay", "clement", "cliff", "clifford", "clifton",
+      "clyde", "conrad", "corey", "cory", "courtney", "curt", "curtis", "cyrus", "dale", "dalton",
+      "damon", "dane", "danny", "daren", "darrell", "darren", "darryl", "dave", "dawson", "dean",
+      "delbert", "denny", "derrick", "desmond", "dewey", "dexter", "dillon", "dino", "dominic", "donnie",
+      "donovan", "doyle", "drake", "duane", "dudley", "duncan", "dwayne", "earl", "eddie", "edgar",
+      "edmond", "edwin", "elbert", "elden", "eldon", "eliot", "elliot", "elliott", "ellis", "elmer",
+      "elton", "emery", "emmett", "ernest", "ernie", "eugene", "evan", "everett", "ezra", "felix",
+      "ferdinand", "finn", "fletcher", "floyd", "forrest", "francis", "franklin", "freddie", "frederick", "gabe",
+      "gabriel", "garrett", "gavin", "gene", "geoff", "geoffrey", "gerald", "gil", "gilbert", "giles",
+      "glen", "glenn", "gordon", "grady", "graham", "grant", "gregg", "gretchen", "gus", "guy",
+      "hal", "hank", "hans", "harlan", "harley", "harold", "harrison", "harry", "hart", "harvey",
+      "hayden", "heath", "hector", "henry", "herbert", "herman", "homer", "horace", "howard", "hugh",
+      "hugo", "ian", "irving", "isaac", "ivan", "jack", "jackson", "jacob", "jamie", "jared",
+      "jarrett", "jasper", "jed", "jeffery", "jeremiah", "jessie", "jimmy", "joey", "jonah", "jonas",
+      "jordy", "josh", "judd", "julian", "julius", "junior", "kurt", "lance", "landon", "lane",
+      "lawrence", "leland", "leo", "leon", "leroy", "les", "leslie", "levi", "lewis", "lincoln",
+      "lloyd", "lonnie", "loren", "lou", "louie", "louis", "lowell", "luc", "lucas", "lucian",
+      "lyle", "lyman", "mack", "malcolm", "marc", "marco", "mario", "marshall", "marty", "marvin",
+      "mason", "maurice", "max", "maxwell", "merrill", "mickey", "miles", "milo", "milton", "mitch",
+      "mitchell", "monty", "morgan", "morris", "murray", "nate", "nathaniel", "ned", "neil", "nelson",
+      "norm", "norman", "norris", "oliver", "oscar", "otis", "owen", "pascal", "pete", "philip",
+      "quentin", "quinn", "ralph", "ramon", "randall", "randolph", "raymond", "reginald", "reid", "rex",
+      "rhett", "richard", "ricky", "rob", "rod", "rodney", "roger", "roland", "roman", "ronnie",
+      "rory", "ross", "roy", "rudy", "russ", "russell", "sal", "sammy", "saul", "sawyer",
+      "seth", "sid", "sidney", "silas", "simon", "sol", "spencer", "stan", "stanley", "stewart",
+      "stuart", "sylvester", "tanner", "ted", "theodore", "toby", "todd", "tracy", "trent", "trey",
+      "tristan", "troy", "tucker", "ty", "tyrone", "val", "vance", "vernon", "victor", "vince",
+      "vincent", "virgil", "wade", "walker", "wallace", "walter", "warren", "wayne", "wendell", "wes",
+      "wesley", "whit", "wilbur", "will", "willard", "willie", "wilson", "winston", "woody", "wyatt",
+      "xavier", "zachary", "zack", "zane",
+      // Additional 100 first names for White Caucasian males, aged 45–75
+      "alton", "archie", "barnett", "beauford", "benedict", "bernie", "beverly", "blake", "boyd", "bradford",
+      "brent", "buck", "burl", "calvin", "carroll", "cary", "chandler", "chester", "clair", "claude",
+      "clem", "cletus", "cliff", "clyde", "coleman", "cornell", "curt", "dallas", "danny", "darrel",
+      "darwin", "delmar", "denny", "dickie", "donny", "dwight", "earnest", "eddie", "elbert", "elliott",
+      "elmer", "elwood", "emery", "ernie", "eugene", "everett", "floyd", "freddy", "gail", "gale",
+      "garland", "garry", "gayle", "giles", "glenn", "gordon", "grover", "hal", "harlan", "harris",
+      "harvey", "homer", "irvin", "jerald", "jerry", "jimmie", "joey", "johnnie", "julian", "kelvin",
+      "kenny", "lamar", "lance", "lavern", "leland", "lenny", "lon", "lowell", "loyd", "lynn",
+      "marion", "maurice", "melvin", "merle", "murray", "neil", "norman", "orville", "otis", "percy",
+      "randell", "randy", "russel", "sherman", "sidney", "sonny", "vernon", "vinton", "wallace", "wilbert"
+    ]);
+
+    const KNOWN_LAST_NAMES = new Set([
+      "adams", "anderson", "bailey", "barnes", "bell", "bennett", "bishop", "black", "blake", "bowman",
+      "boyd", "bradley", "brewer", "brown", "bryant", "burns", "burton", "butler", "campbell", "carpenter",
+      "carter", "chapman", "clark", "cole", "coleman", "collins", "cook", "cooper", "cox", "craig",
+      "daniel", "davis", "day", "dean", "dixon", "douglas", "dube", "duncan", "dunn", "edwards", "elliott",
+      "ellis", "evans", "fisher", "fleming", "ford", "foster", "fox", "garcia", "garner", "gibson",
+      "gonzalez", "graham", "grant", "gray", "green", "griffin", "hall", "hamilton", "harrison", "hart",
+      "harris", "hatcher", "hayes", "henderson", "henry", "hesser", "hill", "holmes", "hopkins", "howard",
+      "hudson", "hunt", "hunter", "jackson", "jacobs", "james", "jenkins", "johnson", "jones", "kelly",
+      "kennedy", "king", "knight", "lambert", "lawrence", "lee", "lewis", "long", "lovett", "martin",
+      "mason", "matthews", "mcdaniel", "miller", "moore", "morris", "murphy", "myers", "nelson", "nixon",
+      "oliver", "owens", "palmer", "parker", "patterson", "perry", "peters", "peterson", "philips",
+      "powell", "price", "ramsey", "reed", "reid", "reynolds", "rice", "richards", "richardson", "riley",
+      "rivera", "roberts", "robinson", "rogers", "ross", "russell", "ryan", "sanders", "scott", "smith",
+      "snyder", "stanley", "stephens", "stevens", "stone", "sweeney", "taylor", "thomas", "thorne",
+      "todd", "torres", "turner", "walker", "ward", "watson", "weaver", "webb", "wells", "west",
+      "white", "williams", "wilson", "wolfe", "wood", "wright", "young",
+      // Previous 500 last names for White Caucasian male business owners, aged 25–65
+      "abbott", "ackerman", "adkins", "albert", "aldrich", "alexander", "alford", "allison", "alston", "andrews",
+      "appleton", "archer", "armstrong", "arnold", "ashley", "atkins", "atkinson", "austin", "avery", "baird",
+      "baker", "baldwin", "ball", "ballard", "barker", "barlow", "barr", "barrett", "barry", "barton",
+      "bates", "bauer", "baxter", "beal", "beard", "beasley", "beck", "becker", "benson", "berry",
+      "billings", "bingham", "blackburn", "blair", "bolton", "bond", "booth", "bowen", "bowers", "boyle",
+      "brady", "brannon", "bray", "briggs", "bright", "brink", "britt", "brock", "brooks", "browne",
+      "browning", "bryce", "buck", "bullock", "burgess", "burke", "burnett", "bush", "byrd", "calhoun",
+      "callahan", "cameron", "cannon", "cantrell", "carey", "carlson", "carr", "carroll", "carson", "case",
+      "casey", "cassidy", "chambers", "chandler", "chase", "childers", "church", "clarke", "clay", "clemens",
+      "clements", "cobb", "cochran", "cody", "collier", "compton", "conley", "connor", "conway", "cooke",
+      "cope", "corbett", "corbin", "cowan", "crane", "crawford", "crews", "crosby", "cross", "crowley",
+      "cummings", "curry", "dalton", "daly", "daniels", "daugherty", "davidson", "decker", "denton", "dickerson",
+      "dickinson", "dillard", "dodson", "doherty", "donnelly", "donovan", "dorsey", "dotson", "dougherty", "downey",
+      "downs", "doyle", "drake", "dudley", "duff", "duffy", "durham", "eaton", "edmonds", "emerson", "england",
+      "english", "erickson", "farley", "farmer", "farris", "faulkner", "fenton", "ferguson", "finley", "fischer",
+      "fitzgerald", "fletcher", "flynn", "fowler", "franklin", "fraser", "freeman", "frost", "fuller", "gallagher",
+      "gardner", "garrett", "garrison", "gibbs", "gilbert", "giles", "gill", "gilles", "gilmore", "glass",
+      "gleason", "goodman", "goodwin", "gordon", "gould", "grady", "granger", "graves", "greene", "gregory",
+      "griffith", "grimes", "gross", "grove", "guthrie", "hahn", "hale", "hammond", "hancock", "hanna",
+      "hardy", "harmon", "harper", "harrington", "hartman", "hastings", "hawkins", "hayden", "hayward", "heath",
+      "hendricks", "herndon", "hicks", "higgins", "hinton", "hodges", "hoffman", "hogan", "holder", "holland",
+      "holloway", "holt", "hood", "hooper", "horn", "horton", "houston", "howe", "hubbard", "huffman",
+      "hughes", "humphrey", "ingram", "irwin", "jacobson", "jameson", "jarvis", "jennings", "jensen", "johnston",
+      "jordan", "kane", "keating", "keller", "kelley", "kemp", "kendall", "kent", "kerr", "kinney",
+      "kirby", "kirk", "klein", "knox", "lane", "lang", "larson", "lawson", "leach", "leblanc",
+      "lindsey", "locke", "logan", "lowe", "lucas", "lynch", "lyons", "mackenzie", "madden", "malone",
+      "mann", "manning", "marks", "marlowe", "marsh", "mccarthy", "mccoy", "mckinney", "mclaughlin", "mclean",
+      "mcmillan", "mcpherson", "meadows", "mercer", "merritt", "meyer", "miles", "mills", "mitchell", "moody",
+      "morgan", "morrison", "morrow", "morse", "morton", "moss", "mullins", "munson", "murray", "nash",
+      "neal", "newman", "newton", "nichols", "noble", "nolan", "norman", "norris", "oakley", "obrien",
+      "oconnor", "odonnell", "oneal", "oneil", "oneill", "orr", "osborne", "owens", "pace", "page",
+      "palmer", "parsons", "patrick", "payne", "pearson", "pennington", "perkins", "phelps", "pierce", "pollard",
+      "poole", "porter", "potter", "pratt", "prescott", "preston", "purcell", "quinn", "raines", "randall",
+      "raymond", "reese", "reeves", "regan", "reilly", "rhodes", "riggs", "robbins", "rollins", "roman",
+      "rose", "rowe", "rudd", "rutherford", "salazar", "sanderson", "sargent", "saunders", "savage",
+      "schmidt", "schneider", "schroeder", "schultz", "sears", "sexton", "shannon", "sharp", "shaw", "shea",
+      "shepherd", "sherman", "short", "simmons", "simon", "simpson", "sinclair", "slater", "sloan", "small",
+      "sparks", "spencer", "stafford", "stark", "steele", "stewart", "stokes", "stout", "strickland", "strong",
+      "sullivan", "summers", "sutton", "swanson", "talbot", "tanner", "thornton", "todd", "townsend", "tucker",
+      "underwood", "vance", "vaughn", "vincent", "wade", "wagner", "wall", "wallace", "walters", "walton",
+      "warner", "warren", "weber", "welch", "wheeler", "whitaker", "whitney", "wiley", "wilcox", "wilder",
+      "wilkerson", "wilkins", "williamson", "willis", "winters", "wise", "woodard", "woodruff", "woods", "workman",
+      "wyatt", "yates", "york", "youngblood", "zimmerman",
+      // Additional 100 last names for White Caucasian males, aged 45–75
+      "archibald", "atwood", "babcock", "bain", "banning", "bartlett", "bellows", "bixby", "blanchard", "bowman",
+      "brigham", "buckley", "bumpus", "burdick", "burrows", "calvert", "carmichael", "carpenter", "chaffee", "chamberlain",
+      "churchill", "clayton", "colburn", "colby", "connolly", "crockett", "cummins", "dawes", "dennis", "draper",
+      "dunbar", "dutton", "eastman", "eldridge", "emery", "fairchild", "farnsworth", "farrar", "fay", "fitch",
+      "freeman", "frost", "gannett", "gibbons", "goddard", "goodrich", "graves", "hadley", "hammond", "harriman",
+      "hawley", "peterson", "healey", "hitchcock", "holbrook", "holden", "houghton", "hutchinson", "ingalls", "jewett", "judson",
+      "kellogg", "kimball", "larkin", "leavitt", "lombard", "lowry", "lyman", "mack", "merrill", "morse",
+      "newell", "norton", "osgood", "peabody", "perkins", "phelps", "prentice", "putnam", "ransom", "remington",
+      "ricker", "sargent", "sawyer", "sewell", "sheldon", "sherwood", "sprague", "stoddard", "stratton", "sumner",
+      "thayer", "tucker", "upton", "vinton", "wadsworth", "walden", "whitcomb", "whiting", "whitman", "winslow"
+    ]);
+
+    // Early human name splitting via known first + last detection
+    for (const first of KNOWN_FIRST_NAMES) {
+      if (lower.startsWith(first)) {
+        const remaining = lower.slice(first.length);
+        // Exact match for last name
+        if (KNOWN_LAST_NAMES.has(remaining)) {
+          const split = [capitalizeName(first).name, capitalizeName(remaining).name];
+          log("debug", "Human name split (first + last match)", { text, split });
+          return split;
+        }
+      }
     }
+
+    // Fallback regex-based match for two lowercase blobs
+    const humanNameMatch = lower.match(/^([a-z]{2,})([a-z]{3,})$/);
+    if (humanNameMatch) {
+      const [, first, last] = humanNameMatch;
+      if (KNOWN_FIRST_NAMES.has(first) && KNOWN_LAST_NAMES.has(last)) {
+        const split = [capitalizeName(first).name, capitalizeName(last).name];
+        log("debug", "Regex-based human name split", { text, split });
+        return split;
+      }
+    }
+
+const overrides = {
+  "billdube": ["Bill", "Dube"],
+  "mclartydaniel": ["McLarty", "Daniel"],
+  "nplincoln": ["NP", "Lincoln"],
+  "autonationusa": ["AutoNation"],
+  "robbynixonbuickgmc": ["Robby", "Nixon"],
+  "mccarthyautogroup": ["McCarthy", "Auto"],
+  "donjacobs": ["Don", "Jacobs"],
+  "lacitycars": ["La", "City"],
+  "ricksmithchevrolet": ["Rick", "Smith"],
+  "classicbmw": ["Classic", "BMW"],
+  "davisautosales": ["Davis", "Auto"],
+  "barlowautogroup": ["Barlow", "Auto"],
+  "mikeerdman": ["Mike", "Erdman"],
+  "chevyofcolumbuschevrolet": ["Chevy", "Columbus"],
+  "drivevictory": ["Victory"],
+  "sunsetmitsubishi": ["Sunset", "Mitsubishi"],
+  "northwestcars": ["Northwest"],
+  "kiaofchattanooga": ["Chattanooga", "Kia"],
+  "mazdanashville": ["Nashville", "Mazda"],
+  "tasca": ["Tasca"],
+  "crystalautogroup": ["Crystal", "Auto"],
+  "robertthorne": ["Robert", "Thorne"]
+};
 
     // Dynamic proper noun pair detection
     for (const name of KNOWN_PROPER_NOUNS) {
@@ -891,6 +1310,7 @@ function tryBrandCityPattern(tokens) {
     let brand = null;
     let city = null;
 
+    // Find the first matching city and brand
     for (let i = 0; i < normalizedTokens.length; i++) {
       const token = normalizedTokens[i];
       if (KNOWN_CITIES_SET.has(token)) {
@@ -900,17 +1320,7 @@ function tryBrandCityPattern(tokens) {
           break;
         }
         brand = null;
-      }
-    }
-
-    if (!city || !brand) {
-      const concatPattern = normalizedTokens.join("").match(/(\w+?)(\w{3,})$/i);
-      if (concatPattern) {
-        const [, potentialBrand, potentialCity] = concatPattern;
-        if (CAR_BRANDS.includes(potentialBrand) && KNOWN_CITIES_SET.has(potentialCity)) {
-          brand = potentialBrand;
-          city = potentialCity;
-        }
+        city = null; // Reset if no brand found for this city
       }
     }
 
@@ -944,11 +1354,11 @@ function tryHumanNamePattern(tokens) {
       throw new Error("Invalid tokens input");
     }
 
-    // Two-token human name (e.g., "Don Jacobs", "Rick Smith")
+    // Two-token human name using KNOWN_FIRST_NAMES and KNOWN_LAST_NAMES (e.g., "Don Jacobs", "Rick Smith")
     if (
       tokens.length >= 2 &&
-      KNOWN_PROPER_NOUNS.has(tokens[0]) &&
-      KNOWN_PROPER_NOUNS.has(tokens[1]) &&
+      KNOWN_FIRST_NAMES.has(tokens[0]) &&
+      KNOWN_LAST_NAMES.has(tokens[1]) &&
       !CAR_BRANDS.includes(tokens[0].toLowerCase()) &&
       !CAR_BRANDS.includes(tokens[1].toLowerCase()) &&
       !KNOWN_CITIES_SET.has(tokens[0].toLowerCase()) &&
@@ -959,30 +1369,52 @@ function tryHumanNamePattern(tokens) {
       return { companyName: fullName, confidenceScore: 125, flags: Array.from(flags) };
     }
 
-    // Single proper noun as human name (e.g., "Tasca")
-    if (tokens.length === 1 && KNOWN_PROPER_NOUNS.has(tokens[0]) && !CAR_BRANDS.includes(tokens[0].toLowerCase())) {
-      flags.add("SingleProperNoun");
-      return { companyName: tokens[0], confidenceScore: 125, flags: Array.from(flags) };
-    }
-
-    // Check for merged names (e.g., "donjacobs" → "Don Jacobs")
-    for (const token of tokens) {
-      const tokenLower = token.toLowerCase();
-      for (const noun of KNOWN_PROPER_NOUNS) {
-        const nounLower = noun.toLowerCase();
-        if (tokenLower.includes(nounLower)) {
-          const remaining = tokenLower.replace(nounLower, "");
-          if (remaining && KNOWN_PROPER_NOUNS.has(capitalizeName(remaining).name)) {
-            const fullName = `${noun} ${capitalizeName(remaining).name}`;
-            flags.add("HumanNameDetected");
-            flags.add("MergedNameSplit");
-            return { companyName: fullName, confidenceScore: 125, flags: Array.from(flags) };
-          }
+    // Last name + car brand or generic term (e.g., "Smith Kia", "Smith Motors")
+    if (tokens.length >= 2) {
+      const lastName = tokens[0];
+      const domainBrand = tokens.find(t => CAR_BRANDS.includes(t.toLowerCase()));
+      const genericTerms = ["auto", "automotive", "motors", "dealers", "motor", "group"];
+      const hasGeneric = tokens.find(t => genericTerms.includes(t.toLowerCase()));
+      if (
+        KNOWN_LAST_NAMES.has(lastName) &&
+        !CAR_BRANDS.includes(lastName.toLowerCase()) &&
+        !KNOWN_CITIES_SET.has(lastName.toLowerCase()) &&
+        !lastName.toLowerCase().endsWith("s")
+      ) {
+        if (domainBrand) {
+          const name = `${lastName} ${BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name}`;
+          flags.add("HumanNameDetected");
+          flags.add("LastNameBrandPattern");
+          return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
+        } else if (hasGeneric) {
+          const name = `${lastName} ${capitalizeName(hasGeneric).name}`;
+          flags.add("HumanNameDetected");
+          flags.add("LastNameGenericPattern");
+          return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
         }
       }
     }
 
-    // Partial match with domain brand (only if not possessive-friendly)
+    // First name + generic term (e.g., "Phil Auto", "Phil Motors")
+    if (tokens.length >= 2) {
+      const firstName = tokens[0];
+      const genericTerms = ["auto", "automotive", "motors", "dealer", "motor", "group"];
+      const hasGeneric = tokens.find(t => genericTerms.includes(t.toLowerCase()));
+      if (
+        (KNOWN_FIRST_NAMES.has(firstName) || KNOWN_PROPER_NOUNS.has(firstName)) &&
+        hasGeneric &&
+        !CAR_BRANDS.includes(firstName.toLowerCase()) &&
+        !KNOWN_CITIES_SET.has(firstName.toLowerCase()) &&
+        !firstName.toLowerCase().endsWith("s")
+      ) {
+        const name = `${firstName} ${capitalizeName(hasGeneric).name}`;
+        flags.add("HumanNameDetected");
+        flags.add("FirstNameGenericPattern");
+        return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
+      }
+    }
+
+    // Partial match with domain brand using KNOWN_PROPER_NOUNS (e.g., "Phil Kia")
     if (tokens.some(t => KNOWN_PROPER_NOUNS.has(t) && !CAR_BRANDS.includes(t.toLowerCase()))) {
       const properNoun = tokens.find(t => KNOWN_PROPER_NOUNS.has(t));
       const domainBrand = tokens.find(t => CAR_BRANDS.includes(t.toLowerCase()));
@@ -1048,6 +1480,39 @@ function tryGenericPattern(tokens, meta) {
       .filter(t => !spamTriggers.includes(t))
       .filter((t, i, arr) => i === 0 || t !== arr[i - 1]);
 
+    // Deduplicate tokens to prevent redundant brands (e.g., "Chevy Chevy")
+    cleanedTokens = dedupeBrands(cleanedTokens);
+
+    // Check for empty tokens after cleaning
+    if (cleanedTokens.length === 0) {
+      const metaBrand = getMetaTitleBrand(meta) || "Auto";
+      const name = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand).name;
+      flags.add("GenericAppended");
+      flags.add("ManualReviewRecommended");
+      return { companyName: name, confidenceScore: 50, flags: Array.from(flags) };
+    }
+
+    // City-only check: Append brand if city-only
+    if (cleanedTokens.length === 1 && KNOWN_CITIES_SET.has(cleanedTokens[0])) {
+      flags.add("CityOnly");
+      const cityName = capitalizeName(cleanedTokens[0]).name;
+      const metaBrand = getMetaTitleBrand(meta) || "Auto";
+      const formattedBrand = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand).name;
+      const name = `${cityName} ${formattedBrand}`;
+      return {
+        companyName: name,
+        confidenceScore: 90,
+        flags: Array.from(flags)
+      };
+    }
+
+    // Brand-only check: Trigger fallback for generic brand-only outputs
+    if (cleanedTokens.length === 1 && CAR_BRANDS.includes(cleanedTokens[0])) {
+      flags.add("BrandOnly");
+      throw new Error("BrandOnlyError: Generic brand-only output requires fallback");
+    }
+
+    // Abbreviation check
     const abbreviation = cleanedTokens.find(t => /^[a-z]{2,3}$/i.test(t) && !COMMON_WORDS.includes(t));
     if (abbreviation) {
       const metaBrand = getMetaTitleBrand(meta) || "Auto";
@@ -1057,6 +1522,7 @@ function tryGenericPattern(tokens, meta) {
       return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
     }
 
+    // City and brand check
     const city = cleanedTokens.find(t => KNOWN_CITIES_SET.has(t));
     if (city) {
       const metaBrand = getMetaTitleBrand(meta);
@@ -1070,14 +1536,7 @@ function tryGenericPattern(tokens, meta) {
       }
     }
 
-    if (cleanedTokens.length === 0) {
-      const metaBrand = getMetaTitleBrand(meta) || "Auto";
-      const name = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand).name;
-      flags.add("GenericAppended");
-      flags.add("ManualReviewRecommended");
-      return { companyName: name, confidenceScore: 85, flags: Array.from(flags) };
-    }
-
+  // Generic pattern processing
     let primaryToken = cleanedTokens.find(t => KNOWN_PROPER_NOUNS.has(capitalizeName(t).name)) || cleanedTokens[0];
     let brand = cleanedTokens.find(t => CAR_BRANDS.includes(t)) || getMetaTitleBrand(meta);
     if (brand) {
@@ -1101,25 +1560,112 @@ function tryGenericPattern(tokens, meta) {
       name = `${name} ${brand || "Auto"}`;
     }
 
+    // Deduplicate and clean up the final name
     const nameTokens = name.split(" ").filter((t, i, arr) => i === 0 || t.toLowerCase() !== arr[i - 1].toLowerCase());
     name = nameTokens.slice(0, 3).join(" ").replace(/\b(auto auto|auto group)\b/gi, "Auto").replace(/\s+/g, " ").trim();
 
+    // Adjust confidence and flags based on name quality
     if (nameTokens.every(t => KNOWN_PROPER_NOUNS.has(t)) || (nameTokens.length === 1 && KNOWN_PROPER_NOUNS.has(nameTokens[0]))) {
       flags.delete("ManualReviewRecommended");
+      return { companyName: name, confidenceScore: 125, flags: Array.from(flags) };
+    }
+
+    // Check for generic patterns that need review
+    const isTooGeneric = nameTokens.length === 1 && (CAR_BRANDS.includes(name.toLowerCase()) || name.toLowerCase() === "auto");
+    if (isTooGeneric) {
+      flags.add("TooGeneric");
+      return { companyName: name, confidenceScore: 50, flags: Array.from(flags) };
     }
 
     flags.add("GenericPattern");
     return { companyName: name, confidenceScore: flags.has("CityBrandPattern") ? 125 : 95, flags: Array.from(flags) };
   } catch (e) {
     log("error", "tryGenericPattern failed", { tokens, error: e.message, stack: e.stack });
+    if (e.message.includes("BrandOnlyError")) {
+      throw e; // Re-throw to trigger fallback in batch-enrich.js
+    }
     return { companyName: "", confidenceScore: 80, flags: Array.from(new Set(["GenericPatternError", "ManualReviewRecommended"])) };
   }
 }
 
 /**
- * Humanizes a domain into a cold-email-friendly company name
- * @param {string} domain - The domain to enrich
- * @param {string} originalDomain - Original domain for overrides
+ * Attempts to match a city-auto pattern in tokens
+ * @param {Array<string>} tokens - Tokens to analyze
+ * @returns {{companyName: string, confidenceScore: number, flags: Array<string>}} - Result with company name, confidence score, and flags
+ */
+function tryCityAutoPattern(tokens) {
+  const flags = new Set();
+  log("info", "tryCityAutoPattern started", { tokens });
+
+  try {
+    if (!Array.isArray(tokens)) {
+      log("error", "Invalid tokens in tryCityAutoPattern", { tokens });
+      throw new Error("Invalid tokens input");
+    }
+
+    const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+    const hasAuto = tokens.some(t => t.toLowerCase() === "auto");
+    if (city && hasAuto) {
+      const formattedCity = capitalizeName(city).name;
+      const name = `${formattedCity} Auto`;
+      flags.add("CityAutoPattern");
+      return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
+    }
+
+    return { companyName: "", confidenceScore: 0, flags: Array.from(flags) };
+  } catch (e) {
+    log("error", "tryCityAutoPattern failed", { tokens, error: e.message, stack: err.stack });
+    return { companyName: "", confidenceScore: 80, flags: Array.from(new Set(["CityAutoPatternError", "ManualReviewRecommended"])) };
+  }
+}
+
+/**
+ * Attempts to match a brand-generic term pattern in tokens
+ * @param {Array<string>} tokens - Tokens to analyze
+ * @returns {{companyName: string, confidenceScore: number, flags: Array<string>}} - Result with company name, confidence score, and flags
+ */
+function tryBrandGenericPattern(tokens) {
+  const flags = new Set();
+  log("info", "tryBrandGenericPattern started", { tokens });
+
+  try {
+    if (!Array.isArray(tokens)) {
+      log("error", "Invalid tokens in tryBrandGenericPattern", { tokens });
+      throw new Error("Invalid tokens input");
+    }
+
+    const genericTerms = ["automotive", "auto", "group", "motors", "motor", "fleet"];
+    const brand = tokens.find(t => CAR_BRANDS.includes(t.toLowerCase()));
+    const generic = tokens.find(t => genericTerms.includes(t.toLowerCase()));
+    if (brand && generic) {
+      const formattedBrand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name;
+      const formattedGeneric = capitalizeName(generic).name;
+      const name = `${formattedBrand} ${formattedGeneric}`;
+      flags.add("BrandGenericPattern");
+      return { companyName: name, confidenceScore: 95, flags: Array.from(flags) };
+    }
+
+    return { companyName: "", confidenceScore: 0, flags: Array.from(flags) };
+  } catch (e) {
+    log("error", "tryBrandGenericPattern failed", { tokens, error: e.message, stack: err.stack });
+    return { companyName: "", confidenceScore: 80, flags: Array.from(new Set(["BrandGenericPatternError", "ManualReviewRecommended"])) };
+  }
+}
+
+function dedupeBrands(tokens) {
+  const seen = new Set();
+  return tokens.filter(token => {
+    const lower = token.toLowerCase();
+    if (seen.has(lower)) return false;
+    seen.add(lower);
+    return true;
+  });
+}
+
+/**
+ * Humanizes a domain name into a cold-email-friendly company name
+ * @param {string} domain - The domain to humanize
+ * @param {string} originalDomain - The original domain for override lookup
  * @param {boolean} useMeta - Whether to fetch meta data
  * @returns {Object} - Enriched result
  */
@@ -1205,6 +1751,26 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
         companyName: result.companyName,
         confidenceScore: result.confidenceScore,
         flags: Array.from(new Set(["ProperNounDetected", ...result.flags])),
+        tokens
+      };
+    }
+
+    result = tryCityAutoPattern(extractedTokens);
+    if (result.companyName) {
+      return {
+        companyName: result.companyName,
+        confidenceScore: result.confidenceScore,
+        flags: Array.from(new Set(["CityAutoPattern", ...result.flags])),
+        tokens
+      };
+    }
+
+    result = tryBrandGenericPattern(extractedTokens);
+    if (result.companyName) {
+      return {
+        companyName: result.companyName,
+        confidenceScore: result.confidenceScore,
+        flags: Array.from(new Set(["BrandGenericPattern", ...result.flags])),
         tokens
       };
     }
@@ -1302,11 +1868,12 @@ export {
   COMMON_WORDS,
   TEST_CASE_OVERRIDES,
   BRAND_ONLY_DOMAINS,
-  KNOWN_PROPER_NOUNS,
   KNOWN_CITIES_SET,
   tryBrandCityPattern,
   tryHumanNamePattern,
   tryProperNounPattern,
+  tryCityAutoPattern,
+  tryBrandGenericPattern,
   tryGenericPattern,
   fetchMetaData,
   getMetaTitleBrand
