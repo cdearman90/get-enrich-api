@@ -1,7 +1,6 @@
 // api/lib/humanize.js v5.0.9
 // Comprehensive list of car brands (unchanged)
 
-import winston from "winston";
 import path from "path";
 
 const logger = winston.createLogger({
