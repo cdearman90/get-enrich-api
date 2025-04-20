@@ -2,17 +2,28 @@
 
 import winston from "winston";
 
+const isProd = process.env.NODE_ENV === "production";
+
 const logger = winston.createLogger({
   level: "info",
   format: winston.format.combine(
     winston.format.timestamp(),
-    winston.format.json()
+    winston.format.printf(({ level, message, timestamp }) => {
+      return `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+    })
   ),
-  transports: [
-    new winston.transports.File({ filename: "logs/enrich.log", maxsize: 5242880, maxFiles: 5 }),
-    new winston.transports.Console()
-  ]
+  transports: isProd
+    ? [new winston.transports.Console()]
+    : [
+        new winston.transports.File({
+          filename: "logs/enrich.log",
+          maxsize: 5242880,
+          maxFiles: 5
+        }),
+        new winston.transports.Console()
+      ]
 });
+
 
 /**
  * Logs messages with Winston
