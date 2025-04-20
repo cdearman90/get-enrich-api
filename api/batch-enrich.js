@@ -21,21 +21,15 @@ export const config = {
   }
 };
 
-// Initialize Winston logger
 const logger = winston.createLogger({
   level: "debug",
   format: winston.format.combine(
     winston.format.timestamp(),
-    winston.format.json()
+    winston.format.printf(({ level, message, timestamp }) => {
+      return `[${timestamp}] ${level.toUpperCase()}: ${message}`;
+    })
   ),
-  transports: [
-    new winston.transports.File({
-      filename: path.join("logs", "enrich.log"),
-      maxsize: 5242880,
-      maxFiles: 5
-    }),
-    new winston.transports.Console()
-  ]
+  transports: [new winston.transports.Console()]
 });
 
 // Ensure logs directory exists
