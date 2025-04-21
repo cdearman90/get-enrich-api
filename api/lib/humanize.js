@@ -2244,6 +2244,112 @@ function tryCityAutoPattern(tokens) {
   }
 }
 
+function tryBrandGenericPattern(tokens) {
+  const flags = new Set(["BrandGenericPattern"]);
+  log("info", "tryBrandGenericPattern started", { tokens });
+
+  try {
+    if (!Array.isArray(tokens) || !tokens.length) {
+      log("error", "Invalid tokens in tryBrandGenericPattern", { tokens });
+      flags.add("InvalidInput");
+      return { companyName: "", confidenceScore: 0, flags: Array.from(flags) };
+    }
+
+    const genericTerms = ["automotive", "auto", "group", "motors", "motor", "fleet", "dealers", "center"];
+    const carBrandsSet = new Set(CAR_BRANDS.map(b => b.toLowerCase()));
+    const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
+    const cleanedTokens = dedupeBrands(tokens); // Deduplicate tokens
+
+    for (let i = 0; i < cleanedTokens.length; i++) {
+      const token = cleanedTokens[i].toLowerCase();
+      let brand = null;
+
+      if (ABBREVIATION_EXPANSIONS[token]) {
+        brand = ABBREVIATION_EXPANSIONS[token];
+      } else if (carBrandsSet.has(token) || BRAND_MAPPING[token]) {
+        brand = BRAND_MAPPING[token] || token;
+      }
+
+      if (brand) {
+        let nounTokens = cleanedTokens.filter((t, j) => j !== i && (properNounsSet.has(t.toLowerCase()) || KNOWN_CITIES_SET.has(t.toLowerCase())));
+
+        // Combine multi-word cities
+        let formattedNoun = null;
+        for (let j = 0; j < cleanedTokens.length - 1; j++) {
+          const t1 = cleanedTokens[j].toLowerCase();
+          const t2 = cleanedTokens[j + 1].toLowerCase();
+          const combined = `${t1} ${t2}`;
+          if (KNOWN_CITIES_SET.has(combined)) {
+            formattedNoun = capitalizeName(combined).name;
+            break;
+          }
+        }
+
+        // Fallback: longest known proper noun
+        if (!formattedNoun && nounTokens.length > 0) {
+          nounTokens.sort((a, b) => b.length - a.length);
+          for (const n of nounTokens) {
+            if (properNounsSet.has(n.toLowerCase())) {
+              formattedNoun = capitalizeName(n).name;
+              break;
+            }
+          }
+        }
+
+        const formattedBrand = BRAND_MAPPING[brand.toLowerCase()] || capitalizeName(brand).name;
+
+        if (formattedNoun) {
+          const isPossessiveSafe = !formattedNoun.toLowerCase().endsWith("s") && properNounsSet.has(formattedNoun.toLowerCase());
+          const name = isPossessiveSafe ? formattedNoun : `${formattedNoun} ${formattedBrand}`;
+          flags.add("ProperNounBrandPattern");
+          return {
+            companyName: name,
+            confidenceScore: isPossessiveSafe ? 125 : 95,
+            flags: Array.from(flags)
+          };
+        }
+
+        // Brand + Generic fallback
+        const generic = cleanedTokens.find(t => genericTerms.includes(t.toLowerCase()));
+        if (generic) {
+          const formattedGeneric = capitalizeName(generic).name;
+          const name = `${formattedBrand} ${formattedGeneric}`;
+          flags.add("BrandGenericMatch");
+          return { companyName: name, confidenceScore: 100, flags: Array.from(flags) };
+        }
+
+        // Block brand-only outputs
+        flags.add("BrandOnlyBlocked");
+        return {
+          companyName: `${formattedBrand} Motors`,
+          confidenceScore: 50,
+          flags: Array.from(flags)
+        };
+      }
+    }
+
+    // Single-token fallback
+    if (cleanedTokens.length === 1) {
+      const token = cleanedTokens[0];
+      const lower = token.toLowerCase();
+      if (properNounsSet.has(lower) || KNOWN_CITIES_SET.has(lower)) {
+        const name = capitalizeName(token).name;
+        flags.add("SingleTokenFallback");
+        return { companyName: name, confidenceScore: 80, flags: Array.from(flags) };
+      }
+      flags.add("TooGeneric");
+      flags.add("ManualReviewRecommended");
+      return { companyName: capitalizeName(token).name, confidenceScore: 55, flags: Array.from(flags) };
+    }
+
+    return { companyName: "", confidenceScore: 0, flags: Array.from(flags) };
+  } catch (e) {
+    log("error", "tryBrandGenericPattern failed", { tokens, error: e.message, stack: e.stack });
+    flags.add("BrandGenericPatternError");
+    flags.add("ManualReviewRecommended");
+    return { companyName: "", confidenceScore: 80, flags: Array.from(flags) };
+  }
+}
 function dedupeBrands(tokens) {
   const seen = new Set();
   return tokens.filter(token => {
