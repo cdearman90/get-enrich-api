@@ -2030,7 +2030,7 @@ function tryBrandCityPattern(tokens) {
         return { companyName: '', confidenceScore: 0, flags: Array.from(flags) };
       }
 
-      const name = `${formattedCity} ${formatted370Brand}`;
+      const name = `${formattedCity} ${formattedBrand}`;
       log('debug', 'BrandCityPattern matched', { companyName: name, confidenceScore: 125 });
       return { companyName: name, confidenceScore: 125, flags: Array.from(flags) };
     }
