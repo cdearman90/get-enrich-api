@@ -27,6 +27,16 @@ function log(level, message, context = {}) {
   logger[level]({ message, domain: context.domain || null, ...context });
 }
 
+const KNOWN_GENERIC_BLOBS = {
+  "capitalbpg": "BPG Auto",
+  "hmtrs": "HMTR Auto",
+  "czag": "CZAG Auto",
+  "nwh": "NWH Auto",
+  "pbg": "PBG Auto",
+  "rbm": "RBM Auto",
+  "sth": "STH Auto"
+};
+
 // Comprehensive list of car brands
 const CAR_BRANDS = [
   "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
