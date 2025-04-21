@@ -1501,40 +1501,55 @@ function extractTokens(domain) {
  */
 function earlyCompoundSplit(text) {
   try {
-    if (!text || typeof text !== "string") {
-      log("error", "Invalid text in earlyCompoundSplit", { text });
-      throw new Error("Invalid text input");
+    if (!text || typeof text !== 'string') {
+      log('error', 'Invalid text in earlyCompoundSplit', { text });
+      throw new Error('Invalid text input');
     }
 
     const lower = text.toLowerCase().replace(/\.(com|net|co\.uk|jp)$/, '');
     const overrides = {
-      "billdube": ["Bill", "Dube"],
-      "mclartydaniel": ["McLarty", "Daniel"],
-      "nplincoln": ["NP", "Lincoln"],
-      "autonationusa": ["AutoNation"],
-      "robbynixonbuickgmc": ["Robby", "Nixon"],
-      "mccarthyautogroup": ["McCarthy", "Auto"],
-      "donjacobs": ["Don", "Jacobs"],
-      "lacitycars": ["La", "City"],
-      "ricksmithchevrolet": ["Rick", "Smith"],
-      "classicbmw": ["Classic", "BMW"],
-      "davisautosales": ["Davis", "Auto"],
-      "barlowautogroup": ["Barlow", "Auto"],
-      "mikeerdman": ["Mike", "Erdman"],
-      "chevyofcolumbuschevrolet": ["Chevy", "Columbus"],
-      "drivevictory": ["Victory"],
-      "sunsetmitsubishi": ["Sunset", "Mitsubishi"],
-      "northwestcars": ["Northwest"],
-      "kiaofchattanooga": ["Chattanooga", "Kia"],
-      "mazdanashville": ["Nashville", "Mazda"],
-      "tasca": ["Tasca"],
-      "crystalautogroup": ["Crystal", "Auto"],
-      "robertthorne": ["Robert", "Thorne"]
+      'billdube': ['Bill', 'Dube'],
+      'mclartydaniel': ['McLarty', 'Daniel'],
+      'nplincoln': ['NP', 'Lincoln'],
+      'autonationusa': ['AutoNation'],
+      'robbynixonbuickgmc': ['Robby', 'Nixon'],
+      'mccarthyautogroup': ['McCarthy', 'Auto'],
+      'donjacobs': ['Don', 'Jacobs'],
+      'lacitycars': ['La', 'City'],
+      'ricksmithchevrolet': ['Rick', 'Smith'],
+      'classicbmw': ['Classic', 'BMW'],
+      'davisautosales': ['Davis', 'Auto'],
+      'barlowautogroup': ['Barlow', 'Auto'],
+      'mikeerdman': ['Mike', 'Erdman'],
+      'chevyofcolumbuschevrolet': ['Chevy', 'Columbus'],
+      'drivevictory': ['Victory'],
+      'sunsetmitsubishi': ['Sunset', 'Mitsubishi'],
+      'northwestcars': ['Northwest'],
+      'kiaofchattanooga': ['Chattanooga', 'Kia'],
+      'mazdanashville': ['Nashville', 'Mazda'],
+      'tasca': ['Tasca'],
+      'crystalautogroup': ['Crystal', 'Auto'],
+      'robertthorne': ['Robert', 'Thorne'],
+      'acdealergroup': ['AC', 'Dealer'],
+      'daytonandrews': ['Dayton', 'Andrews'],
+      'fordofdalton': ['Dalton', 'Ford'],
+      'metrofordofmadison': ['Metro', 'Madison', 'Ford'],
+      'williamssubarucharlotte': ['Williams', 'Charlotte', 'Subaru'],
+      'vwsouthtowne': ['South', 'Towne'],
+      'scottclarkstoyota': ['Scott', 'Clark', 'Toyota'],
+      'duvalford': ['Duval'],
+      'avisford': ['Avis'],
+      'devineford': ['Devine'],
+      'allamericanford': ['All', 'American'],
+      'slvdodge': ['Silver', 'Dodge'],
+      'regalauto': ['Regal', 'Auto'],
+      'elwaydealers': ['Elway', 'Dealers'],
+      'chapmanchoice': ['Chapman', 'Choice']
     };
 
-    if (overrides[lower]) {
+if (overrides[lower]) {
       const split = overrides[lower];
-      log("debug", "Domain override applied", { text, split });
+      log('debug', 'Domain override applied', { text, split });
       return split;
     }
 
@@ -1544,6 +1559,7 @@ function earlyCompoundSplit(text) {
       normalized = normalized.replace(regex, expansion.replace(/\s+/g, '').toLowerCase());
     }
 
+    // Proper noun exact match
     for (const noun of KNOWN_PROPER_NOUNS) {
       const nounLower = noun.toLowerCase().replace(/\s+/g, '');
       if (lower === nounLower) {
@@ -1553,7 +1569,7 @@ function earlyCompoundSplit(text) {
       }
     }
 
-    // City + Brand split
+    // Multi-word city + brand/generic split
     for (const city of KNOWN_CITIES_SET) {
       const cityLower = city.toLowerCase().replace(/\s+/g, '');
       if (lower.includes(cityLower)) {
@@ -1561,36 +1577,51 @@ function earlyCompoundSplit(text) {
         if (CAR_BRANDS.includes(remaining) || ABBREVIATION_EXPANSIONS[remaining]) {
           const formattedCity = capitalizeName(city).name;
           const brand = ABBREVIATION_EXPANSIONS[remaining] || BRAND_MAPPING[remaining] || capitalizeName(remaining).name;
-          const split = [formattedCity, brand];
+          const split = formattedCity.includes(' ') ? [...formattedCity.split(' '), brand] : [formattedCity, brand];
           log('debug', 'City+Brand split', { text, split });
+          return split;
+        }
+        const genericTerms = ['auto', 'automotive', 'motors', 'dealers', 'group', 'mall', 'automall'];
+        if (genericTerms.includes(remaining)) {
+          const formattedCity = capitalizeName(city).name;
+          const formattedGeneric = capitalizeName(remaining).name;
+          const split = formattedCity.includes(' ') ? [...formattedCity.split(' '), formattedGeneric] : [formattedCity, formattedGeneric];
+          log('debug', 'City+Generic split', { text, split });
           return split;
         }
       }
     }
 
+    // Human name split
     for (const first of KNOWN_FIRST_NAMES) {
       if (normalized.startsWith(first)) {
         const remaining = normalized.slice(first.length);
         if (KNOWN_LAST_NAMES.has(remaining)) {
-          const split = [
-            first.charAt(0).toUpperCase() + first.slice(1),
-            remaining.charAt(0).toUpperCase() + remaining.slice(1)
-          ];
-          log("debug", "Human name split (fallback)", { text, split });
+          const split = [capitalizeName(first).name, capitalizeName(remaining).name];
+          log('debug', 'Human name split', { text, split });
           return split;
         }
       }
     }
 
+    // Regex-based human name split
     const humanNameMatch = normalized.match(/^([a-z]{2,})([a-z]{3,})$/);
     if (humanNameMatch) {
       const [, first, last] = humanNameMatch;
       if (KNOWN_FIRST_NAMES.has(first) && KNOWN_LAST_NAMES.has(last)) {
-        const split = [
-          first.charAt(0).toUpperCase() + first.slice(1),
-          last.charAt(0).toUpperCase() + last.slice(1)
-        ];
+        const split = [capitalizeName(first).name, capitalizeName(last).name];
         log('debug', 'Regex-based human name split', { text, split });
+        return split;
+      }
+    }
+
+    // Abbreviation + generic/brand split
+    const abbrMatch = normalized.match(/^([a-z]{2,3})(auto|dealers|group|motors|motor|mall|automall|[a-z]{3,})$/);
+    if (abbrMatch) {
+      const [, abbr, rest] = abbrMatch;
+      if (!CAR_BRANDS.includes(abbr) && !KNOWN_CITIES_SET.has(abbr) && !KNOWN_PROPER_NOUNS.has(abbr)) {
+        const split = [abbr.toUpperCase(), capitalizeName(rest).name];
+        log('debug', 'Abbreviation split', { text, split });
         return split;
       }
     }
@@ -1601,68 +1632,77 @@ function earlyCompoundSplit(text) {
     while (remaining.length > 0) {
       let matched = false;
 
-      for (const city of KNOWN_CITIES_SET) {
-        if (remaining.startsWith(city)) {
-          const rest = remaining.slice(city.length);
-          if (rest === 'auto' || rest === 'mall' || rest === 'automall') {
-            tokens.push(
-              city.charAt(0).toUpperCase() + city.slice(1),
-              capitalizeName(rest).name
-            );
-            remaining = '';
+      // Proper noun prefix
+      for (const noun of KNOWN_PROPER_NOUNS) {
+        const nounLower = noun.toLowerCase().replace(/\s+/g, '');
+        if (remaining.startsWith(nounLower)) {
+          const formattedNoun = capitalizeName(noun).name;
+          tokens.push(...formattedNoun.split(' '));
+          remaining = remaining.slice(nounLower.length);
+          matched = true;
+          log('debug', 'Proper noun prefix split', { text, split: tokens });
+          break;
+        }
+      }
+
+      if (!matched) {
+        // City prefix
+        for (const city of KNOWN_CITIES_SET) {
+          const cityLower = city.toLowerCase().replace(/\s+/g, '');
+          if (remaining.startsWith(cityLower)) {
+            const formattedCity = capitalizeName(city).name;
+            tokens.push(...formattedCity.split(' '));
+            remaining = remaining.slice(cityLower.length);
             matched = true;
-            log('debug', 'City+Auto/Mall split', { text, split: tokens });
+            log('debug', 'City prefix split', { text, split: tokens });
             break;
           }
         }
       }
 
       if (!matched) {
+        // Brand prefix
         for (const brand of CAR_BRANDS) {
           const brandLower = brand.toLowerCase();
           if (remaining.startsWith(brandLower)) {
-            const rest = remaining.slice(brandLower.length);
-            const genericTerms = ['auto', 'automotive', 'motors', 'dealers', 'group', 'mall', 'automall'];
-            if (genericTerms.includes(rest)) {
-              tokens.push(
-                BRAND_MAPPING[brandLower] || (brandLower.charAt(0).toUpperCase() + brandLower.slice(1)),
-                rest.charAt(0).toUpperCase() + rest.slice(1)
-              );
-              remaining = '';
-              matched = true;
-              log('debug', 'Brand+Generic split', { text, split: tokens });
-              break;
-            }
+            const formattedBrand = BRAND_MAPPING[brandLower] || capitalizeName(brandLower).name;
+            tokens.push(formattedBrand);
+            remaining = remaining.slice(brandLower.length);
+            matched = true;
+            log('debug', 'Brand prefix split', { text, split: tokens });
+            break;
           }
         }
       }
 
       if (!matched) {
+        // CamelCase or separator split
         const camelMatch = remaining.match(/^([a-z]+)([A-Z][a-z]*)/);
         if (camelMatch) {
-          tokens.push(camelMatch[1].charAt(0).toUpperCase() + camelMatch[1].slice(1));
+          tokens.push(capitalizeName(camelMatch[1]).name);
           remaining = camelMatch[2].toLowerCase() + remaining.slice(camelMatch[0].length);
         } else {
-          const blobMatch = remaining.match(/^([a-z]+)([A-Z]|$)/);
-          if (blobMatch) {
-            tokens.push(blobMatch[1].charAt(0).toUpperCase() + blobMatch[1].slice(1));
-            remaining = remaining.slice(blobMatch[1].length);
-          } else {
-            if (remaining.length > 10) {
-              const chunk = remaining.slice(0, 5);
-              tokens.push(chunk.charAt(0).toUpperCase() + chunk.slice(1));
-              remaining = remaining.slice(5);
-            } else {
-              tokens.push(remaining.charAt(0).toUpperCase() + remaining.slice(1));
-              remaining = '';
+          // Split on 'of' or other separators
+          const separatorMatch = remaining.match(/^([a-z]+)(of|and|[a-z]+|$)/);
+          if (separatorMatch) {
+            tokens.push(capitalizeName(separatorMatch[1]).name);
+            remaining = remaining.slice(separatorMatch[1].length);
+            if (separatorMatch[2] && !['of', 'and'].includes(separatorMatch[2])) {
+              tokens.push(capitalizeName(separatorMatch[2]).name);
+              remaining = remaining.slice(separatorMatch[2].length);
             }
+          } else {
+            // Fallback: take remaining as a single token
+            tokens.push(capitalizeName(remaining).name);
+            remaining = '';
           }
         }
       }
     }
 
+    // Final cleanup and deduplication
     const validTokens = tokens
-      .filter(t => t && !['cars', 'sales', 'autogroup'].includes(t.toLowerCase()))
+      .filter(t => t && !['cars', 'sales', 'autogroup', 'of', 'and'].includes(t.toLowerCase()))
       .filter((t, i, arr) => {
         if (i === 0) return true;
         return t.toLowerCase() !== arr[i - 1].toLowerCase();
@@ -1671,11 +1711,7 @@ function earlyCompoundSplit(text) {
     log('debug', 'earlyCompoundSplit result', { text, split: validTokens });
     return validTokens;
   } catch (e) {
-    log("error", "earlyCompoundSplit failed", {
-      text,
-      error: e.message,
-      stack: e.stack
-    });
+    log('error', 'earlyCompoundSplit failed', { text, error: e.message, stack: e.stack });
     return [text];
   }
 }
