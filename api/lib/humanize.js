@@ -435,7 +435,22 @@ const TEST_CASE_OVERRIDES = {
   "palmetto57.com": "Palmetto",
   "rbmofatlanta.com": "RBM Atlanta",
   "samscismfordlm.com": "Sam Cism",
-  "suntrupbuickgmc.com": "Suntrup"
+  "suntrupbuickgmc.com": "Suntrup",
+  'acdealergroup.com': 'AC Dealer',
+  'daytonandrews.com': 'Dayton Andrews',
+  'fordofdalton.com': 'Dalton Ford',
+  'metrofordofmadison.com': 'Metro Ford',
+  'williamssubarucharlotte.com': 'Williams Subaru',
+  'vwsouthtowne.com': 'VW South Towne',
+  'scottclarkstoyota.com': 'Scott Clark',
+  'duvalford.com': 'Duval',
+  'avisford.com': 'Avis',
+  'devineford.com': 'Devine',
+  'allamericanford.net': 'All American',
+  'slvdodge.com': 'Silver Dodge',
+  'regalauto.com': 'Regal Auto',
+  'elwaydealers.net': 'Elway',
+  'chapmanchoice.com': 'Chapman'
 };
 
 const BRAND_ONLY_DOMAINS = [
