@@ -2865,12 +2865,16 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
 
 // Hypothetical test cases (likely causing the error around line 2038)
 const testCases = [
-  ['johnthornton.com', { name: 'John Thornton', confidenceScore: 125 }],
-  ['stoopsbuickgmc.com', { name: 'Stoops', confidenceScore: 95 }],
-  ['bespokemotorgroup.com', { name: 'Bespoke', confidenceScore: 95 }],
-  ['alanbyervolvo.com', { name: 'Alan Byer', confidenceScore: 125 }],
-  ['nissanofathens.com', { name: 'Athens Nissan', confidenceScore: 125 }],
-  ['jimmybrittchevrolet.com', { name: 'Jimmy Britt', confidenceScore: 125 }]
+  // From logs
+  ['duvalford.com', { name: 'Duval', confidenceScore: 125, flags: ['ProperNounPattern', 'ProperNounDetected'] }],
+  // Edge cases
+  ['johnthornton.com', { name: 'John Thornton', confidenceScore: 125, flags: ['HumanNamePattern', 'HumanNameDetected', 'FirstLastPattern'] }],
+  ['stoopsbuickgmc.com', { name: 'Stoops', confidenceScore: 95, flags: ['FallbackName', 'SingleProperNoun', 'FallbackTriggered'] }],
+  ['bespokemotorgroup.com', { name: 'Bespoke', confidenceScore: 95, flags: ['FallbackName', 'SingleProperNoun', 'FallbackTriggered'] }],
+  ['alanbyervolvo.com', { name: 'Alan Byer', confidenceScore: 125, flags: ['HumanNamePattern', 'HumanNameDetected', 'FirstLastPattern'] }],
+  ['nissanofathens.com', { name: 'Athens Nissan', confidenceScore: 125, flags: ['BrandCityPattern', 'CityBrandPattern'] }],
+  ['jimmybrittchevrolet.com', { name: 'Jimmy Britt', confidenceScore: 125, flags: ['ProperNounPattern', 'ProperNounDetected'] }],
+  ['donjacobs.com', { name: 'Don Jacobs', confidenceScore: 125, flags: ['HumanNamePattern', 'HumanNameDetected', 'FirstLastPattern'] }]
 ];
 
 // Fix: Ensure correct for...of syntax
@@ -2880,9 +2884,8 @@ const testCases = [
 //   console.log(result);
 // }
 
-// After (correct syntax):
 for (const [domain, expected] of testCases) {
-  const result = await humanizeName(domain, domain, false);
+  const result = await humanizeName(domain, domain, true); // useMeta: true to test fetchMetaData
   console.log({
     domain,
     name: result.companyName,
