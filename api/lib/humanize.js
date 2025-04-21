@@ -1493,30 +1493,30 @@ function earlyCompoundSplit(text) {
 
     const lower = text.toLowerCase().replace(/\.(com|net|co\.uk|jp)$/, '');
 
-const overrides = {
-  "billdube": ["Bill", "Dube"],
-  "mclartydaniel": ["McLarty", "Daniel"],
-  "nplincoln": ["NP", "Lincoln"],
-  "autonationusa": ["AutoNation"],
-  "robbynixonbuickgmc": ["Robby", "Nixon"],
-  "mccarthyautogroup": ["McCarthy", "Auto"],
-  "donjacobs": ["Don", "Jacobs"],
-  "lacitycars": ["La", "City"],
-  "ricksmithchevrolet": ["Rick", "Smith"],
-  "classicbmw": ["Classic", "BMW"],
-  "davisautosales": ["Davis", "Auto"],
-  "barlowautogroup": ["Barlow", "Auto"],
-  "mikeerdman": ["Mike", "Erdman"],
-  "chevyofcolumbuschevrolet": ["Chevy", "Columbus"],
-  "drivevictory": ["Victory"],
-  "sunsetmitsubishi": ["Sunset", "Mitsubishi"],
-  "northwestcars": ["Northwest"],
-  "kiaofchattanooga": ["Chattanooga", "Kia"],
-  "mazdanashville": ["Nashville", "Mazda"],
-  "tasca": ["Tasca"],
-  "crystalautogroup": ["Crystal", "Auto"],
-  "robertthorne": ["Robert", "Thorne"]
-};
+    const overrides = {
+      "billdube": ["Bill", "Dube"],
+      "mclartydaniel": ["McLarty", "Daniel"],
+      "nplincoln": ["NP", "Lincoln"],
+      "autonationusa": ["AutoNation"],
+      "robbynixonbuickgmc": ["Robby", "Nixon"],
+      "mccarthyautogroup": ["McCarthy", "Auto"],
+      "donjacobs": ["Don", "Jacobs"],
+      "lacitycars": ["La", "City"],
+      "ricksmithchevrolet": ["Rick", "Smith"],
+      "classicbmw": ["Classic", "BMW"],
+      "davisautosales": ["Davis", "Auto"],
+      "barlowautogroup": ["Barlow", "Auto"],
+      "mikeerdman": ["Mike", "Erdman"],
+      "chevyofcolumbuschevrolet": ["Chevy", "Columbus"],
+      "drivevictory": ["Victory"],
+      "sunsetmitsubishi": ["Sunset", "Mitsubishi"],
+      "northwestcars": ["Northwest"],
+      "kiaofchattanooga": ["Chattanooga", "Kia"],
+      "mazdanashville": ["Nashville", "Mazda"],
+      "tasca": ["Tasca"],
+      "crystalautogroup": ["Crystal", "Auto"],
+      "robertthorne": ["Robert", "Thorne"]
+    };
 
     if (overrides[lower]) {
       const split = overrides[lower];
@@ -1547,22 +1547,23 @@ const overrides = {
     for (const noun of sortedNouns) {
       const compressed = noun.toLowerCase().replace(/\s+/g, '');
       if (lowerClean.startsWith(compressed)) {
-  const rest = lowerClean.slice(compressed.length);
+        const rest = lowerClean.slice(compressed.length);
 
-  // 🛑 New rule: Only append brand if noun ends in "s" or isn't possessive-safe
-  const nounEndsInS = compressed.endsWith("s");
-  const allowAppend = nounEndsInS || !KNOWN_PROPER_NOUNS.has(noun.toLowerCase());
+        // 🛑 New rule: Only append brand if noun ends in "s" or isn't possessive-safe
+        const nounEndsInS = compressed.endsWith("s");
+        const allowAppend = nounEndsInS || !KNOWN_PROPER_NOUNS.has(noun.toLowerCase());
 
-  if (!rest || (allowAppend && (ABBREVIATION_EXPANSIONS[rest] || CAR_BRANDS.includes(rest)))) {
-    const formatted = capitalizeName(noun).name;
-    const restFormatted = rest
-      ? BRAND_MAPPING[rest.toLowerCase()] || capitalizeName(rest).name
-      : null;
-    const split = restFormatted ? [formatted, restFormatted] : [formatted];
-    log("debug", "Proper noun prefix match", { text, split });
-    return split;
-  }
-}
+        if (!rest || (allowAppend && (ABBREVIATION_EXPANSIONS[rest] || CAR_BRANDS.includes(rest)))) {
+          const formatted = capitalizeName(noun).name;
+          const restFormatted = rest
+            ? BRAND_MAPPING[rest.toLowerCase()] || capitalizeName(rest).name
+            : null;
+          const split = restFormatted ? [formatted, restFormatted] : [formatted];
+          log("debug", "Proper noun prefix match", { text, split });
+          return split;
+        }
+      }
+    }
 
     // 🔹 First + Last name detection
     for (const first of KNOWN_FIRST_NAMES) {
@@ -1663,23 +1664,23 @@ const overrides = {
       }
     }
 
-// ✅ Already inside try { ... } at the top of earlyCompoundSplit
-const validTokens = tokens
-  .filter(t => t && !['cars', 'sales', 'autogroup'].includes(t.toLowerCase()))
-  .filter((t, i, arr) => {
-    if (i === 0) return true;
-    return t.toLowerCase() !== arr[i - 1].toLowerCase();
-  });
+    const validTokens = tokens
+      .filter(t => t && !['cars', 'sales', 'autogroup'].includes(t.toLowerCase()))
+      .filter((t, i, arr) => {
+        if (i === 0) return true;
+        return t.toLowerCase() !== arr[i - 1].toLowerCase();
+      });
 
-log('debug', 'earlyCompoundSplit result', { text, split: validTokens });
-return validTokens;
-} catch (e) {
-  log("error", "earlyCompoundSplit failed", {
-    text,
-    error: e.message,
-    stack: e.stack
-  });
-  return [text];
+    log('debug', 'earlyCompoundSplit result', { text, split: validTokens });
+    return validTokens;
+  } catch (e) {
+    log("error", "earlyCompoundSplit failed", {
+      text,
+      error: e.message,
+      stack: e.stack
+    });
+    return [text];
+  }
 }
 
 /**
