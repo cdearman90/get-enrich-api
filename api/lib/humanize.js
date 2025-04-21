@@ -1663,16 +1663,22 @@ const overrides = {
       }
     }
 
-    const validTokens = tokens
-      .filter(t => t && !['cars', 'sales', 'autogroup'].includes(t.toLowerCase()))
-      .filter((t, i, arr) => i === 0 || t.toLowerCase() !== arr[i - 1].toLowerCase());
+const validTokens = tokens
+  .filter(t => t && !['cars', 'sales', 'autogroup'].includes(t.toLowerCase()))
+  .filter((t, i, arr) => {
+    if (i === 0) return true;
+    return t.toLowerCase() !== arr[i - 1].toLowerCase();
+  });
 
-    log('debug', 'earlyCompoundSplit result', { text, split: validTokens });
-    return validTokens;
-  } catch (e) {
-    log("error", "earlyCompoundSplit failed", { text, error: e.message, stack: e.stack });
-    return [text];
-  }
+log('debug', 'earlyCompoundSplit result', { text, split: validTokens });
+return validTokens;
+} catch (e) {
+  log("error", "earlyCompoundSplit failed", {
+    text,
+    error: e.message,
+    stack: e.stack
+  });
+  return [text];
 }
 
 /**
