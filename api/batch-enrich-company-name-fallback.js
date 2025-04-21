@@ -494,7 +494,7 @@ class FallbackError extends Error {
  * @param {string | null} domainBrand - Brand detected from domain (e.g., "Chevrolet").
  * @returns {Object} - { validatedName: string | null, flags: string[] }.
  */
-function validateFallbackName(result, domain, domainBrand) {
+function validateFallbackName(result, domain, domainBrand, confidenceScore = 80) {
   const flags = [];
   let validatedName = result.name?.trim();
 
@@ -505,10 +505,10 @@ function validateFallbackName(result, domain, domainBrand) {
     if (!result || !validatedName || typeof validatedName !== "string") {
       log("warn", "Invalid OpenAI result", { domain, result });
       flags.push("FallbackNameError", "ReviewNeeded");
-      return { validatedName: null, flags };
+      return { validatedName: null, flags, confidenceScore };
     }
 
-    // Split merged tokens (e.g., "Rodbakerford" → "Rod Baker")
+    // Split merged tokens
     if (validatedName.split(" ").length === 1) {
       const splitName = splitMergedTokens(validatedName);
       if (splitName !== validatedName) {
@@ -528,22 +528,22 @@ function validateFallbackName(result, domain, domainBrand) {
       if (!isProper && (isBrand || isCity)) {
         log("warn", "City-only or brand-only output detected", { domain, name: validatedName });
         flags.push(isBrand ? "BrandOnlyFallback" : "CityOnlyFallback", "ReviewNeeded");
-        return { validatedName: null, flags };
+        return { validatedName: null, flags, confidenceScore };
       }
     }
 
-    // Enforce domain brand precedence
+    // Enforce domain brand precedence with soft penalty
     if (result.brand && domainBrand && result.brand.toLowerCase() !== domainBrand.toLowerCase()) {
       log("warn", "OpenAI brand mismatch", { domain, openAIBrand: result.brand, domainBrand });
-      flags.push("FallbackNameError", "ReviewNeeded");
-      return { validatedName: null, flags };
+      flags.push("BrandMismatchPenalty");
+      confidenceScore = Math.max(confidenceScore - 15, 50);
     }
 
     // Validate brand against CAR_BRANDS
     if (result.brand && !CAR_BRANDS.includes(result.brand.toLowerCase())) {
       log("warn", "OpenAI hallucinated brand", { domain, brand: result.brand });
       flags.push("FallbackNameError", "ReviewNeeded");
-      return { validatedName: null, flags };
+      return { validatedName: null, flags, confidenceScore };
     }
 
     // Check for uncapitalized or malformed output
@@ -612,11 +612,11 @@ function validateFallbackName(result, domain, domainBrand) {
       log("info", "OpenAI output validated", { domain, name: validatedName });
     }
 
-    return { validatedName, flags };
+    return { validatedName, flags, confidenceScore };
   } catch (e) {
     log("error", "validateFallbackName failed", { domain, error: e.message, stack: e.stack });
     flags.push("FallbackNameError", "ReviewNeeded");
-    return { validatedName: null, flags };
+    return { validatedName: null, flags, confidenceScore };
   }
 }
 
@@ -777,7 +777,24 @@ async function fallbackName(domain, meta = {}) {
         };
       }
 
-      // Priority 4: Brand + Generic
+      // Priority 4: Generic Blob or Initials Fallback (Patch 2: Addresses GenericPatternError)
+      if (!companyName && extractedTokens.length === 1) {
+        const token = extractedTokens[0];
+        if (KNOWN_GENERIC_BLOBS[token]) {
+          companyName = KNOWN_GENERIC_BLOBS[token];
+          log("info", "Generic blob mapped", { domain: normalizedDomain, name: companyName });
+          flags.push("GenericBlobMapped");
+          confidenceScore = 95;
+        } else if (token.length >= 3 && token.length <= 5 && /^[a-zA-Z]+$/.test(token)) {
+          const initials = token.toUpperCase();
+          companyName = `${initials} Auto`;
+          log("info", "Initials extracted", { domain: normalizedDomain, name: companyName });
+          flags.push("InitialsRecovered");
+          confidenceScore = 90;
+        }
+      }
+
+      // Priority 5: Brand + Generic
       if (domainBrand && extractedTokens.includes('auto') && !companyName) {
         const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
         const name = `${formattedBrand} Auto`;
@@ -795,7 +812,7 @@ async function fallbackName(domain, meta = {}) {
       flags.push("LocalFallbackFailed");
     }
 
-    // Check for brand-only output and enhance with metadata
+    // Check for brand-only output and enhance with metadata (Patch 1: Addresses FallbackNameError and LocalFallbackFailed)
     if (companyName && CAR_BRANDS.includes(companyName.toLowerCase())) {
       const city = extractedTokens?.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
       const inferredBrand = companyName;
@@ -804,13 +821,21 @@ async function fallbackName(domain, meta = {}) {
         log("info", "Brand-only output, appending city", { domain: normalizedDomain, name: companyName });
         flags.push("BrandCityAppended");
         confidenceScore = 125;
-      } else if (metaBrand) {
-        companyName = `${capitalizeName(metaBrand).name} ${inferredBrand}`;
-        log("info", "Brand-only output, appending meta brand", { domain: normalizedDomain, name: companyName });
-        flags.push("MetaTitleBrandAppended");
-        confidenceScore = 100;
+      } else if (meta.title) {
+        const titleTokens = meta.title.toLowerCase().split(/\s+/).filter(t => t.length > 3);
+        const metaCity = titleTokens.find(t => KNOWN_CITIES_SET.has(t) && !CAR_BRANDS.includes(t));
+        if (metaCity) {
+          companyName = `${capitalizeName(metaCity).name} ${inferredBrand}`;
+          log("info", "Brand-only output, appending meta city", { domain: normalizedDomain, name: companyName });
+          flags.push("MetaTitleCityAppended");
+          confidenceScore = 110;
+        } else {
+          log("warn", "Brand-only output, no city found", { domain: normalizedDomain, name: companyName });
+          flags.push("BrandOnlyFallback", "ReviewNeeded");
+          confidenceScore = 50;
+        }
       } else {
-        log("warn", "Brand-only output", { domain: normalizedDomain, name: companyName });
+        log("warn", "Brand-only output, no city or meta available", { domain: normalizedDomain, name: companyName });
         flags.push("BrandOnlyFallback", "ReviewNeeded");
         confidenceScore = 50;
       }
@@ -873,7 +898,7 @@ async function fallbackName(domain, meta = {}) {
       }
     }
 
-    // OpenAI fallback for spacing/casing only (last resort)
+    // OpenAI fallback for spacing/casing only (last resort) (Patch 3: Adjusts for Meta-Brand Mismatches)
     if (companyName && (companyName.split(" ").length < 2 || /\b[a-z]+[A-Z]/.test(companyName))) {
       const cacheKey = `${normalizedDomain}:${(meta.title || "").toLowerCase().trim()}`;
       if (openAICache.has(cacheKey)) {
@@ -917,8 +942,13 @@ async function fallbackName(domain, meta = {}) {
         // Extract domainBrand
         const domainBrand = CAR_BRANDS.find(b => normalizedDomain.includes(b.toLowerCase())) || null;
 
-        // Validate OpenAI result
-        const { validatedName, flags: validationFlags } = validateFallbackName({ name, brand: null, flagged: false }, normalizedDomain, domainBrand);
+        // Validate OpenAI result with updated validateFallbackName
+        const { validatedName, flags: validationFlags, confidenceScore: updatedConfidence } = validateFallbackName(
+          { name, brand: null, flagged: false },
+          normalizedDomain,
+          domainBrand,
+          confidenceScore
+        );
         flags.push(...validationFlags);
 
         // Prevent hallucination
@@ -930,7 +960,7 @@ async function fallbackName(domain, meta = {}) {
           flags.push("OpenAIHallucinationDetected", "ReviewNeeded");
         } else if (validatedName) {
           companyName = validatedName;
-          confidenceScore = Math.min(confidenceScore + 5, 125);
+          confidenceScore = updatedConfidence; // Use updated confidence from validateFallbackName
           flags.push("OpenAISpacingFix");
         } else {
           flags.push("OpenAIFallbackFailed", "ReviewNeeded");
