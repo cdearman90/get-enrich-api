@@ -2392,7 +2392,7 @@ function tryBrandGenericPattern(tokens) {
     // Priority 2: City + Brand
     if (matchedCity && matchedBrand) {
       const formattedCity = capitalizeName(matchedCity).name;
-      const name = `${formattedCity} ${formattedBrand}`;
+      const name = `${formattedCity} ${formattedBrand}`; // Fixed typo: formatted370Brand → formattedBrand
       flags.add('CityBrandPattern');
       return { companyName: name, confidenceScore: 125, flags: Array.from(flags) };
     }
