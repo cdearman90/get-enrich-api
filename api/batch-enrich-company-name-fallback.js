@@ -450,6 +450,28 @@ const OVERRIDES = {
   "yorkautomotive.com": "York Auto"
 };
 
+
+// Blocklist for spammy patterns
+const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
+
+
+// Spammy tokens to filter out
+const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
+
+
+// Cache for OpenAI results
+const openAICache = new Map();
+
+
+// Custom error class for fallback failures
+class FallbackError extends Error {
+  constructor(message, details = {}) {
+    super(message);
+    this.name = "FallbackError";
+    this.details = details;
+  }
+}
+
 /**
  * Splits merged tokens using earlyCompoundSplit from humanize.js.
  * @param {string} name - The name to split.
@@ -472,31 +494,6 @@ function splitMergedTokens(name) {
   }
 }
 
-// Blocklist for spammy patterns
-const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
-
-// Spammy tokens to filter out
-const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
-
-// Known proper nouns for noun-pair restoration (subset of KNOWN_PROPER_NOUNS from humanize.js)
-const KNOWN_PROPER_NOUNS_ARRAY = [
-  "Bill", "Dube", "Don", "Jacobs", "Rick", "Smith", "McLarty", "Daniel", "NP", "Lincoln",
-  "Sunset", "Classic", "Tasca", "Davis", "Barlow", "Mike", "Erdman", "AutoNation", "Robby", "Nixon",
-  "Robert", "Thorne", "Crystal", "Young", "Victory"
-];
-
-// Cache for OpenAI results
-const openAICache = new Map();
-
-// Custom error class for fallback failures
-class FallbackError extends Error {
-  constructor(message, details = {}) {
-    super(message);
-    this.name = "FallbackError";
-    this.details = details;
-  }
-}
-
 /**
  * Validates OpenAI fallback name to ensure it meets cold-email-safe criteria.
  * @param {Object} result - OpenAI result { name: string, brand: string | null, flagged: boolean }.
@@ -505,7 +502,7 @@ class FallbackError extends Error {
  * @returns {Object} - { validatedName: string | null, flags: string[] }.
  */
 function validateFallbackName(result, domain, domainBrand, confidenceScore = 80) {
-  const flags = [];
+  const flags = new Set();
   let validatedName = result.name?.trim();
 
   log("info", "validateFallbackName started", { domain, result });
@@ -514,8 +511,9 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     // Ensure result is valid
     if (!result || !validatedName || typeof validatedName !== "string") {
       log("warn", "Invalid OpenAI result", { domain, result });
-      flags.push("FallbackNameError", "ReviewNeeded");
-      return { validatedName: null, flags, confidenceScore };
+      flags.add("FallbackNameError");
+      flags.add("ReviewNeeded");
+      return { validatedName: null, flags: Array.from(flags), confidenceScore };
     }
 
     // Split merged tokens
@@ -524,89 +522,113 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       if (splitName !== validatedName) {
         validatedName = splitName;
         log("info", "Merged tokens split", { domain, validatedName });
-        flags.push("TokenSplitApplied");
+        flags.add("TokenSplitApplied");
+        confidenceScore = Math.min(confidenceScore, 95);
       } else {
         validatedName = capitalizeName(validatedName).name;
       }
+    }
+
+    // Check for blob-like names (>12 chars, no spaces)
+    if (validatedName && validatedName.length > 12 && !/\s/.test(validatedName)) {
+      log("warn", "Blob-like name detected", { domain, validatedName });
+      flags.add("BlobLikeFallback");
+      flags.add("ReviewNeeded");
+      confidenceScore = Math.min(confidenceScore, 80);
     }
 
     // Check for city-only or brand-only outputs
     if (validatedName) {
       const isBrand = CAR_BRANDS.includes(validatedName.toLowerCase());
       const isCity = KNOWN_CITIES_SET.has(validatedName.toLowerCase());
-      const isProper = KNOWN_PROPER_NOUNS_ARRAY.includes(validatedName);
+      const isProper = KNOWN_PROPER_NOUNS.has(validatedName.toLowerCase());
       if (!isProper && (isBrand || isCity)) {
-        log("warn", "City-only or brand-only output detected", { domain, name: validatedName });
-        flags.push(isBrand ? "BrandOnlyFallback" : "CityOnlyFallback", "ReviewNeeded");
-        return { validatedName: null, flags, confidenceScore };
+        log("warn", `${isBrand ? "Brand" : "City"}-only output detected`, { domain, validatedName });
+        flags.add(isBrand ? "BrandOnlyFallback" : "CityOnlyFallback");
+        flags.add("ReviewNeeded");
+        return { validatedName: null, flags: Array.from(flags), confidenceScore };
       }
     }
 
-    // Enforce domain brand precedence with soft penalty
+    // Handle brand mismatch
     if (result.brand && domainBrand && result.brand.toLowerCase() !== domainBrand.toLowerCase()) {
-      log("warn", "OpenAI brand mismatch", { domain, openAIBrand: result.brand, domainBrand });
-      flags.push("BrandMismatchPenalty");
+      log("warn", "OpenAI brand mismatch, prioritizing domain brand", { domain, openAIBrand: result.brand, domainBrand });
+      flags.add("BrandMismatchPenalty");
       confidenceScore = Math.max(confidenceScore - 15, 50);
+      // Use domainBrand if available
+      const words = validatedName.split(" ");
+      if (words.some(w => CAR_BRANDS.includes(w.toLowerCase()))) {
+        validatedName = words.map(w => CAR_BRANDS.includes(w.toLowerCase()) ? (BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name) : w).join(" ");
+        flags.add("DomainBrandApplied");
+      }
     }
 
     // Validate brand against CAR_BRANDS
     if (result.brand && !CAR_BRANDS.includes(result.brand.toLowerCase())) {
       log("warn", "OpenAI hallucinated brand", { domain, brand: result.brand });
-      flags.push("FallbackNameError", "ReviewNeeded");
-      return { validatedName: null, flags, confidenceScore };
+      flags.add("FallbackNameError");
+      flags.add("ReviewNeeded");
+      return { validatedName: null, flags: Array.from(flags), confidenceScore };
     }
 
     // Check for uncapitalized or malformed output
-    if (!/^([A-Z][a-z]*\s?){1,3}$/.test(validatedName)) {
-      log("warn", "Uncapitalized or malformed OpenAI output", { domain, name: validatedName });
-      flags.push("FallbackNameError");
+    if (validatedName && !/^([A-Z][a-z]*\s?){1,3}$/.test(validatedName)) {
+      log("warn", "Uncapitalized or malformed output", { domain, validatedName });
+      flags.add("FallbackNameError");
+      flags.add("ReviewNeeded");
       validatedName = null;
     }
 
     // Check token count (1–3 words)
     if (validatedName && validatedName.split(" ").length > 3) {
-      log("warn", "OpenAI output too long", { domain, name: validatedName });
-      flags.push("FallbackNameError");
+      log("warn", "Output too long", { domain, validatedName });
       validatedName = validatedName.split(" ").slice(0, 3).join(" ");
-      flags.push("TokenCountAdjusted");
+      flags.add("TokenCountAdjusted");
+      confidenceScore = Math.min(confidenceScore, 95);
     }
 
-    // Check for duplicates (e.g., "Kia Kia")
+    // Check for duplicates
     if (validatedName) {
       const words = validatedName.toLowerCase().split(" ");
-      const uniqueWords = new Set(words);
-      if (uniqueWords.size !== words.length) {
-        log("warn", "Duplicate tokens in OpenAI output", { domain, name: validatedName });
-        validatedName = Array.from(uniqueWords).map(t => capitalizeName(t).name).join(" ");
-        flags.push("DuplicatesRemoved");
+      const uniqueWords = [...new Set(words)];
+      if (uniqueWords.length !== words.length) {
+        log("warn", "Duplicate tokens in output", { domain, validatedName });
+        validatedName = uniqueWords.map(t => capitalizeName(t).name).join(" ");
+        flags.add("DuplicatesRemoved");
+        confidenceScore = Math.min(confidenceScore, 95);
       }
     }
 
     // Check blocklist
     if (validatedName && BLOCKLIST.includes(validatedName.toLowerCase())) {
-      log("warn", "OpenAI output in blocklist", { domain, name: validatedName });
-      flags.push("FallbackNameError");
+      log("warn", "Output in blocklist", { domain, validatedName });
+      flags.add("FallbackNameError");
+      flags.add("ReviewNeeded");
       validatedName = null;
     }
 
-    // Check spammy tokens and flag for review
+    // Check spammy tokens
     if (validatedName) {
       const hasSpammyTokens = SPAMMY_TOKENS.some(token => validatedName.toLowerCase().includes(token));
-      const endsWithSpammy = SPAMMY_TOKENS.some(token => validatedName.toLowerCase().endsWith(token));
-      if (hasSpammyTokens || endsWithSpammy) {
-        log("warn", "OpenAI output contains spammy tokens", { domain, name: validatedName });
-        flags.push("FallbackNameError", "ReviewNeeded");
+      if (hasSpammyTokens) {
+        log("warn", "Output contains spammy tokens", { domain, validatedName });
+        flags.add("SpammyTokens");
+        flags.add("ReviewNeeded");
         validatedName = validatedName.split(" ").filter(t => !SPAMMY_TOKENS.includes(t.toLowerCase())).join(" ");
-        if (!validatedName) validatedName = null;
+        if (!validatedName) {
+          validatedName = null;
+          flags.add("FallbackNameError");
+        }
       }
     }
 
-    // Check for 3+ brands in name
+    // Check for 3+ brands
     if (validatedName) {
       const brandCount = validatedName.split(" ").filter(t => CAR_BRANDS.includes(t.toLowerCase())).length;
       if (brandCount >= 3) {
-        log("warn", "Too many brands in OpenAI output", { domain, name: validatedName });
-        flags.push("FallbackNameError", "ReviewNeeded");
+        log("warn", "Too many brands in output", { domain, validatedName });
+        flags.add("FallbackNameError");
+        flags.add("ReviewNeeded");
         validatedName = null;
       }
     }
@@ -619,14 +641,15 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
 
     // Log successful validation
     if (validatedName) {
-      log("info", "OpenAI output validated", { domain, name: validatedName });
+      log("info", "Output validated", { domain, validatedName });
     }
 
-    return { validatedName, flags, confidenceScore };
+    return { validatedName, flags: Array.from(flags), confidenceScore };
   } catch (e) {
     log("error", "validateFallbackName failed", { domain, error: e.message, stack: e.stack });
-    flags.push("FallbackNameError", "ReviewNeeded");
-    return { validatedName: null, flags, confidenceScore };
+    flags.add("FallbackNameError");
+    flags.add("ReviewNeeded");
+    return { validatedName: null, flags: Array.from(flags), confidenceScore };
   }
 }
 
@@ -636,11 +659,11 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
  * @param {Object} meta - Meta data
  * @returns {{companyName: string, confidenceScore: number, flags: Array<string>, tokens: number}} - Enriched result
  */
-async function fallbackName(domain, meta = {}) {
+async function fallbackName(domain, originalDomain, meta = {}) {
   const normalizedDomain = domain?.toLowerCase().trim() || "";
   let companyName = "";
   let confidenceScore = 80;
-  let flags = [];
+  let flags = new Set(['FallbackName']);
   let tokens = 0;
 
   try {
@@ -659,28 +682,29 @@ async function fallbackName(domain, meta = {}) {
 
     if (!normalizedDomain) {
       log("error", "Invalid domain input", { domain: normalizedDomain });
-      flags.push("InvalidDomainInput");
-      return { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
+      flags.add("InvalidDomainInput");
+      flags.add("ManualReviewRecommended");
+      return { companyName, confidenceScore, flags: Array.from(flags), tokens };
     }
 
     if (BRAND_ONLY_DOMAINS.includes(`${normalizedDomain}.com`)) {
       log("info", "Skipping fallback for brand-only domain", { domain: normalizedDomain });
-      flags.push("BrandOnlyDomainSkipped");
-      return { companyName, confidenceScore: 0, flags: Array.from(new Set(flags)), tokens };
+      flags.add("BrandOnlyDomainSkipped");
+      return { companyName, confidenceScore: 0, flags: Array.from(flags), tokens };
     }
 
     // Try humanizeName first
     let initialResult;
     try {
-      initialResult = await humanizeName(normalizedDomain, normalizedDomain, true);
-      flags.push(...initialResult.flags);
+      initialResult = await humanizeName(normalizedDomain, originalDomain, true);
+      flags.add(...initialResult.flags);
       log("info", "humanizeName completed", { domain: normalizedDomain, result: initialResult });
       if (initialResult.confidenceScore >= 95 && !initialResult.flags.includes("ReviewNeeded")) {
         log("info", "Using humanizeName result", { domain: normalizedDomain, companyName: initialResult.companyName });
         return {
           companyName: initialResult.companyName,
           confidenceScore: initialResult.confidenceScore,
-          flags: Array.from(new Set(flags)),
+          flags: Array.from(flags),
           tokens: initialResult.tokens || 0
         };
       }
@@ -689,7 +713,7 @@ async function fallbackName(domain, meta = {}) {
       tokens = initialResult.tokens || 0;
     } catch (error) {
       log("error", "humanizeName failed", { domain: normalizedDomain, error: error.message });
-      flags.push("HumanizeNameError");
+      flags.add("HumanizeNameError");
       initialResult = { companyName: "", confidenceScore: 80, flags: [], tokens: 0 };
     }
 
@@ -703,218 +727,115 @@ async function fallbackName(domain, meta = {}) {
         .map(t => t.toLowerCase())
         .filter(t => !SPAMMY_TOKENS.includes(t) && t !== "of");
 
-      // Priority 1: Proper noun pair
-      const properNounPair = extractedTokens.filter(t => KNOWN_PROPER_NOUNS_ARRAY.includes(capitalizeName(t).name));
+      // Priority 1: Retry humanizeName with proper noun pair
+      const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
+      const properNounPair = extractedTokens.filter(t => properNounsSet.has(t));
       if (properNounPair.length >= 2) {
-        const name = properNounPair.slice(0, 2).map(t => capitalizeName(t).name).join(" ");
-        log("info", "Proper noun pair rescued", { domain: normalizedDomain, name });
-        flags.push("ProperNounRecovered");
-        return {
-          companyName: name,
-          confidenceScore: 125,
-          flags: Array.from(new Set(flags)),
-          tokens
-        };
+        const tempName = properNounPair.slice(0, 2).map(t => capitalizeName(t).name).join(" ");
+        const retryResult = await humanizeName(tempName, originalDomain, true);
+        if (retryResult.confidenceScore >= 95) {
+          log("info", "Retry humanizeName success", { domain: normalizedDomain, companyName: retryResult.companyName });
+          flags.add("RetryHumanizeSuccess");
+          return {
+            companyName: retryResult.companyName,
+            confidenceScore: retryResult.confidenceScore,
+            flags: Array.from(new Set([...retryResult.flags, ...flags])),
+            tokens
+          };
+        }
       }
 
       // Priority 2: Single proper noun
-      const proper = extractedTokens.find(t => KNOWN_PROPER_NOUNS_ARRAY.includes(capitalizeName(t).name));
-      if (proper) {
-        const formattedProper = capitalizeName(proper).name;
-        log("info", "Single proper noun rescued", { domain: normalizedDomain, name: formattedProper });
-        flags.push("ProperNounRecovered");
-        return {
-          companyName: formattedProper,
-          confidenceScore: 125,
-          flags: Array.from(new Set(flags)),
-          tokens
-        };
+      const singleProper = extractedTokens.find(t => properNounsSet.has(t) && !CAR_BRANDS.includes(t) && !KNOWN_CITIES_SET.has(t));
+      if (singleProper) {
+        companyName = capitalizeName(singleProper).name;
+        confidenceScore = 95;
+        flags.add("SingleProperNoun");
+        // Check for blob-like names
+        if (companyName.length > 12 && !/\s/.test(companyName)) {
+          flags.add("BlobLikeFallback");
+          flags.add("ManualReviewRecommended");
+          confidenceScore = 80;
+        }
       }
 
       // Priority 3: City + Brand or Generic
-      const city = extractedTokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+      const city = extractedTokens.find(t => KNOWN_CITIES_SET.has(t));
       const domainBrand = CAR_BRANDS.find(b => cleanDomain.includes(b.toLowerCase()));
       const metaBrand = getMetaTitleBrand(meta);
       if (city) {
         if (domainBrand) {
           const formattedCity = capitalizeName(city).name;
           const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
-          const name = `${formattedCity} ${formattedBrand}`;
-          log("info", "City and domain brand applied", { domain: normalizedDomain, name });
-          flags.push("CityBrandPattern");
-          return {
-            companyName: name,
-            confidenceScore: 125,
-            flags: Array.from(new Set(flags)),
-            tokens
-          };
-        }
-        if (metaBrand) {
+          companyName = `${formattedCity} ${formattedBrand}`;
+          log("info", "City and domain brand applied", { domain: normalizedDomain, companyName });
+          flags.add("CityBrandPattern");
+          confidenceScore = 125;
+        } else if (metaBrand) {
           const formattedCity = capitalizeName(city).name;
           const formattedBrand = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand).name;
-          const name = `${formattedCity} ${formattedBrand}`;
-          log("info", "City and meta brand applied", { domain: normalizedDomain, name });
-          flags.push("CityBrandPattern", "MetaTitleBrandAppended");
-          return {
-            companyName: name,
-            confidenceScore: 125,
-            flags: Array.from(new Set(flags)),
-            tokens
-          };
+          companyName = `${formattedCity} ${formattedBrand}`;
+          log("info", "City and meta brand applied", { domain: normalizedDomain, companyName });
+          flags.add("CityBrandPattern");
+          flags.add("MetaTitleBrandAppended");
+          confidenceScore = 110;
+        } else {
+          const generic = extractedTokens.find(t => ['auto', 'motors', 'dealers', 'group', 'cares'].includes(t));
+          if (generic) {
+            const formattedCity = capitalizeName(city).name;
+            const formattedGeneric = capitalizeName(generic).name;
+            companyName = `${formattedCity} ${formattedGeneric}`;
+            log("info", "City and generic term applied", { domain: normalizedDomain, companyName });
+            flags.add("CityGenericPattern");
+            confidenceScore = 95;
+          } else {
+            companyName = capitalizeName(city).name;
+            log("info", "City-only output", { domain: normalizedDomain, companyName });
+            flags.add("CityOnlyFallback");
+            flags.add("ManualReviewRecommended");
+            confidenceScore = 80;
+          }
         }
-        const generic = extractedTokens.find(t => ['auto', 'motors', 'dealers', 'group', 'cares'].includes(t));
-        if (generic) {
-          const formattedCity = capitalizeName(city).name;
-          const formattedGeneric = capitalizeName(generic).name;
-          const name = `${formattedCity} ${formattedGeneric}`;
-          log("info", "City and generic term applied", { domain: normalizedDomain, name });
-          flags.push("CityGenericPattern");
-          return {
-            companyName: name,
-            confidenceScore: 125,
-            flags: Array.from(new Set(flags)),
-            tokens
-          };
-        }
-        const formattedCity = capitalizeName(city).name;
-        log("info", "City-only output", { domain: normalizedDomain, name: formattedCity });
-        flags.push("CityOnlyFallback");
-        return {
-          companyName: formattedCity,
-          confidenceScore: 125,
-          flags: Array.from(new Set(flags)),
-          tokens
-        };
       }
 
-      // Priority 4: Generic Blob or Initials Fallback (Patch 2: Addresses GenericPatternError)
+      // Priority 4: Generic Blob or Initials Fallback
       if (!companyName && extractedTokens.length === 1) {
         const token = extractedTokens[0];
         if (KNOWN_GENERIC_BLOBS[token]) {
           companyName = KNOWN_GENERIC_BLOBS[token];
-          log("info", "Generic blob mapped", { domain: normalizedDomain, name: companyName });
-          flags.push("GenericBlobMapped");
+          log("info", "Generic blob mapped", { domain: normalizedDomain, companyName });
+          flags.add("GenericBlobMapped");
           confidenceScore = 95;
         } else if (token.length >= 3 && token.length <= 5 && /^[a-zA-Z]+$/.test(token)) {
           const initials = token.toUpperCase();
           companyName = `${initials} Auto`;
-          log("info", "Initials extracted", { domain: normalizedDomain, name: companyName });
-          flags.push("InitialsRecovered");
-          confidenceScore = 90;
+          log("info", "Initials extracted", { domain: normalizedDomain, companyName });
+          flags.add("InitialsRecovered");
+          confidenceScore = 80;
         }
       }
 
       // Priority 5: Brand + Generic
       if (domainBrand && extractedTokens.includes('auto') && !companyName) {
         const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
-        const name = `${formattedBrand} Auto`;
-        log("info", "Brand and generic term applied", { domain: normalizedDomain, name });
-        flags.push("BrandGenericMatch");
-        return {
-          companyName: name,
-          confidenceScore: 100,
-          flags: Array.from(new Set(flags)),
-          tokens
-        };
+        companyName = `${formattedBrand} Auto`;
+        log("info", "Brand and generic term applied", { domain: normalizedDomain, companyName });
+        flags.add("BrandGenericMatch");
+        confidenceScore = 100;
       }
     } catch (error) {
       log("error", "Token rescue failed", { domain: normalizedDomain, error: error.message });
-      flags.push("LocalFallbackFailed");
+      flags.add("LocalFallbackFailed");
+      flags.add("ManualReviewRecommended");
     }
 
-    // Check for brand-only output and enhance with metadata (Patch 1: Addresses FallbackNameError and LocalFallbackFailed)
-    if (companyName && CAR_BRANDS.includes(companyName.toLowerCase())) {
-      const city = extractedTokens?.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
-      const inferredBrand = companyName;
-      if (city) {
-        companyName = `${capitalizeName(city).name} ${inferredBrand}`;
-        log("info", "Brand-only output, appending city", { domain: normalizedDomain, name: companyName });
-        flags.push("BrandCityAppended");
-        confidenceScore = 125;
-      } else if (meta.title) {
-        const titleTokens = meta.title.toLowerCase().split(/\s+/).filter(t => t.length > 3);
-        const metaCity = titleTokens.find(t => KNOWN_CITIES_SET.has(t) && !CAR_BRANDS.includes(t));
-        if (metaCity) {
-          companyName = `${capitalizeName(metaCity).name} ${inferredBrand}`;
-          log("info", "Brand-only output, appending meta city", { domain: normalizedDomain, name: companyName });
-          flags.push("MetaTitleCityAppended");
-          confidenceScore = 110;
-        } else {
-          log("warn", "Brand-only output, no city found", { domain: normalizedDomain, name: companyName });
-          flags.push("BrandOnlyFallback", "ReviewNeeded");
-          confidenceScore = 50;
-        }
-      } else {
-        log("warn", "Brand-only output, no city or meta available", { domain: normalizedDomain, name: companyName });
-        flags.push("BrandOnlyFallback", "ReviewNeeded");
-        confidenceScore = 50;
-      }
-    }
-
-    // Final token accuracy pass
-    if (companyName) {
-      const isProper = companyName.split(" ").every(t => KNOWN_PROPER_NOUNS_ARRAY.includes(t));
-      if (!isProper && companyName.split(" ").length === 1) {
-        const splitName = splitMergedTokens(companyName);
-        if (splitName !== companyName) {
-          companyName = splitName;
-          log("info", "Final token split applied", { domain: normalizedDomain, name: companyName });
-          flags.push("TokenSplitApplied");
-          confidenceScore = confidenceScore > 50 ? 55 : confidenceScore;
-          flags.push("ReviewNeeded");
-        }
-      }
-
-      // Cap score for weak fallbacks
-      if (companyName.split(" ").length < 2 && !isProper) {
-        confidenceScore = Math.min(confidenceScore, 50);
-        flags.push("LowTokenVariety", "ReviewNeeded");
-      }
-
-      // Possessive-friendly rule
-      const POSSESSIVE_SAFE_NAMES = ["Rick Smith", "Don Jacobs", "Bill Dube", "Robby Nixon", "Robert Thorne", "Team"];
-      if (!POSSESSIVE_SAFE_NAMES.includes(companyName)) {
-        const shouldAppendBrand = (domain, name) => {
-          const domainBrand = CAR_BRANDS.find(b => domain.includes(b.toLowerCase()));
-          return domainBrand && !name.toLowerCase().includes(domainBrand.toLowerCase());
-        };
-        if (shouldAppendBrand(normalizedDomain, companyName)) {
-          const domainBrand = CAR_BRANDS.find(b => normalizedDomain.includes(b.toLowerCase()));
-          const inferredBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
-          companyName = `${companyName} ${inferredBrand}`;
-          log("info", "Brand appended for clarity", { domain: normalizedDomain, name: companyName });
-          flags.push("BrandAppendedForClarity");
-        }
-      }
-    }
-
-    // Apply abbreviation expansions and brand mapping
-    if (companyName) {
-      let normalizedName = companyName;
-      Object.keys(ABBREVIATION_EXPANSIONS).forEach(abbr => {
-        const regex = new RegExp(`\\b${abbr}\\b`, "gi");
-        normalizedName = normalizedName.replace(regex, ABBREVIATION_EXPANSIONS[abbr]);
-      });
-      if (normalizedName.includes("Chevrolet")) {
-        normalizedName = normalizedName.replace("Chevrolet", "Chevy");
-      }
-      if (normalizedName.includes("Mercedes-Benz")) {
-        normalizedName = normalizedName.replace("Mercedes-Benz", "M.B.");
-      }
-      if (normalizedName !== companyName) {
-        companyName = normalizedName;
-        log("info", "Applied abbreviation and brand normalization", { domain: normalizedDomain, companyName });
-        flags.push("NormalizationApplied");
-      }
-    }
-
-    // OpenAI fallback for spacing/casing only (last resort) (Patch 3: Adjusts for Meta-Brand Mismatches)
+    // OpenAI fallback for spacing/casing (last resort)
     if (companyName && (companyName.split(" ").length < 2 || /\b[a-z]+[A-Z]/.test(companyName))) {
       const cacheKey = `${normalizedDomain}:${(meta.title || "").toLowerCase().trim()}`;
       if (openAICache.has(cacheKey)) {
         const cached = openAICache.get(cacheKey);
         log("info", "Cache hit", { domain: normalizedDomain, companyName: cached.companyName });
-        flags.push("OpenAICacheHit");
+        flags.add("OpenAICacheHit");
         return {
           companyName: cached.companyName,
           confidenceScore: cached.confidenceScore,
@@ -949,58 +870,70 @@ async function fallbackName(domain, meta = {}) {
           throw new FallbackError("OpenAI spacing fix failed", { domain: normalizedDomain });
         }
 
-        // Extract domainBrand
         const domainBrand = CAR_BRANDS.find(b => normalizedDomain.includes(b.toLowerCase())) || null;
-
-        // Validate OpenAI result with updated validateFallbackName
         const { validatedName, flags: validationFlags, confidenceScore: updatedConfidence } = validateFallbackName(
           { name, brand: null, flagged: false },
           normalizedDomain,
           domainBrand,
           confidenceScore
         );
-        flags.push(...validationFlags);
+        flags.add(...validationFlags);
 
-        // Prevent hallucination
-        const originalWords = companyName.toLowerCase().split(/\s+/).filter(word => word);
-        const newWords = name.toLowerCase().split(/\s+/).filter(word => word);
-        const addedWords = newWords.filter(word => !originalWords.includes(word));
-        if (addedWords.length > 0) {
-          log("warn", "OpenAI hallucinated words", { domain: normalizedDomain, addedWords });
-          flags.push("OpenAIHallucinationDetected", "ReviewNeeded");
-        } else if (validatedName) {
+        if (validatedName) {
           companyName = validatedName;
-          confidenceScore = updatedConfidence; // Use updated confidence from validateFallbackName
-          flags.push("OpenAISpacingFix");
+          confidenceScore = updatedConfidence;
+          flags.add("OpenAISpacingFix");
         } else {
-          flags.push("OpenAIFallbackFailed", "ReviewNeeded");
+          flags.add("OpenAIFallbackFailed");
+          flags.add("ManualReviewRecommended");
         }
 
         const finalResult = {
           companyName,
           confidenceScore,
-          flags: Array.from(new Set(flags)),
+          flags: Array.from(flags),
           tokens
         };
         openAICache.set(cacheKey, finalResult);
         return finalResult;
       } catch (error) {
         log("error", "OpenAI spacing fix failed", { domain: normalizedDomain, error: error.message });
-        flags.push("OpenAIFallbackFailed", "ReviewNeeded");
+        flags.add("OpenAIFallbackFailed");
+        flags.add("ManualReviewRecommended");
       }
     }
 
     // Final fallback
     if (!companyName) {
       companyName = capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
-      flags.push("FallbackNameError", "ReviewNeeded");
+      flags.add("FinalFallback");
+      flags.add("ManualReviewRecommended");
       confidenceScore = 50;
+    }
+
+    // Deduplicate output
+    if (companyName) {
+      const words = companyName.toLowerCase().split(" ");
+      const uniqueWords = [...new Set(words)];
+      if (uniqueWords.length !== words.length) {
+        companyName = uniqueWords.map(t => capitalizeName(t).name).join(" ");
+        confidenceScore = Math.min(confidenceScore, 95);
+        flags.add("DuplicatesRemoved");
+      }
+    }
+
+    // Final validation
+    if (companyName && CAR_BRANDS.includes(companyName.toLowerCase())) {
+      companyName = "";
+      confidenceScore = 0;
+      flags.add("BrandOnlyFallback");
+      flags.add("ManualReviewRecommended");
     }
 
     const finalResult = {
       companyName,
       confidenceScore,
-      flags: Array.from(new Set(flags)),
+      flags: Array.from(flags),
       tokens
     };
 
@@ -1013,8 +946,9 @@ async function fallbackName(domain, meta = {}) {
       error: err.message,
       stack: err.stack
     });
-    flags.push("FallbackNameError", "ManualReviewRecommended");
-    return { companyName, confidenceScore: 50, flags: Array.from(new Set(flags)), tokens };
+    flags.add("FallbackNameError");
+    flags.add("ManualReviewRecommended");
+    return { companyName, confidenceScore: 50, flags: Array.from(flags), tokens };
   }
 }
 
