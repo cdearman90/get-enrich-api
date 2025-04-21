@@ -2533,7 +2533,6 @@ function tryBrandGenericPattern(tokens, meta = {}) {
   }
 }
 
-
 function dedupeBrands(tokens) {
   const seen = new Set();
   return tokens.filter(token => {
@@ -2681,7 +2680,7 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
   const normalizedDomain = domain?.toLowerCase().trim() || "";
   let companyName = "";
   let confidenceScore = 80;
-  let flags = [];
+  let flags = new Set();
   let tokens = 0;
   // In-memory cache for duplicate domains
   const enrichmentCache = new Map();
@@ -2689,8 +2688,8 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
   try {
     if (!domain || typeof domain !== "string") {
       log("error", "Invalid domain input", { domain, originalDomain });
-      flags.push("InvalidDomainInput");
-      return { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
+      flags.add("InvalidDomainInput");
+      return { companyName, confidenceScore, flags: Array.from(flags), tokens };
     }
     if (!originalDomain || typeof originalDomain !== "string") {
       log("warn", "Invalid originalDomain, using domain as fallback", { originalDomain, domain });
@@ -2701,7 +2700,7 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
     if (enrichmentCache.has(normalizedDomain)) {
       const cached = enrichmentCache.get(normalizedDomain);
       log("debug", "Cache hit for duplicate domain", { domain, cached });
-      flags.push("DuplicateDomainCached");
+      flags.add("DuplicateDomainCached");
       return { ...cached, flags: Array.from(new Set([...cached.flags, ...flags])) };
     }
 
@@ -2711,7 +2710,7 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
         meta = await fetchMetaData(domain);
       } catch (err) {
         log("error", "fetchMetaData failed", { domain, error: err.message, stack: err.stack });
-        flags.push("MetaDataFailed");
+        flags.add("MetaDataFailed");
       }
     }
 
@@ -2748,9 +2747,9 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
 
     let extractedTokens = earlyCompoundSplit(normalizedDomain);
     if (!extractedTokens || extractedTokens.length === 0) {
-      flags.push("NoTokensExtracted");
-      flags.push("ManualReviewRecommended");
-      const result = { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
+      flags.add("NoTokensExtracted");
+      flags.add("ManualReviewRecommended");
+      const result = { companyName, confidenceScore, flags: Array.from(flags), tokens };
       enrichmentCache.set(normalizedDomain, result);
       return result;
     }
@@ -2786,6 +2785,11 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
           result.confidenceScore = Math.min(result.confidenceScore, 95);
           result.flags.push('TokenLimitExceeded');
         }
+        // Check for blob-like names (>12 chars, no spaces)
+        if (result.companyName.length > 12 && !/\s/.test(result.companyName)) {
+          result.confidenceScore = Math.min(result.confidenceScore, 80);
+          result.flags.push('BlobLikeFallback', 'ManualReviewRecommended');
+        }
         // Block brand-only outputs
         const lowerName = result.companyName.toLowerCase();
         if (carBrandsSet.has(lowerName) || CAR_BRANDS.includes(lowerName)) {
@@ -2797,13 +2801,46 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
       }
     }
 
-    // Final result
-    const finalResult = {
+    // Final result from patterns
+    let finalResult = {
       companyName: result.companyName || '',
       confidenceScore: result.companyName ? result.confidenceScore : 0,
-      flags: Array.from(new Set([pattern.name, ...result.flags, ...flags])),
+      flags: Array.from(new Set([result ? pattern.name : 'NoPatternMatch', ...result.flags, ...flags])),
       tokens
     };
+
+    // Trigger fallbackName if low confidence or no result
+    if (!finalResult.companyName || finalResult.confidenceScore < 95) {
+      const fallbackResult = await fallbackName(domain, originalDomain, meta);
+      if (fallbackResult.companyName) {
+        finalResult = {
+          companyName: fallbackResult.companyName,
+          confidenceScore: fallbackResult.confidenceScore,
+          flags: Array.from(new Set([...finalResult.flags, ...fallbackResult.flags, 'FallbackTriggered'])),
+          tokens: fallbackResult.tokens
+        };
+      }
+    }
+
+    // Validate final result with validateFallbackName
+    if (finalResult.companyName) {
+      const domainBrand = CAR_BRANDS.find(b => normalizedDomain.includes(b.toLowerCase())) || null;
+      const { validatedName, flags: validationFlags, confidenceScore: updatedConfidence } = validateFallbackName(
+        { name: finalResult.companyName, brand: null, flagged: false },
+        normalizedDomain,
+        domainBrand,
+        finalResult.confidenceScore
+      );
+      if (validatedName) {
+        finalResult.companyName = validatedName;
+        finalResult.confidenceScore = updatedConfidence;
+        finalResult.flags = Array.from(new Set([...finalResult.flags, ...validationFlags]));
+      } else {
+        finalResult.companyName = '';
+        finalResult.confidenceScore = 0;
+        finalResult.flags = Array.from(new Set([...finalResult.flags, ...validationFlags, 'ValidationFailed', 'ManualReviewRecommended']));
+      }
+    }
 
     // Cache result
     enrichmentCache.set(normalizedDomain, finalResult);
@@ -2815,8 +2852,9 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
       stack: err.stack,
       tokensExtracted: extractedTokens || []
     });
-    flags.push("HumanizeNameError", "ManualReviewRecommended");
-    const errorResult = { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
+    flags.add("HumanizeNameError");
+    flags.add("ManualReviewRecommended");
+    const errorResult = { companyName, confidenceScore, flags: Array.from(flags), tokens };
     enrichmentCache.set(normalizedDomain, errorResult);
     return errorResult;
   }
