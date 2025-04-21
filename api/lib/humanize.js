@@ -1663,16 +1663,16 @@ const overrides = {
       }
     }
 
-try {
-  const validTokens = tokens
-    .filter(t => t && !['cars', 'sales', 'autogroup'].includes(t.toLowerCase()))
-    .filter((t, i, arr) => {
-      if (i === 0) return true;
-      return t.toLowerCase() !== arr[i - 1].toLowerCase();
-    });
+// ✅ Already inside try { ... } at the top of earlyCompoundSplit
+const validTokens = tokens
+  .filter(t => t && !['cars', 'sales', 'autogroup'].includes(t.toLowerCase()))
+  .filter((t, i, arr) => {
+    if (i === 0) return true;
+    return t.toLowerCase() !== arr[i - 1].toLowerCase();
+  });
 
-  log('debug', 'earlyCompoundSplit result', { text, split: validTokens });
-  return validTokens;
+log('debug', 'earlyCompoundSplit result', { text, split: validTokens });
+return validTokens;
 } catch (e) {
   log("error", "earlyCompoundSplit failed", {
     text,
