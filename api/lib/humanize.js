@@ -1547,7 +1547,7 @@ function earlyCompoundSplit(text) {
       'chapmanchoice': ['Chapman', 'Choice']
     };
 
-if (overrides[lower]) {
+    if (overrides[lower]) {
       const split = overrides[lower];
       log('debug', 'Domain override applied', { text, split });
       return split;
@@ -1569,24 +1569,24 @@ if (overrides[lower]) {
       }
     }
 
-    // Multi-word city + brand/generic split
+    // Enhanced city + brand/generic split with full city preservation
     for (const city of KNOWN_CITIES_SET) {
-      const cityLower = city.toLowerCase().replace(/\s+/g, '');
-      if (lower.includes(cityLower)) {
-        const remaining = lower.replace(cityLower, '');
-        if (CAR_BRANDS.includes(remaining) || ABBREVIATION_EXPANSIONS[remaining]) {
-          const formattedCity = capitalizeName(city).name;
-          const brand = ABBREVIATION_EXPANSIONS[remaining] || BRAND_MAPPING[remaining] || capitalizeName(remaining).name;
-          const split = formattedCity.includes(' ') ? [...formattedCity.split(' '), brand] : [formattedCity, brand];
-          log('debug', 'City+Brand split', { text, split });
+      const cityNoSpaces = city.toLowerCase().replace(/\s+/g, '');
+      if (lower === cityNoSpaces || lower.startsWith(cityNoSpaces)) {
+        const rest = lower.slice(cityNoSpaces.length);
+        const formattedCity = capitalizeName(city).name; // Preserve full city name
+        if (!rest || CAR_BRANDS.includes(rest) || ABBREVIATION_EXPANSIONS[rest]) {
+          const brand = rest ? (ABBREVIATION_EXPANSIONS[rest] || BRAND_MAPPING[rest] || capitalizeName(rest).name) : null;
+          const split = formattedCity.includes(' ') ? [...formattedCity.split(' ')] : [formattedCity];
+          if (brand) split.push(brand);
+          log('debug', 'City+Brand split with full city preservation', { text, split });
           return split;
         }
         const genericTerms = ['auto', 'automotive', 'motors', 'dealers', 'group', 'mall', 'automall'];
-        if (genericTerms.includes(remaining)) {
-          const formattedCity = capitalizeName(city).name;
-          const formattedGeneric = capitalizeName(remaining).name;
+        if (genericTerms.includes(rest)) {
+          const formattedGeneric = capitalizeName(rest).name;
           const split = formattedCity.includes(' ') ? [...formattedCity.split(' '), formattedGeneric] : [formattedCity, formattedGeneric];
-          log('debug', 'City+Generic split', { text, split });
+          log('debug', 'City+Generic split with full city preservation', { text, split });
           return split;
         }
       }
@@ -2295,6 +2295,11 @@ function tryCityAutoPattern(tokens) {
   }
 }
 
+/**
+ * Attempts to match a brand + generic term or proper noun pattern in tokens
+ * @param {Array<string>} tokens - Tokens to analyze
+ * @returns {{companyName: string, confidenceScore: number, flags: Array<string>}} - Result with company name, confidence score, and flags
+ */
 function tryBrandGenericPattern(tokens) {
   const flags = new Set(['BrandGenericPattern']);
   log('info', 'tryBrandGenericPattern started', { tokens });
@@ -2372,12 +2377,12 @@ function tryBrandGenericPattern(tokens) {
       const isPossessiveSafe = !formattedProper.toLowerCase().endsWith('s') && properNounsSet.has(formattedProper.toLowerCase());
 
       // Stand-alone proper noun if possessive-safe
-      if (isPossessiveSafe && !matchedBrand) {
+      if (isPossessiveSafe) {
         flags.add('ProperNounDetected');
         return { companyName: formattedProper, confidenceScore: 125, flags: Array.from(flags) };
       }
 
-      // Proper Noun + Brand
+      // Proper Noun + Brand (only if proper noun isn't possessive-safe)
       if (matchedBrand) {
         const name = `${formattedProper} ${formattedBrand}`;
         flags.add('ProperNounBrandPattern');
@@ -2392,7 +2397,7 @@ function tryBrandGenericPattern(tokens) {
     // Priority 2: City + Brand
     if (matchedCity && matchedBrand) {
       const formattedCity = capitalizeName(matchedCity).name;
-      const name = `${formattedCity} ${formattedBrand}`; // Fixed typo: formatted370Brand → formattedBrand
+      const name = `${formattedCity} ${formattedBrand}`;
       flags.add('CityBrandPattern');
       return { companyName: name, confidenceScore: 125, flags: Array.from(flags) };
     }
@@ -2414,10 +2419,12 @@ function tryBrandGenericPattern(tokens) {
       return { companyName: name, confidenceScore: 100, flags: Array.from(flags) };
     }
 
-    // Priority 5: Brand-only fallback (prevented with Motors append)
-    if (matchedBrand) {
-      flags.add('BrandOnlyPrevented');
-      return { companyName: `${formattedBrand} Motors`, confidenceScore: 50, flags: Array.from(flags) };
+    // Priority 5: Brand-only fallback (blocked)
+    if (matchedBrand && !matchedProper && !matchedCity && !matchedGeneric) {
+      flags.add('TooGeneric');
+      flags.add('ReviewNeeded');
+      flags.add('BrandOnlyBlocked');
+      return { companyName: '', confidenceScore: 0, flags: Array.from(flags) };
     }
 
     // Priority 6: Single-token fallback
