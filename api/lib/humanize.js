@@ -2000,25 +2000,17 @@ function tryBrandCityPattern(tokens) {
     let matchedCity = null;
     let matchedBrand = null;
 
-    // Pass 1: Multi-word city (non-adjacent)
-    const cityCombinations = [];
-    for (let i = 0; i < normalizedTokens.length; i++) {
-      for (let j = i + 1; j < normalizedTokens.length; j++) {
-        const combo = `${normalizedTokens[i]} ${normalizedTokens[j]}`;
-        if (KNOWN_CITIES_SET.has(combo)) {
-          cityCombinations.push({ city: combo, indices: [i, j] });
-        }
+    // Pass 1: Adjacent multi-word city
+    for (let i = 0; i < normalizedTokens.length - 1; i++) {
+      const combo = `${normalizedTokens[i]} ${normalizedTokens[i + 1]}`;
+      if (KNOWN_CITIES_SET.has(combo)) {
+        matchedCity = combo;
+        matchedBrand = normalizedTokens.find((t, j) =>
+          j !== i && j !== i + 1 && (CAR_BRANDS.includes(t) || ABBREVIATION_EXPANSIONS[t])
+        );
+        if (matchedBrand) break;
+        matchedCity = null;
       }
-    }
-
-    // Select the first valid combination with a brand
-    for (const { city, indices } of cityCombinations) {
-      matchedCity = city;
-      matchedBrand = normalizedTokens.find((t, j) =>
-        !indices.includes(j) && (CAR_BRANDS.includes(t) || ABBREVIATION_EXPANSIONS[t])
-      );
-      if (matchedBrand) break;
-      matchedCity = null;
     }
 
     // Pass 2: Single-token city
@@ -2069,7 +2061,7 @@ function tryBrandCityPattern(tokens) {
     log('error', 'tryBrandCityPattern failed', { tokens, error: e.message, stack: e.stack });
     flags.add('BrandCityPatternError');
     flags.add('ManualReviewRecommended');
-    return { companyName: '', confidenceScore: 80, flags: Array.from(flags) };
+    return { companyName: '', confidenceScore: 0, flags: Array.from(flags) };
   }
 }
 
