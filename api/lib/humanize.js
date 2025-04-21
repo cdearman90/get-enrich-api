@@ -2860,6 +2860,36 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
   }
 }
 
+// Ensure other functions (earlyCompoundSplit, etc.) are included in the file
+// ... (earlyCompoundSplit, capitalizeName, pattern functions as previously shared)
+
+// Hypothetical test cases (likely causing the error around line 2038)
+const testCases = [
+  ['johnthornton.com', { name: 'John Thornton', confidenceScore: 125 }],
+  ['stoopsbuickgmc.com', { name: 'Stoops', confidenceScore: 95 }],
+  ['bespokemotorgroup.com', { name: 'Bespoke', confidenceScore: 95 }],
+  ['alanbyervolvo.com', { name: 'Alan Byer', confidenceScore: 125 }],
+  ['nissanofathens.com', { name: 'Athens Nissan', confidenceScore: 125 }],
+  ['jimmybrittchevrolet.com', { name: 'Jimmy Britt', confidenceScore: 125 }]
+];
+
+// Fix: Ensure correct for...of syntax
+// Before (hypothetical incorrect syntax causing the error):
+// for domain of testCases {  // 🔴 Invalid
+//   const result = await humanizeName(domain, domain, false);
+//   console.log(result);
+// }
+
+// After (correct syntax):
+for (const [domain, expected] of testCases) {
+  const result = await humanizeName(domain, domain, false);
+  console.log({
+    domain,
+    name: result.companyName,
+    pass: result.companyName === expected.name && result.confidenceScore === expected.confidenceScore
+  });
+}
+
 /**
  * Fetches metadata for a domain
  * @param {string} domain - Domain to fetch metadata for
