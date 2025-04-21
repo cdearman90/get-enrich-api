@@ -2036,9 +2036,13 @@ function tryHumanNamePattern(tokens) {
       }
     }
 
-    const t0 = tokens[0]?.toLowerCase();
-    const t1 = tokens[1]?.toLowerCase();
-
+// Check for proper nouns to defer
+for (const token of tokens) {
+  if (properNouns.has(token.toLowerCase())) {
+    flags.add('ProperNounDetected');
+    return { companyName: '', confidenceScore: 0, flags: Array.from(flags) }; // Defer to tryProperNounPattern
+  }
+}
     // Two-token pattern: First + Last Name (e.g., Don Jacobs)
     if (
       tokens.length >= 2 &&
