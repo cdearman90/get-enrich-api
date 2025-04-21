@@ -1079,7 +1079,9 @@ const KNOWN_CITIES_SET = new Set([
   'merrill', 'monroe', 'oconto', 'pewaukee', 'portage', 'reedsburg', 'rice lake', 'river falls', 'stoughton', 'sturgeon bay',
 
   // Wyoming (10 new, smaller communities)
-  'afton', 'evanston', 'glenrock', 'green river', 'jackson hole', 'kemmerer', 'lander', 'powell', 'riverton', 'sheridan'
+  'afton', 'evanston', 'glenrock', 'green river', 'jackson hole', 'kemmerer', 'lander', 'powell', 'riverton', 'sheridan', 'birmingham', 'montgomery',
+  'hunstville', 'lakeland', 'wilsonville', 'palm coast', 'morristown', 'palm coast', 'morristown', 'roseville', 'novato', 'jacksonville', 'richmond',
+  'san leandro'
 ]);
 
  // Define known first and last names for human name splitting
@@ -1569,24 +1571,50 @@ function earlyCompoundSplit(text) {
       }
     }
 
-    // Enhanced city + brand/generic split with full city preservation
+    // Enhanced city + brand/generic split with full city preservation and directional prefixes
+    const prefixes = ['north', 'south', 'east', 'west'];
+    for (const prefix of prefixes) {
+      for (const city of KNOWN_CITIES_SET) {
+        const cityNoSpaces = city.toLowerCase().replace(/\s+/g, '');
+        const prefixedCity = `${prefix}${cityNoSpaces}`;
+        if (lower.startsWith(prefixedCity)) {
+          const rest = lower.slice(prefixedCity.length);
+          const formattedCity = `${capitalizeName(prefix)} ${capitalizeName(city)}`;
+          if (!rest || CAR_BRANDS.includes(rest)) {
+            const brand = rest ? (BRAND_MAPPING[rest] || capitalizeName(rest).name) : null;
+            const split = [formattedCity];
+            if (brand) split.push(brand);
+            log('debug', 'Prefixed City+Brand split', { text, split });
+            return split;
+          }
+          const genericTerms = ['auto', 'automotive', 'motors', 'dealers', 'group', 'mall', 'automall'];
+          if (genericTerms.includes(rest)) {
+            const formattedGeneric = capitalizeName(rest).name;
+            const split = [formattedCity, formattedGeneric];
+            log('debug', 'Prefixed City+Generic split', { text, split });
+            return split;
+          }
+        }
+      }
+    }
+
     for (const city of KNOWN_CITIES_SET) {
       const cityNoSpaces = city.toLowerCase().replace(/\s+/g, '');
-      if (lower === cityNoSpaces || lower.startsWith(cityNoSpaces)) {
+      if (lower.startsWith(cityNoSpaces)) {
         const rest = lower.slice(cityNoSpaces.length);
-        const formattedCity = capitalizeName(city).name; // Preserve full city name
-        if (!rest || CAR_BRANDS.includes(rest) || ABBREVIATION_EXPANSIONS[rest]) {
-          const brand = rest ? (ABBREVIATION_EXPANSIONS[rest] || BRAND_MAPPING[rest] || capitalizeName(rest).name) : null;
-          const split = formattedCity.includes(' ') ? [...formattedCity.split(' ')] : [formattedCity];
+        const formattedCity = capitalizeName(city).name;
+        if (!rest || CAR_BRANDS.includes(rest)) {
+          const brand = rest ? (BRAND_MAPPING[rest] || capitalizeName(rest).name) : null;
+          const split = [formattedCity];
           if (brand) split.push(brand);
-          log('debug', 'City+Brand split with full city preservation', { text, split });
+          log('debug', 'City+Brand split', { text, split });
           return split;
         }
         const genericTerms = ['auto', 'automotive', 'motors', 'dealers', 'group', 'mall', 'automall'];
         if (genericTerms.includes(rest)) {
           const formattedGeneric = capitalizeName(rest).name;
-          const split = formattedCity.includes(' ') ? [...formattedCity.split(' '), formattedGeneric] : [formattedCity, formattedGeneric];
-          log('debug', 'City+Generic split with full city preservation', { text, split });
+          const split = [formattedCity, formattedGeneric];
+          log('debug', 'City+Generic split', { text, split });
           return split;
         }
       }
@@ -1637,7 +1665,7 @@ function earlyCompoundSplit(text) {
         const nounLower = noun.toLowerCase().replace(/\s+/g, '');
         if (remaining.startsWith(nounLower)) {
           const formattedNoun = capitalizeName(noun).name;
-          tokens.push(...formattedNoun.split(' '));
+          tokens.push(formattedNoun);
           remaining = remaining.slice(nounLower.length);
           matched = true;
           log('debug', 'Proper noun prefix split', { text, split: tokens });
@@ -1651,7 +1679,7 @@ function earlyCompoundSplit(text) {
           const cityLower = city.toLowerCase().replace(/\s+/g, '');
           if (remaining.startsWith(cityLower)) {
             const formattedCity = capitalizeName(city).name;
-            tokens.push(...formattedCity.split(' '));
+            tokens.push(formattedCity);
             remaining = remaining.slice(cityLower.length);
             matched = true;
             log('debug', 'City prefix split', { text, split: tokens });
@@ -1715,7 +1743,6 @@ function earlyCompoundSplit(text) {
     return [text];
   }
 }
-
 /**
  * Splits camelCase text into tokens
  * @param {string} text - Text to split
@@ -2474,6 +2501,18 @@ function tryGenericPattern(tokens, meta = {}) {
       .map(t => t.toLowerCase())
       .filter(t => !spamTerms.includes(t));
 
+    // Add brand-count penalty (Suggestion A)
+    const brandCount = cleanedTokens.filter(t => CAR_BRANDS.includes(t.toLowerCase())).length;
+    if (brandCount > 1) {
+      flags.add('BrandOverusePenalty');
+      log('warn', 'Multiple brands detected in tokens', { tokens, brandCount });
+      return {
+        companyName: '',
+        confidenceScore: 50,
+        flags: Array.from(new Set(['GenericPattern', 'BrandOverusePenalty', 'ManualReviewRecommended']))
+      };
+    }
+
     if (!cleanedTokens.length) {
       const fallbackBrand = getMetaTitleBrand(meta) || 'Auto';
       const brandLower = fallbackBrand.toLowerCase();
@@ -2813,6 +2852,13 @@ function getMetaTitleBrand(meta) {
 
     const title = meta.title.toLowerCase().replace(/[^a-z0-9\s]/gi, '');
     const words = title.split(/\s+/).filter(Boolean);
+
+    // Check for multiple brands (Suggestion B)
+    const brandTokens = words.filter(w => CAR_BRANDS.includes(w) || BRAND_MAPPING[w]);
+    if (brandTokens.length > 1) {
+      log('warn', 'Multiple brands detected in meta title', { title, brandTokens });
+      return null;
+    }
 
     // Priority 1: Match full human name (first + last)
     for (let i = 0; i < words.length - 1; i++) {
