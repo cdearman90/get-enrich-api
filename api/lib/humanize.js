@@ -444,7 +444,6 @@ const TEST_CASE_OVERRIDES = {
   'vwsouthtowne.com': 'VW South Towne',
   'scottclarkstoyota.com': 'Scott Clark',
   'duvalford.com': 'Duval',
-  'avisford.com': 'Avis',
   'devineford.com': 'Devine',
   'allamericanford.net': 'All American',
   'slvdodge.com': 'Silver Dodge',
