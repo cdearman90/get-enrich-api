@@ -676,6 +676,7 @@ async function fallbackName(domain, meta = {}) {
       }
       companyName = initialResult.companyName || "";
       confidenceScore = initialResult.confidenceScore || 80;
+      tokens = initialResult.tokens || 0;
     } catch (error) {
       log("error", "humanizeName failed", { domain: normalizedDomain, error: error.message });
       flags.push("HumanizeNameError");
@@ -685,80 +686,129 @@ async function fallbackName(domain, meta = {}) {
     // Enhanced token rescue
     let cleanDomain;
     try {
-      cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org)$/g, "");
-      let tokens = earlyCompoundSplit(cleanDomain);
-      tokens = tokens
+      cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org|\.biz|\.ca|\.co\.uk)$/g, "");
+      let extractedTokens = earlyCompoundSplit(cleanDomain);
+      tokens = extractedTokens.length;
+      extractedTokens = extractedTokens
         .map(t => t.toLowerCase())
         .filter(t => !SPAMMY_TOKENS.includes(t) && t !== "of");
-      const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
-      const properNounPair = tokens.filter(t => KNOWN_PROPER_NOUNS_ARRAY.includes(capitalizeName(t).name));
 
-      if (properNounPair.length === 2) {
-        const name = properNounPair.map(t => capitalizeName(t).name).join(" ");
+      // Priority 1: Proper noun pair
+      const properNounPair = extractedTokens.filter(t => KNOWN_PROPER_NOUNS_ARRAY.includes(capitalizeName(t).name));
+      if (properNounPair.length >= 2) {
+        const name = properNounPair.slice(0, 2).map(t => capitalizeName(t).name).join(" ");
         log("info", "Proper noun pair rescued", { domain: normalizedDomain, name });
         flags.push("ProperNounRecovered");
         return {
           companyName: name,
           confidenceScore: 125,
           flags: Array.from(new Set(flags)),
-          tokens: 0
+          tokens
         };
       }
 
-      const metaBrand = getMetaTitleBrand(meta);
-      if (city && metaBrand && !CAR_BRANDS.some(b => cleanDomain.includes(b.toLowerCase()))) {
-        const name = `${capitalizeName(city).name} ${BRAND_MAPPING[metaBrand.toLowerCase()] || metaBrand}`;
-        log("info", "City and meta brand applied", { domain: normalizedDomain, name });
-        flags.push("CityBrandPattern", "MetaTitleBrandAppended");
+      // Priority 2: Single proper noun
+      const proper = extractedTokens.find(t => KNOWN_PROPER_NOUNS_ARRAY.includes(capitalizeName(t).name));
+      if (proper) {
+        const formattedProper = capitalizeName(proper).name;
+        log("info", "Single proper noun rescued", { domain: normalizedDomain, name: formattedProper });
+        flags.push("ProperNounRecovered");
         return {
-          companyName: name,
+          companyName: formattedProper,
           confidenceScore: 125,
           flags: Array.from(new Set(flags)),
-          tokens: 0
+          tokens
         };
       }
+
+      // Priority 3: City + Brand or Generic
+      const city = extractedTokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+      const domainBrand = CAR_BRANDS.find(b => cleanDomain.includes(b.toLowerCase()));
+      const metaBrand = getMetaTitleBrand(meta);
       if (city) {
-        const brand = CAR_BRANDS.find(b => cleanDomain.includes(b.toLowerCase()));
-        if (brand) {
-          const name = `${capitalizeName(city).name} ${BRAND_MAPPING[brand.toLowerCase()] || brand}`;
+        if (domainBrand) {
+          const formattedCity = capitalizeName(city).name;
+          const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
+          const name = `${formattedCity} ${formattedBrand}`;
           log("info", "City and domain brand applied", { domain: normalizedDomain, name });
           flags.push("CityBrandPattern");
           return {
             companyName: name,
             confidenceScore: 125,
             flags: Array.from(new Set(flags)),
-            tokens: 0
-          };
-        } else {
-          const name = `${capitalizeName(city).name} Auto`;
-          log("info", "City-only output, appending Auto", { domain: normalizedDomain, name });
-          flags.push("CityOnlyFallback", "BrandAppendedForClarity", "ReviewNeeded");
-          return {
-            companyName: name,
-            confidenceScore: 50,
-            flags: Array.from(new Set(flags)),
-            tokens: 0
+            tokens
           };
         }
+        if (metaBrand) {
+          const formattedCity = capitalizeName(city).name;
+          const formattedBrand = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand).name;
+          const name = `${formattedCity} ${formattedBrand}`;
+          log("info", "City and meta brand applied", { domain: normalizedDomain, name });
+          flags.push("CityBrandPattern", "MetaTitleBrandAppended");
+          return {
+            companyName: name,
+            confidenceScore: 125,
+            flags: Array.from(new Set(flags)),
+            tokens
+          };
+        }
+        const generic = extractedTokens.find(t => ['auto', 'motors', 'dealers', 'group', 'cares'].includes(t));
+        if (generic) {
+          const formattedCity = capitalizeName(city).name;
+          const formattedGeneric = capitalizeName(generic).name;
+          const name = `${formattedCity} ${formattedGeneric}`;
+          log("info", "City and generic term applied", { domain: normalizedDomain, name });
+          flags.push("CityGenericPattern");
+          return {
+            companyName: name,
+            confidenceScore: 125,
+            flags: Array.from(new Set(flags)),
+            tokens
+          };
+        }
+        const formattedCity = capitalizeName(city).name;
+        log("info", "City-only output", { domain: normalizedDomain, name: formattedCity });
+        flags.push("CityOnlyFallback");
+        return {
+          companyName: formattedCity,
+          confidenceScore: 125,
+          flags: Array.from(new Set(flags)),
+          tokens
+        };
       }
-      if (city && !companyName.includes(city)) {
-        log("warn", "City dropped", { domain: normalizedDomain, city });
-        flags.push("CityDropped");
+
+      // Priority 4: Brand + Generic
+      if (domainBrand && extractedTokens.includes('auto') && !companyName) {
+        const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
+        const name = `${formattedBrand} Auto`;
+        log("info", "Brand and generic term applied", { domain: normalizedDomain, name });
+        flags.push("BrandGenericMatch");
+        return {
+          companyName: name,
+          confidenceScore: 100,
+          flags: Array.from(new Set(flags)),
+          tokens
+        };
       }
     } catch (error) {
       log("error", "Token rescue failed", { domain: normalizedDomain, error: error.message });
       flags.push("LocalFallbackFailed");
     }
 
-    // Check for brand-only output and append meta or domain context
+    // Check for brand-only output and enhance with metadata
     if (companyName && CAR_BRANDS.includes(companyName.toLowerCase())) {
-      const city = tokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+      const city = extractedTokens?.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
       const inferredBrand = companyName;
       if (city) {
         companyName = `${capitalizeName(city).name} ${inferredBrand}`;
         log("info", "Brand-only output, appending city", { domain: normalizedDomain, name: companyName });
         flags.push("BrandCityAppended");
         confidenceScore = 125;
+      } else if (metaBrand) {
+        companyName = `${capitalizeName(metaBrand).name} ${inferredBrand}`;
+        log("info", "Brand-only output, appending meta brand", { domain: normalizedDomain, name: companyName });
+        flags.push("MetaTitleBrandAppended");
+        confidenceScore = 100;
       } else {
         log("warn", "Brand-only output", { domain: normalizedDomain, name: companyName });
         flags.push("BrandOnlyFallback", "ReviewNeeded");
@@ -782,7 +832,7 @@ async function fallbackName(domain, meta = {}) {
 
       // Cap score for weak fallbacks
       if (companyName.split(" ").length < 2 && !isProper) {
-        confidenceScore = confidenceScore > 50 ? 50 : confidenceScore;
+        confidenceScore = Math.min(confidenceScore, 50);
         flags.push("LowTokenVariety", "ReviewNeeded");
       }
 
@@ -800,36 +850,6 @@ async function fallbackName(domain, meta = {}) {
           log("info", "Brand appended for clarity", { domain: normalizedDomain, name: companyName });
           flags.push("BrandAppendedForClarity");
         }
-      }
-    }
-
-    // Add brand suffix for generic names or names ending in "s"
-    if (companyName) {
-      const tokens = companyName.toLowerCase().split(" ");
-      const isGeneric = tokens.some(t => ["auto", "motors"].includes(t));
-      const endsWithS = tokens[tokens.length - 1]?.endsWith("s");
-      if (isGeneric || endsWithS) {
-        const domainBrand = CAR_BRANDS.find(b => normalizedDomain.includes(b.toLowerCase()));
-        const metaBrand = getMetaTitleBrand(meta);
-        const brandToAppend = BRAND_MAPPING[domainBrand?.toLowerCase()] || BRAND_MAPPING[metaBrand?.toLowerCase()] || domainBrand || metaBrand;
-        if (brandToAppend && !companyName.toLowerCase().includes(brandToAppend.toLowerCase())) {
-          companyName = `${companyName} ${brandToAppend}`;
-          log("info", "Brand suffix appended for generic name", { domain: normalizedDomain, companyName });
-          flags.push("BrandAppendedForGenericName");
-        }
-      }
-    }
-
-    // Guard against score inflation
-    if (companyName) {
-      const tokens = companyName.toLowerCase().split(" ");
-      if (tokens.length === 1 && KNOWN_CITIES_SET.has(tokens[0])) {
-        flags.push("CityOnly");
-        confidenceScore = 50;
-      }
-      if (companyName.length <= 2 || /[a-z]{5,}[a-z]{5,}/i.test(companyName.replace(/\s/g, ""))) {
-        flags.push("PossiblyMergedTokens");
-        confidenceScore = 50;
       }
     }
 
@@ -853,22 +873,21 @@ async function fallbackName(domain, meta = {}) {
       }
     }
 
-    // Check cache
-    const cacheKey = `${normalizedDomain}:${(meta.title || "").toLowerCase().trim()}`;
-    if (openAICache.has(cacheKey)) {
-      const cached = openAICache.get(cacheKey);
-      log("info", "Cache hit", { domain: normalizedDomain, companyName: cached.companyName });
-      flags.push("OpenAICacheHit");
-      return {
-        companyName: cached.companyName,
-        confidenceScore: cached.confidenceScore,
-        flags: Array.from(new Set([...flags, ...cached.flags])),
-        tokens: 0
-      };
-    }
-
-    // Try OpenAI fallback for spacing/casing only
+    // OpenAI fallback for spacing/casing only (last resort)
     if (companyName && (companyName.split(" ").length < 2 || /\b[a-z]+[A-Z]/.test(companyName))) {
+      const cacheKey = `${normalizedDomain}:${(meta.title || "").toLowerCase().trim()}`;
+      if (openAICache.has(cacheKey)) {
+        const cached = openAICache.get(cacheKey);
+        log("info", "Cache hit", { domain: normalizedDomain, companyName: cached.companyName });
+        flags.push("OpenAICacheHit");
+        return {
+          companyName: cached.companyName,
+          confidenceScore: cached.confidenceScore,
+          flags: Array.from(new Set([...flags, ...cached.flags])),
+          tokens: cached.tokens
+        };
+      }
+
       const prompt = `
         Given a name "${companyName}", return a JSON object with the name properly spaced and capitalized.
         Rules:
@@ -895,14 +914,14 @@ async function fallbackName(domain, meta = {}) {
           throw new FallbackError("OpenAI spacing fix failed", { domain: normalizedDomain });
         }
 
-        // Extract domainBrand from normalizedDomain
+        // Extract domainBrand
         const domainBrand = CAR_BRANDS.find(b => normalizedDomain.includes(b.toLowerCase())) || null;
 
-        // Validate OpenAI result with strict constraints
+        // Validate OpenAI result
         const { validatedName, flags: validationFlags } = validateFallbackName({ name, brand: null, flagged: false }, normalizedDomain, domainBrand);
         flags.push(...validationFlags);
 
-        // Additional check to prevent hallucination
+        // Prevent hallucination
         const originalWords = companyName.toLowerCase().split(/\s+/).filter(word => word);
         const newWords = name.toLowerCase().split(/\s+/).filter(word => word);
         const addedWords = newWords.filter(word => !originalWords.includes(word));
@@ -911,23 +930,28 @@ async function fallbackName(domain, meta = {}) {
           flags.push("OpenAIHallucinationDetected", "ReviewNeeded");
         } else if (validatedName) {
           companyName = validatedName;
-          confidenceScore += 5;
+          confidenceScore = Math.min(confidenceScore + 5, 125);
           flags.push("OpenAISpacingFix");
         } else {
           flags.push("OpenAIFallbackFailed", "ReviewNeeded");
         }
+
+        const finalResult = {
+          companyName,
+          confidenceScore,
+          flags: Array.from(new Set(flags)),
+          tokens
+        };
+        openAICache.set(cacheKey, finalResult);
+        return finalResult;
       } catch (error) {
         log("error", "OpenAI spacing fix failed", { domain: normalizedDomain, error: error.message });
         flags.push("OpenAIFallbackFailed", "ReviewNeeded");
       }
     }
 
-    // Final adjustments
-    if (companyName) {
-      if (confidenceScore < 85 && confidenceScore > 0) {
-        flags.push("ReviewNeeded");
-      }
-    } else {
+    // Final fallback
+    if (!companyName) {
       companyName = capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
       flags.push("FallbackNameError", "ReviewNeeded");
       confidenceScore = 50;
@@ -940,7 +964,7 @@ async function fallbackName(domain, meta = {}) {
       tokens
     };
 
-    openAICache.set(cacheKey, finalResult);
+    openAICache.set(`${normalizedDomain}:${(meta.title || "").toLowerCase().trim()}`, finalResult);
     log("info", "Result cached", { domain: normalizedDomain, companyName });
     return finalResult;
   } catch (err) {
@@ -949,8 +973,8 @@ async function fallbackName(domain, meta = {}) {
       error: err.message,
       stack: err.stack
     });
-    flags.push("FallbackNameError", "ReviewNeeded");
-    return { companyName, confidenceScore, flags: Array.from(new Set(flags)), tokens };
+    flags.push("FallbackNameError", "ManualReviewRecommended");
+    return { companyName, confidenceScore: 50, flags: Array.from(new Set(flags)), tokens };
   }
 }
 
