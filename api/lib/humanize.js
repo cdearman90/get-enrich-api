@@ -1717,71 +1717,45 @@ function tryBrandCityPattern(tokens) {
   };
 }
 
-// Matches proper noun + brand patterns (e.g., 'curryacura' → 'Curry Acura')
-function tryBrandGenericPattern(tokens) {
-  if (!tokens || !Array.isArray(tokens) || tokens.length < 2) return null;
+  // tryGenericPattern function
+  function tryGenericPattern(tokens, properNounsSet) {
+    if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
 
-  let properNoun = '';
-  let brand = '';
-  let confidenceScore = 100;
-  const flags = ['brandGenericPattern'];
-  const confidenceOrigin = 'brandGenericPattern';
+    let properNoun = "";
+    const flags = ["genericPattern"];
 
-  // Look for proper noun or name followed by brand
-  for (let i = 0; i < tokens.length - 1; i++) {
-    const token = tokens[i].toLowerCase();
-    if (KNOWN_PROPER_NOUNS.has(token) || KNOWN_LAST_NAMES.has(token)) {
-      properNoun = token;
-      const nextToken = tokens[i + 1].toLowerCase();
-      if (CAR_BRANDS.has(nextToken)) {
-        brand = BRAND_MAPPING.get(nextToken) || token;
+    // Look for a single proper noun or name
+    for (const token of tokens) {
+      if (properNounsSet.has(token.toLowerCase()) && !CAR_BRANDS.has(token.toLowerCase()) && !KNOWN_CITIES_SET.has(token.toLowerCase())) {
+        properNoun = capitalizeName(token);
         break;
       }
     }
+
+    if (!properNoun) return null;
+
+    const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
+    const generic = tokens.find(t => genericTerms.includes(t.toLowerCase()));
+    if (!generic) return null;
+
+    const companyName = `${properNoun} ${capitalizeName(generic)}`;
+    if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) return null;
+
+    return {
+      companyName,
+      confidenceScore: 95,
+      flags,
+      tokens: companyName.split(" ").map(t => t.toLowerCase())
+    };
   }
 
-  if (!properNoun || !brand) return null;
+  const genericResult = tryGenericPattern(tokens, properNounsSet) || {};
 
-  // Ensure not a city or brand alone
-  if (KNOWN_CITIES_SET.has(properNoun.toLowerCase()) || CAR_BRANDS.has(properNoun.toLowerCase())) {
-    return null;
-  }
-
-  // Construct company name
-  const companyName = capitalizeName(`${properNoun} ${brand}`);
-
-  // Block brand-only or city-only results
-  if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
-    flags.push('brandOrCityOnlyBlocked');
-    confidenceScore = 0;
-    return null;
-  }
-
-  // Check for duplicate tokens
-  const wordList = companyName.split(' ').map(w => w.toLowerCase());
-  if (new Set(wordList).size !== wordList.length) {
-    flags.push('duplicateTokens');
-    confidenceScore = Math.min(confidenceScore, 95);
-  }
-
-  // Validate token count and pattern
-  const nameTokens = companyName.split(' ').filter(Boolean);
-  if (nameTokens.length > 3) {
-    confidenceScore = Math.min(confidenceScore, 85);
-    flags.push('tokenLimitExceeded');
-  }
-
-  if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) {
-    return null;
-  }
-
-  log('info', `Brand generic pattern matched`, { companyName, tokens });
   return {
-    companyName,
-    confidenceScore: 125,
-    confidenceOrigin,
-    flags,
-    tokens: nameTokens.map(t => t.toLowerCase())
+    companyName: genericResult.companyName || "",
+    confidenceScore: genericResult.confidenceScore || 80,
+    flags: genericResult.flags || [],
+    tokens: genericResult.tokens || []
   };
 }
 
@@ -1817,6 +1791,79 @@ function tryBrandGenericPattern(tokens) {
     };
   }
 
+// Helper: Handle override logic
+function handleOverride(normalizedDomain, override) {
+  if (!validateOverrideFormat(override)) {
+    log('warn', `Invalid override format`, { domain: normalizedDomain, override });
+    return {
+      companyName: '',
+      confidenceScore: 0,
+      flags: ['override', 'invalidOverrideFormat'],
+      tokens: [],
+      confidenceOrigin: 'invalidOverrideFormat',
+      rawTokenCount: 0
+    };
+  }
+
+  const companyName = cleanCompanyName(capitalizeName(override));
+  const nameTokens = companyName.split(' ').filter(Boolean);
+  const validation = validateFallbackName(
+    { name: companyName, brand: null, flagged: false },
+    normalizedDomain,
+    null,
+    125
+  );
+
+  if (!validation.validatedName) {
+    log('warn', `Override validation failed`, { domain: normalizedDomain, override });
+    return {
+      companyName: '',
+      confidenceScore: 0,
+      flags: ['override', 'patternValidationFailed'],
+      tokens: [],
+      confidenceOrigin: 'overrideValidationFailed',
+      rawTokenCount: 0
+    };
+  }
+
+  log('info', `Override applied`, { domain: normalizedDomain, companyName });
+  return {
+    companyName: validation.validatedName,
+    confidenceScore: validation.confidenceScore,
+    flags: ['override', ...validation.flags],
+    tokens: nameTokens.map(t => t.toLowerCase()),
+    confidenceOrigin: 'override',
+    rawTokenCount: nameTokens.length
+  };
+}
+
+// Helper: Validate and update result using validateFallbackName
+function validateAndUpdateResult(result, normalizedDomain) {
+  const validation = validateFallbackName(
+    { name: result.companyName, brand: null, flagged: false },
+    normalizedDomain,
+    null,
+    result.confidenceScore
+  );
+
+  if (!validation.validatedName) {
+    return {
+      ...result,
+      companyName: '',
+      confidenceScore: 0,
+      flags: [...result.flags, 'patternValidationFailed'],
+      confidenceOrigin: 'patternValidationFailed'
+    };
+  }
+
+  return {
+    ...result,
+    companyName: validation.validatedName,
+    confidenceScore: validation.confidenceScore,
+    flags: [...result.flags, ...validation.flags]
+  };
+}
+
 // Main function to humanize domain names
 function humanizeName(domain) {
   if (!domain || typeof domain !== 'string') {
@@ -1842,50 +1889,10 @@ function humanizeName(domain) {
   // Check for override
   const override = TEST_CASE_OVERRIDES.get(normalizedDomain + '.com');
   if (override) {
-    if (!validateOverrideFormat(override)) {
-      log('warn', `Invalid override format`, { domain, override });
-      return {
-        companyName: '',
-        confidenceScore: 0,
-        flags: ['override', 'invalidOverrideFormat'],
-        tokens: [],
-        confidenceOrigin: 'invalidOverrideFormat',
-        rawTokenCount: 0
-      };
-    }
-    const companyName = cleanCompanyName(capitalizeName(override));
-    const nameTokens = companyName.split(' ').filter(Boolean);
-    // Fixed: Align call with validateFallbackName signature
-    const validation = validateFallbackName(
-      { name: companyName, brand: null, flagged: false }, // result object
-      normalizedDomain, // domain
-      null, // domainBrand (not extracted here)
-      125 // confidenceScore for overrides
-    );
-    // Fixed: Check validatedName instead of isValid
-    if (!validation.validatedName) {
-      log('warn', `Override validation failed`, { domain, override });
-      return {
-        companyName: '',
-        confidenceScore: 0,
-        flags: ['override', 'patternValidationFailed'],
-        tokens: [],
-        confidenceOrigin: 'overrideValidationFailed',
-        rawTokenCount: 0
-      };
-    }
-    log('info', `Override applied`, { domain, companyName });
-    const result = {
-      companyName: validation.validatedName, // Use validated name
-      confidenceScore: validation.confidenceScore, // Use validated confidence
-      flags: ['override', ...validation.flags], // Include validation flags
-      tokens: nameTokens.map(t => t.toLowerCase()),
-      confidenceOrigin: 'override',
-      rawTokenCount: nameTokens.length
-    };
-    log('debug', 'Final result confidence', { companyName: result.companyName, confidenceScore: result.confidenceScore });
-    result.tokens = result.tokens.slice(0, 3);
-    return result;
+    const overrideResult = handleOverride(normalizedDomain, override);
+    log('debug', 'Final result confidence', { companyName: overrideResult.companyName, confidenceScore: overrideResult.confidenceScore });
+    overrideResult.tokens = overrideResult.tokens.slice(0, 3);
+    return overrideResult;
   }
 
   // Tokenize the domain
@@ -1908,11 +1915,7 @@ function humanizeName(domain) {
   }
 
   // Apply pattern matching in order
-  let result = tryHumanNamePattern(tokens);
-  if (!result) result = tryProperNounPattern(tokens);
-  if (!result) result = tryBrandCityPattern(tokens);
-  if (!result) result = tryBrandGenericPattern(tokens);
-  if (!result) result = tryGenericPattern(tokens);
+  let result = tryHumanNamePattern(tokens) || tryProperNounPattern(tokens) || tryBrandCityPattern(tokens) || tryBrandGenericPattern(tokens) || tryGenericPattern(tokens);
 
   // If no match, return failure
   if (!result) {
@@ -1944,23 +1947,7 @@ function humanizeName(domain) {
   result.rawTokenCount = rawTokenCount;
 
   // Final validation
-  // Fixed: Align call with validateFallbackName signature
-  const validation = validateFallbackName(
-    { name: result.companyName, brand: null, flagged: false }, // result object
-    normalizedDomain, // domain
-    null, // domainBrand (not extracted here)
-    result.confidenceScore // pass the current confidenceScore
-  );
-  // Fixed: Check validatedName instead of isValid
-  if (!validation.validatedName) {
-    result.confidenceScore = 0;
-    result.flags.push('patternValidationFailed');
-    result.confidenceOrigin = 'patternValidationFailed';
-  } else {
-    result.companyName = validation.validatedName; // Update with validated name
-    result.confidenceScore = validation.confidenceScore; // Update confidence
-    result.flags.push(...validation.flags); // Add validation flags
-  }
+  result = validateAndUpdateResult(result, normalizedDomain);
 
   log('info', `Processed domain: ${normalizedDomain}`, { result });
   log('debug', 'Final result confidence', { companyName: result.companyName, confidenceScore: result.confidenceScore });
