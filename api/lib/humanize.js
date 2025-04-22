@@ -1785,63 +1785,37 @@ function tryBrandGenericPattern(tokens) {
   };
 }
 
-// tryGenericPattern function
-function tryGenericPattern(tokens) {
-  if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
+ // tryGenericPattern function
+  function tryGenericPattern(tokens) {
+    if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
 
-  let properNoun = '';
-  const flags = ['genericPattern'];
-  const confidenceOrigin = 'genericPattern';
+    let properNoun = "";
+    const flags = ["genericPattern"];
 
-  // Look for a single proper noun or name
-  for (const token of tokens) {
-    if (KNOWN_PROPER_NOUNS.has(token.toLowerCase()) || KNOWN_LAST_NAMES.has(token.toLowerCase())) {
-      properNoun = token;
-      break;
+    // Look for a single proper noun or name
+    for (const token of tokens) {
+      if (properNounsSet.has(token.toLowerCase()) && !CAR_BRANDS.has(token.toLowerCase()) && !KNOWN_CITIES_SET.has(token.toLowerCase())) {
+        properNoun = capitalizeName(token);
+        break;
+      }
     }
+
+    if (!properNoun) return null;
+
+    const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
+    const generic = tokens.find(t => genericTerms.includes(t.toLowerCase()));
+    if (!generic) return null;
+
+    const companyName = `${properNoun} ${capitalizeName(generic)}`;
+    if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) return null;
+
+    return {
+      companyName,
+      confidenceScore: 95,
+      flags,
+      tokens: companyName.split(" ").map(t => t.toLowerCase())
+    };
   }
-
-  if (!properNoun) return null;
-
-  // Stricter validation
-  if (properNoun.length < 3 || !/^[a-z]+$/.test(properNoun)) return null;
-
-  // Ensure not a city or brand
-  if (KNOWN_CITIES_SET.has(properNoun.toLowerCase()) || CAR_BRANDS.has(properNoun.toLowerCase())) {
-    return null;
-  }
-
-  // Construct company name
-  const companyName = capitalizeName(properNoun);
-
-  // Block brand-only or city-only results
-  if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
-    flags.push('brandOrCityOnlyBlocked');
-    return null;
-  }
-
-  // Check for duplicate tokens (unlikely here, but for consistency)
-  const wordList = companyName.split(' ').map(w => w.toLowerCase());
-  let confidenceScore = 85; // Moved initialization after early returns
-  if (new Set(wordList).size !== wordList.length) {
-    flags.push('duplicateTokens');
-    confidenceScore = Math.min(confidenceScore, 95);
-  }
-
-  // Validate pattern
-  if (!companyName.match(/^([A-Z][a-z]+)$/)) {
-    return null;
-  }
-
-  log('info', `Generic pattern matched`, { companyName, tokens });
-  return {
-    companyName,
-    confidenceScore, // Fixed: Include confidenceScore in return
-    confidenceOrigin,
-    flags,
-    tokens: [properNoun.toLowerCase()]
-  };
-}
 
 // Main function to humanize domain names
 function humanizeName(domain) {
