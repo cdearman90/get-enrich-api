@@ -1717,79 +1717,106 @@ function tryBrandCityPattern(tokens) {
   };
 }
 
-  // tryGenericPattern function
-  function tryGenericPattern(tokens, properNounsSet) {
-    if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
+// Matches proper noun + brand patterns (e.g., 'curryacura' → 'Curry Acura')
+function tryBrandGenericPattern(tokens) {
+  if (!tokens || !Array.isArray(tokens) || tokens.length < 2) return null;
 
-    let properNoun = "";
-    const flags = ["genericPattern"];
+  let properNoun = "";
+  let brand = "";
+  let confidenceScore = 100;
+  const flags = ["brandGenericPattern"];
+  const confidenceOrigin = "brandGenericPattern";
 
-    // Look for a single proper noun or name
-    for (const token of tokens) {
-      if (properNounsSet.has(token.toLowerCase()) && !CAR_BRANDS.has(token.toLowerCase()) && !KNOWN_CITIES_SET.has(token.toLowerCase())) {
-        properNoun = capitalizeName(token);
+  // Look for proper noun or name followed by brand
+  for (let i = 0; i < tokens.length - 1; i++) {
+    const token = tokens[i].toLowerCase();
+    if (KNOWN_PROPER_NOUNS.has(token) || KNOWN_LAST_NAMES.has(token)) {
+      properNoun = token;
+      const nextToken = tokens[i + 1].toLowerCase();
+      if (CAR_BRANDS.has(nextToken)) {
+        brand = BRAND_MAPPING.get(nextToken) || token;
         break;
       }
     }
-
-    if (!properNoun) return null;
-
-    const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
-    const generic = tokens.find(t => genericTerms.includes(t.toLowerCase()));
-    if (!generic) return null;
-
-    const companyName = `${properNoun} ${capitalizeName(generic)}`;
-    if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) return null;
-
-    return {
-      companyName,
-      confidenceScore: 95,
-      flags,
-      tokens: companyName.split(" ").map(t => t.toLowerCase())
-    };
   }
 
-  const genericResult = tryGenericPattern(tokens, properNounsSet) || {};
+  if (!properNoun || !brand) return null;
+  // Ensure not a city or brand alone
+  if (KNOWN_CITIES_SET.has(properNoun.toLowerCase()) || CAR_BRANDS.has(properNoun.toLowerCase())) {
+    return null;
+  }
 
+  // Construct company name
+  const companyName = capitalizeName(`${properNoun} ${brand}`);
+
+  // Block brand-only or city-only results
+  if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
+    flags.push("brandOrCityOnlyBlocked");
+    confidenceScore = 0;
+    return null;
+  }
+
+  // Check for duplicate tokens
+  const wordList = companyName.split(" ").map(w => w.toLowerCase());
+  if (new Set(wordList).size !== wordList.length) {
+    flags.push("duplicateTokens");
+    confidenceScore = Math.min(confidenceScore, 95);
+  }
+
+  // Validate token count and pattern
+  const nameTokens = companyName.split(" ").filter(Boolean);
+  if (nameTokens.length > 3) {
+    confidenceScore = Math.min(confidenceScore, 85);
+    flags.push("tokenLimitExceeded");
+  }
+
+  if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) {
+    return null;
+  }
+
+  log("info", "Brand generic pattern matched", { companyName, tokens });
   return {
-    companyName: genericResult.companyName || "",
-    confidenceScore: genericResult.confidenceScore || 80,
-    flags: genericResult.flags || [],
-    tokens: genericResult.tokens || []
+    companyName,
+    confidenceScore: 125,
+    confidenceOrigin,
+    flags,
+    tokens: nameTokens.map(t => t.toLowerCase())
   };
 }
 
- // tryGenericPattern function
-  function tryGenericPattern(tokens) {
-    if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
+// tryGenericPattern function
+function tryGenericPattern(tokens, properNounsSet) {
+  if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
 
-    let properNoun = "";
-    const flags = ["genericPattern"];
+  const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
+  let properNoun = null;
+  let generic = null;
 
-    // Look for a single proper noun or name
-    for (const token of tokens) {
-      if (properNounsSet.has(token.toLowerCase()) && !CAR_BRANDS.has(token.toLowerCase()) && !KNOWN_CITIES_SET.has(token.toLowerCase())) {
-        properNoun = capitalizeName(token);
-        break;
-      }
+  // Find a proper noun and a generic term in a single pass
+  for (const token of tokens) {
+    const lowerToken = token.toLowerCase();
+    if (!properNoun && properNounsSet.has(lowerToken) && !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken)) {
+      properNoun = capitalizeName(token);
     }
-
-    if (!properNoun) return null;
-
-    const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
-    const generic = tokens.find(t => genericTerms.includes(t.toLowerCase()));
-    if (!generic) return null;
-
-    const companyName = `${properNoun} ${capitalizeName(generic)}`;
-    if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) return null;
-
-    return {
-      companyName,
-      confidenceScore: 95,
-      flags,
-      tokens: companyName.split(" ").map(t => t.toLowerCase())
-    };
+    if (!generic && genericTerms.includes(lowerToken)) {
+      generic = capitalizeName(token);
+    }
+    if (properNoun && generic) break;
   }
+
+  if (!properNoun || !generic) return null;
+
+  const companyName = `${properNoun} ${generic}`;
+  if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) return null;
+
+  const nameTokens = companyName.split(" ").map(t => t.toLowerCase());
+  return {
+    companyName,
+    confidenceScore: 95,
+    flags: ["genericPattern"],
+    tokens: nameTokens
+  };
+}
 
 // Helper: Handle override logic
 function handleOverride(normalizedDomain, override) {
@@ -1826,7 +1853,7 @@ function handleOverride(normalizedDomain, override) {
     };
   }
 
-  log('info', `Override applied`, { domain: normalizedDomain, companyName });
+  log('info', `Override applied`, { domain: normalizedDomain, companyName: validation.validatedName });
   return {
     companyName: validation.validatedName,
     confidenceScore: validation.confidenceScore,
