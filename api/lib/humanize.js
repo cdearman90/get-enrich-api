@@ -1453,16 +1453,28 @@ function extractTokens(domain) {
 
     // Abbreviation expansions (e.g., "mb" → "M.B.")
     tokens = tokens.map(token => {
-      let normalizedToken = token;
-      Object.keys(ABBREVIATION_EXPANSIONS).forEach(abbr => {
-        const regex = new RegExp(`\\b${abbr}\\b`, "gi");
-        if (regex.test(normalizedToken.toLowerCase())) {
-          normalizedToken = normalizedToken.replace(regex, ABBREVIATION_EXPANSIONS[abbr]);
-          // Validate the normalized token after abbreviation expansion
-          if (!pattern.test(normalizedToken)) {
-            log('debug', 'Abbreviation expansion pattern validation failed', { token: normalizedToken });
-            return token; // Revert to original token if validation fails
-          }
+  let normalizedToken = token;
+  Object.keys(ABBREVIATION_EXPANSIONS).forEach(abbr => {
+    const regex = new RegExp(`\\b${abbr}\\b`, "gi");
+    if (regex.test(normalizedToken.toLowerCase())) {
+      normalizedToken = normalizedToken.replace(regex, ABBREVIATION_EXPANSIONS[abbr]);
+    }
+  });
+
+  if (!pattern.test(normalizedToken)) {
+    log("debug", 'Abbreviation expansion pattern validation failed', { token: normalizedToken });
+    return token;
+  } else {
+    log("debug", "Applied abbreviation expansion in extractTokens", {
+      domain,
+      token,
+      normalizedToken
+    });
+    flags.add("AbbreviationExpanded");
+    return normalizedToken;
+  }
+});
+
           log("debug", "Applied abbreviation expansion in extractTokens", {
             domain,
             token,
