@@ -1494,6 +1494,28 @@ function blobSplit(token) {
   }
 }
 
+/**
+ * Splits merged tokens using earlyCompoundSplit from humanize.js.
+ * @param {string} name - The name to split.
+ * @returns {string} - The split name.
+ */
+function splitMergedTokens(name) {
+  try {
+    if (!name || typeof name !== "string") {
+      log("error", "Invalid name in splitMergedTokens", { name });
+      return name;
+    }
+
+    const splitTokens = earlyCompoundSplit(name);
+    const result = splitTokens.join(" ");
+    log("debug", "splitMergedTokens result", { name, result });
+    return result;
+  } catch (e) {
+    log("error", "splitMergedTokens failed", { name, error: e.message });
+    return name;
+  }
+}
+
 function earlyCompoundSplit(text) {
   try {
     if (!text || typeof text !== 'string') {
@@ -3104,7 +3126,13 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
       return result;
     }
 
+    const tokenResult = extractTokens(normalizedDomain);
+    extractedTokens = tokenResult.tokens;
     tokens = extractedTokens.length;
+    flags = new Set([...flags, ...tokenResult.flags]);
+    if (tokenResult.confidenceScore < 95) {
+      confidenceScore = tokenResult.confidenceScore;
+    }
 
     // Prioritize patterns based on token characteristics
     const hasBrand = extractedTokens.some(t => carBrandsSet.has(t.toLowerCase()));
@@ -3157,7 +3185,7 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
     };
 
     // Adaptive confidence threshold for fallback
-    const confidenceThreshold = (hasBrand || hasCity || hasProper) ? 95 : 80; // Lower threshold for simpler domains
+    const confidenceThreshold = (hasBrand || hasCity || hasProper) ? 95 : 80;
 
     if (!finalResult.companyName || finalResult.confidenceScore < confidenceThreshold) {
       if (fallbackAttempts >= maxFallbackAttempts) {
