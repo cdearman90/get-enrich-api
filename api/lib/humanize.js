@@ -1785,7 +1785,7 @@ function tryBrandGenericPattern(tokens) {
   };
 }
 
-// Matches single proper noun as fallback (e.g., 'campbell' → 'Campbell')
+// tryGenericPattern function
 function tryGenericPattern(tokens) {
   if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
 
@@ -1822,7 +1822,7 @@ function tryGenericPattern(tokens) {
 
   // Check for duplicate tokens (unlikely here, but for consistency)
   const wordList = companyName.split(' ').map(w => w.toLowerCase());
-  let confidenceScore = 85; // [Fix 4: Moved initialization after early returns]
+  let confidenceScore = 85; // Moved initialization after early returns
   if (new Set(wordList).size !== wordList.length) {
     flags.push('duplicateTokens');
     confidenceScore = Math.min(confidenceScore, 95);
@@ -1836,7 +1836,7 @@ function tryGenericPattern(tokens) {
   log('info', `Generic pattern matched`, { companyName, tokens });
   return {
     companyName,
-    confidenceScore,
+    confidenceScore, // Fixed: Include confidenceScore in return
     confidenceOrigin,
     flags,
     tokens: [properNoun.toLowerCase()]
@@ -1844,7 +1844,7 @@ function tryGenericPattern(tokens) {
 }
 
 // Main function to humanize domain names
-function humanizeName(domain) { // [Fix 5: Removed unused hasMetaTitle parameter]
+function humanizeName(domain) {
   if (!domain || typeof domain !== 'string') {
     log('error', 'Invalid domain input', { domain });
     return { companyName: '', confidenceScore: 0, flags: ['invalidInput'], tokens: [], confidenceOrigin: 'invalidInput', rawTokenCount: 0 };
@@ -1881,8 +1881,15 @@ function humanizeName(domain) { // [Fix 5: Removed unused hasMetaTitle parameter
     }
     const companyName = cleanCompanyName(capitalizeName(override));
     const nameTokens = companyName.split(' ').filter(Boolean);
-    const validation = validateFallbackName(companyName, nameTokens);
-    if (!validation.isValid) {
+    // Fixed: Align call with validateFallbackName signature
+    const validation = validateFallbackName(
+      { name: companyName, brand: null, flagged: false }, // result object
+      normalizedDomain, // domain
+      null, // domainBrand (not extracted here)
+      125 // confidenceScore for overrides
+    );
+    // Fixed: Check validatedName instead of isValid
+    if (!validation.validatedName) {
       log('warn', `Override validation failed`, { domain, override });
       return {
         companyName: '',
@@ -1895,9 +1902,9 @@ function humanizeName(domain) { // [Fix 5: Removed unused hasMetaTitle parameter
     }
     log('info', `Override applied`, { domain, companyName });
     const result = {
-      companyName,
-      confidenceScore: 125,
-      flags: ['override'],
+      companyName: validation.validatedName, // Use validated name
+      confidenceScore: validation.confidenceScore, // Use validated confidence
+      flags: ['override', ...validation.flags], // Include validation flags
       tokens: nameTokens.map(t => t.toLowerCase()),
       confidenceOrigin: 'override',
       rawTokenCount: nameTokens.length
@@ -1963,11 +1970,22 @@ function humanizeName(domain) { // [Fix 5: Removed unused hasMetaTitle parameter
   result.rawTokenCount = rawTokenCount;
 
   // Final validation
-  const validation = validateFallbackName(result.companyName, result.tokens);
-  if (!validation.isValid) {
+  // Fixed: Align call with validateFallbackName signature
+  const validation = validateFallbackName(
+    { name: result.companyName, brand: null, flagged: false }, // result object
+    normalizedDomain, // domain
+    null, // domainBrand (not extracted here)
+    result.confidenceScore // pass the current confidenceScore
+  );
+  // Fixed: Check validatedName instead of isValid
+  if (!validation.validatedName) {
     result.confidenceScore = 0;
     result.flags.push('patternValidationFailed');
     result.confidenceOrigin = 'patternValidationFailed';
+  } else {
+    result.companyName = validation.validatedName; // Update with validated name
+    result.confidenceScore = validation.confidenceScore; // Update confidence
+    result.flags.push(...validation.flags); // Add validation flags
   }
 
   log('info', `Processed domain: ${normalizedDomain}`, { result });
