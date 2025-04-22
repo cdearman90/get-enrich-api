@@ -785,8 +785,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       // Priority 3: City + Brand or Generic (expanded generic terms)
       const city = extractedTokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
       const domainBrand = CAR_BRANDS.find(b => cleanDomain.includes(b.toLowerCase()));
-      const metaBrandResult = getMetaTitleBrand(meta);
-      const metaBrand = metaBrandResult ? metaBrandResult.companyName : null;
       if (city) {
         if (domainBrand) {
           const formattedCity = capitalizeName(city);
@@ -800,20 +798,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
             log("info", "City and domain brand applied", { domain: normalizedDomain, companyName });
             flags.add("CityBrandPattern");
             confidenceScore = 125;
-          }
-        } else if (metaBrand) {
-          const formattedCity = capitalizeName(city);
-          const formattedBrand = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand);
-          companyName = `${formattedCity} ${formattedBrand}`;
-          if (!pattern.test(companyName)) {
-            log("warn", "City + meta brand pattern validation failed", { domain: normalizedDomain, companyName });
-            companyName = formattedCity;
-            flags.add("PatternValidationFailed");
-          } else {
-            log("info", "City and meta brand applied", { domain: normalizedDomain, companyName });
-            flags.add("CityBrandPattern");
-            flags.add("MetaTitleBrandAppended");
-            confidenceScore = metaBrandResult.confidenceScore;
           }
         } else {
           const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cars', 'drive', 'center', 'world'];
@@ -896,22 +880,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         }
       }
 
-      // Priority 6: Enhanced Metadata Fallback
-      if (!companyName && meta.title) {
-        const metaResult = getMetaTitleBrand(meta);
-        if (metaResult && metaResult.companyName) {
-          companyName = metaResult.companyName;
-          if (!pattern.test(companyName)) {
-            log("warn", "Metadata fallback pattern validation failed", { domain: normalizedDomain, companyName });
-            companyName = "";
-            flags.add("PatternValidationFailed");
-          } else {
-            confidenceScore = metaResult.confidenceScore;
-            flags.add(...metaResult.flags);
-            log("info", "Metadata fallback applied", { domain: normalizedDomain, companyName });
-          }
-        }
-      }
+      // Removed Priority 6: Enhanced Metadata Fallback (since getMetaTitleBrand is undefined)
     } catch (error) {
       log("error", "Token rescue failed", { domain: normalizedDomain, error: error.message, stack: error.stack });
       flags.add("LocalFallbackFailed");
