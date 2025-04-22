@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 // ap../batch-enrich-company-name-fallback.js
-=======
-// api/company-name-fallback.js
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 // Fallback logic using OpenAI with caching
 
 import { humanizeName, KNOWN_CITIES_SET, capitalizeName, earlyCompoundSplit } from "./lib/humanize.js";
