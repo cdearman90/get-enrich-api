@@ -27,6 +27,13 @@ function log(level, message, context = {}) {
   logger[level]({ message, ...context });
 }
 
+const finalResult = {
+  companyName: result?.companyName || '',
+  confidenceScore: result?.companyName ? result.confidenceScore : 0,
+  flags: Array.from(new Set([matchedPattern || "NoPatternMatch", ...(result?.flags || []), ...flags])),
+  tokens
+};
+
 // Comprehensive list of car brands
 const CAR_BRANDS = [
   "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
