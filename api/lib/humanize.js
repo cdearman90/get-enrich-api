@@ -2,7 +2,7 @@
 // Logger configuration with Vercel-safe transports only
 
 import winston from "winston";
-import { validateFallbackName } from '../company-name-fallback.js'; // Fixed: Removed unused fallbackName
+import { validateFallbackName } from '../batch-enrich-company-name-fallback.js'; // Fixed: Removed unused fallbackName
 
 const logger = winston.createLogger({
   level: "debug",
