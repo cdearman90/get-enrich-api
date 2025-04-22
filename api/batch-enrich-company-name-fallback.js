@@ -1219,8 +1219,7 @@ async function handler(req, res) {
       partial: false,
       fromFallback: fallbackTriggers.length > 0
     });
-  } // ✅ Added this to close the try block properly
-  catch (error) {
+  } catch (error) {
     log("error", "Handler error", {
       error: error.message,
       stack: error.stack,
