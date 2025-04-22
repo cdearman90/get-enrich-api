@@ -705,18 +705,17 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
-    // Log successful validation
-    if (validatedName) {
-      log("info", "Output validated successfully", { domain, validatedName, confidenceScore, flags: Array.from(flags) });
-    }
-
-    return { validatedName, flags: Array.from(flags), confidenceScore };
-  } catch (e) {
-    log("error", "validateFallbackName failed", { domain, error: e.message, stack: e.stack });
-    flags.add("FallbackNameError");
-    flags.add("ReviewNeeded");
-    return { validatedName: null, flags: Array.from(flags), confidenceScore };
+try {
+  if (validatedName) {
+    log("info", "Output validated successfully", { domain, validatedName, confidenceScore, flags: Array.from(flags) });
   }
+
+  return { validatedName, flags: Array.from(flags), confidenceScore };
+} catch (e) {
+  log("error", "validateFallbackName failed", { domain, error: e.message, stack: e.stack });
+  flags.add("FallbackNameError");
+  flags.add("ReviewNeeded");
+  return { validatedName: null, flags: Array.from(flags), confidenceScore };
 }
 
 /**
