@@ -716,6 +716,7 @@ try {
   flags.add("FallbackNameError");
   flags.add("ReviewNeeded");
   return { validatedName: null, flags: Array.from(flags), confidenceScore };
+  }
 }
 
 /**
