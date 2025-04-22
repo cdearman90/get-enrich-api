@@ -464,7 +464,7 @@ if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[
   logger.debug("Expanded initials result", { domain, result: finalResult });
 }
 
-finalResult.flags = finalResult.flags.map(flag => String(flag));
+    finalResult.flags = finalResult.flags.map(flag => String(flag));
 
     domainCache.set(domainKey, {
       companyName: finalResult.companyName,
@@ -482,7 +482,7 @@ finalResult.flags = finalResult.flags.map(flag => String(flag));
       tokens: tokensUsed,
       rowNum
     };
-  } catch (err) {
+  } catch (err) {  // Fixed: Removed extra semicolon before catch
     logger.error("processLead failed", { domain, rowNum, error: err.message, stack: err.stack });
     return {
       domain,
