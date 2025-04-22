@@ -144,7 +144,11 @@ logger.error("Fallback exhausted retries", { domain, error: lastError?.message, 
 let local = { companyName: "", confidenceScore: 80, flags: [], tokens: 0 };
 try {
   const splitName = earlyCompoundSplit(domain.split(".")[0]);
+<<<<<<< HEAD
   local.companyName = capitalizeName(splitName.join(" ")) || ""; // Fixed: Directly use split and capitalize
+=======
+  local.companyName = capitalizeName(splitName.join(' ')) || ""; // Fixed: Directly use split and capitalize
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   local.confidenceScore = 80;
   local.flags = ["LocalCompoundSplit"];
   logger.debug("Local compound split result", { domain, result: local });

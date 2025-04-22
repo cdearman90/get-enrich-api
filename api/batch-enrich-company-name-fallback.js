@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 // ap../batch-enrich-company-name-fallback.js
+=======
+// api/company-name-fallback.js
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 // Fallback logic using OpenAI with caching
 
 import { humanizeName, KNOWN_CITIES_SET, capitalizeName, earlyCompoundSplit } from "./lib/humanize.js";
@@ -392,36 +396,62 @@ function extractTokens(domain) {
   const flags = [];
   let confidenceScore = 80; // Default for token extraction
 
+<<<<<<< HEAD
   if (!domain || typeof domain !== "string") {
     log("error", "Invalid domain input in extractTokens", { domain });
     return { tokens: [], confidenceScore: 0, flags: ["InvalidDomainInput"] };
+=======
+  if (!domain || typeof domain !== 'string') {
+    log('error', 'Invalid domain input in extractTokens', { domain });
+    return { tokens: [], confidenceScore: 0, flags: ['InvalidDomainInput'] };
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   }
 
   // Split on separators and camelCase boundaries
   let tokens = domain
     .toLowerCase()
+<<<<<<< HEAD
     .replace(/([a-z])([A-Z])/g, "$1-$2") // Split camelCase (e.g., "JimmyBritt" → "Jimmy-Britt")
+=======
+    .replace(/([a-z])([A-Z])/g, '$1-$2') // Split camelCase (e.g., "JimmyBritt" → "Jimmy-Britt")
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     .split(/[-_]/) // Split on hyphens and underscores
     .filter(token => token && /^[a-z0-9]+$/.test(token)); // Remove empty or invalid tokens
 
   // Remove suffixes and spammy tokens
+<<<<<<< HEAD
   const SUFFIXES = new Set(["llc", "inc", "corp", "co", "ltd", "motors", "auto", "group"]);
+=======
+  const SUFFIXES = new Set(['llc', 'inc', 'corp', 'co', 'ltd', 'motors', 'auto', 'group']);
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   tokens = tokens.filter(token => !SUFFIXES.has(token) && !SPAMMY_TOKENS.includes(token));
 
   // Cap at 3 tokens for cold-email safety
   if (tokens.length > 3) {
+<<<<<<< HEAD
     flags.push("TokenCountAdjusted");
+=======
+    flags.push('TokenCountAdjusted');
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     confidenceScore = Math.min(confidenceScore, 95);
     tokens = tokens.slice(0, 3);
   }
 
   // Log tokenization details
+<<<<<<< HEAD
   log("debug", "Extracted tokens", {
+=======
+  log('debug', 'Extracted tokens', {
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     domain,
     tokens,
     rawTokenCount: tokens.length,
     confidenceScore,
+<<<<<<< HEAD
     flags
+=======
+    flags,
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   });
 
   return { tokens, confidenceScore, flags };
@@ -531,7 +561,11 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     const isBrand = CAR_BRANDS.includes(validatedName.toLowerCase());
     const isProper = properNounsSet.has(validatedName.toLowerCase());
     const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+<<<<<<< HEAD
     const genericTerms = ["auto", "motors", "dealers", "group", "cares", "cars", "drive", "center", "world"];
+=======
+    const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
 
     if (!isProper) {
@@ -596,7 +630,11 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     }
 
     // Check spammy tokens (exclude valid generics)
+<<<<<<< HEAD
     const safeGenerics = ["auto", "motors", "dealers", "group", "cares", "cars", "drive", "center", "world"];
+=======
+    const safeGenerics = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
+>>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     const hasSpammyTokens = SPAMMY_TOKENS.some(token => validatedName.toLowerCase().includes(token) && !safeGenerics.includes(token));
     if (hasSpammyTokens) {
       log("warn", "Output contains spammy tokens", { domain, validatedName });
