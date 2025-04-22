@@ -2,10 +2,12 @@
 // Fallback logic using OpenAI with caching
 
 import { humanizeName, getMetaTitleBrand, KNOWN_CITIES_SET, capitalizeName, earlyCompoundSplit, KNOWN_PROPER_NOUNS } from "./lib/humanize.js";
-
 import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
 import path from "path";
+
+// Precompute proper nouns set for performance
+const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
 
 const logger = winston.createLogger({
   level: "debug",
@@ -549,7 +551,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
 
   log("info", "validateFallbackName started", { domain, result });
 
-  try {
+try {
     // Ensure result is valid
     if (!result || !validatedName || typeof validatedName !== "string") {
       log("warn", "Invalid OpenAI result", { domain, result });
@@ -577,7 +579,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     // Enhanced blob-like name recovery
     if (validatedName && validatedName.length > 12 && !/\s/.test(validatedName)) {
       const lowerName = validatedName.toLowerCase();
-      if (properNounsSet.has(lowerName)) { // Fixed: Use precomputed properNounsSet
+      if (properNounsSet.has(lowerName)) {
         validatedName = capitalizeName(validatedName);
         log("info", "Blob-like name recovered as proper noun", { domain, validatedName });
         flags.add("BlobLikeRecovered");
@@ -600,7 +602,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     if (validatedName) {
       const tokens = validatedName.split(" ");
       const isBrand = CAR_BRANDS.includes(validatedName.toLowerCase());
-      const isProper = properNounsSet.has(validatedName.toLowerCase()); // Fixed: Use precomputed properNounsSet
+      const isProper = properNounsSet.has(validatedName.toLowerCase());
       const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
       const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
       const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
@@ -772,7 +774,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     // Try humanizeName first
     let initialResult;
     try {
-      initialResult = await humanizeName(normalizedDomain); // Fixed: Updated call to match new signature
+      initialResult = await humanizeName(normalizedDomain);
       flags.add(...initialResult.flags);
       log("info", "humanizeName completed", { domain: normalizedDomain, result: initialResult });
 
@@ -819,7 +821,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       const properNounTokens = extractedTokens.filter(t => properNounsSet.has(t));
       if (properNounTokens.length >= 2) {
         const tempName = properNounTokens.map(t => capitalizeName(t)).join(" ");
-        const retryResult = await humanizeName(tempName); // Fixed: Updated call to match new signature
+        const retryResult = await humanizeName(tempName);
         if (retryResult.confidenceScore >= 95) {
           const validatedName = retryResult.companyName;
           if (!pattern.test(validatedName)) {
@@ -1236,7 +1238,7 @@ async function handler(req, res) {
     })).filter(lead => lead.domain);
 
     const successful = await Promise.all(validatedLeads.map(async (lead) => {
-      const result = await fallbackName(lead.domain, lead.domain, { title: lead.metaTitle }); // Note: originalDomain is the same as domain since humanizeName signature changed
+      const result = await fallbackName(lead.domain, lead.domain, { title: lead.metaTitle });
       return {
         domain: lead.domain,
         companyName: result.companyName,
@@ -1272,7 +1274,6 @@ async function handler(req, res) {
       tokens: 0
     });
   }
-}
 }
 
 export { fallbackName, clearOpenAICache, handler, validateFallbackName };
