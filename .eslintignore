@@ -1,0 +1,16 @@
+// eslint.config.js
+import js from '@eslint/js';
+
+export default [
+  js.configs.recommended,
+  {
+    ignores: [
+      'node_modules',
+      '.vercel',
+      'logs',
+      '*.json',
+      '*.md'
+    ]
+  }
+];
+
