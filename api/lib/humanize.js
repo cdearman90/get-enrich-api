@@ -1366,25 +1366,6 @@ const KNOWN_LAST_NAMES = new Set([
   'young', 'youngblood', 'zimmerman', 'kadlac', 'clark', 'caruso', 'perillo', 'stoops', 'weaver'
 ]);
 
-// Token fixes for common parsing errors
-const TOKEN_FIXES = {
-  coluus: "Columbus",
-  classicche: "Classic Chevy",
-  nplinc: "NP Lincoln",
-  helloauto: "Hello Auto",
-  autonati: "AutoNation",
-  robbyauto: "Robby Nixon",
-  billauto: "Bill Dube",
-  penskeauto: "Penske",
-  classicchev: "Classic Chevy",
-  sunsetmits: "Sunset Mitsubishi",
-  drivevic: "Victory",
-  robertthorne: "Robert Thorne",
-  crystalauto: "Crystal",
-  youngauto: "Young",
-  victoryauto: "Victory Auto"
-};
-
 function extractTokens(domain) {
   log("info", "extractTokens started", { domain });
 
@@ -2340,7 +2321,6 @@ function tryBrandGenericPattern(tokens, meta = {}) {
 
     // Define generic terms and sets
     const genericTerms = ['auto', 'automotive', 'motors', 'motor', 'dealers', 'dealer', 'group', 'mall', 'automall', 'cares'];
-    const knownGenericPrefixes = new Set(['ac', 'auto', 'motors', 'group', 'mall', 'dealer', 'dealers', 'automall', 'cares']);
     const carBrandsSet = new Set(CAR_BRANDS.map(b => b.toLowerCase()));
     const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
     const citiesSet = new Set(KNOWN_CITIES_SET.map(c => c.toLowerCase()));
