@@ -450,18 +450,14 @@ const OVERRIDES = {
   "yorkautomotive.com": "York Auto"
 };
 
-
 // Blocklist for spammy patterns
 const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
-
 
 // Spammy tokens to filter out
 const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
 
-
 // Cache for OpenAI results
 const openAICache = new Map();
-
 
 // Custom error class for fallback failures
 class FallbackError extends Error {
@@ -529,7 +525,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
         flags.add("TokenSplitApplied");
         confidenceScore = Math.min(confidenceScore, 95);
       } else {
-        validatedName = capitalizeName(validatedName).name;
+        validatedName = capitalizeName(validatedName);
       }
     }
 
@@ -538,13 +534,13 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       const lowerName = validatedName.toLowerCase();
       const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
       if (properNounsSet.has(lowerName)) {
-        validatedName = capitalizeName(validatedName).name;
+        validatedName = capitalizeName(validatedName);
         log("info", "Blob-like name recovered as proper noun", { domain, validatedName });
         flags.add("BlobLikeRecovered");
       } else {
         const splitAttempt = validatedName.replace(/([a-z])([A-Z])/g, "$1 $2").split(" ").filter(Boolean);
         if (splitAttempt.length > 1) {
-          validatedName = splitAttempt.map(t => capitalizeName(t).name).join(" ");
+          validatedName = splitAttempt.map(t => capitalizeName(t)).join(" ");
           log("info", "Blob-like name split", { domain, validatedName });
           flags.add("BlobLikeSplit");
           confidenceScore = Math.min(confidenceScore, 95);
@@ -588,7 +584,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       confidenceScore = Math.max(confidenceScore - 5, 50); // Reduced penalty
       const words = validatedName.split(" ");
       if (words.some(w => CAR_BRANDS.includes(w.toLowerCase()))) {
-        validatedName = words.map(w => CAR_BRANDS.includes(w.toLowerCase()) ? (BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name) : w).join(" ");
+        validatedName = words.map(w => CAR_BRANDS.includes(w.toLowerCase()) ? (BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand)) : w).join(" ");
         flags.add("DomainBrandApplied");
       }
     }
@@ -623,7 +619,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       const uniqueWords = [...new Set(words)];
       if (uniqueWords.length !== words.length) {
         log("warn", "Duplicate tokens in output", { domain, validatedName });
-        validatedName = uniqueWords.map(t => capitalizeName(t).name).join(" ");
+        validatedName = uniqueWords.map(t => capitalizeName(t)).join(" ");
         flags.add("DuplicatesRemoved");
         confidenceScore = Math.min(confidenceScore, 95);
       }
@@ -732,14 +728,14 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     // Try humanizeName first
     let initialResult;
     try {
-      initialResult = await humanizeName(normalizedDomain, originalDomain, true);
+      initialResult = await humanizeName(normalizedDomain); // Fixed: Updated call to match new signature
       flags.add(...initialResult.flags);
       log("info", "humanizeName completed", { domain: normalizedDomain, result: initialResult });
 
       // Adaptive confidence threshold based on token characteristics
       const hasBrand = initialResult.tokens.some(t => CAR_BRANDS.includes(t.toLowerCase()));
       const hasProper = initialResult.tokens.some(t => KNOWN_PROPER_NOUNS.has(t.toLowerCase()));
-      const hasCity = initialResult.tokens.some(t => KNOWN_CITIES_SET.has(capitalizeName(t).name));
+      const hasCity = initialResult.tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
       const confidenceThreshold = (hasBrand || hasCity || hasProper) ? 95 : 80;
 
       if (initialResult.confidenceScore >= confidenceThreshold && !initialResult.flags.includes("ReviewNeeded")) {
@@ -778,8 +774,8 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
       const properNounTokens = extractedTokens.filter(t => properNounsSet.has(t));
       if (properNounTokens.length >= 2) {
-        const tempName = properNounTokens.map(t => capitalizeName(t).name).join(" ");
-        const retryResult = await humanizeName(tempName, originalDomain, true);
+        const tempName = properNounTokens.map(t => capitalizeName(t)).join(" ");
+        const retryResult = await humanizeName(tempName); // Fixed: Updated call to match new signature
         if (retryResult.confidenceScore >= 95) {
           const validatedName = retryResult.companyName;
           if (!pattern.test(validatedName)) {
@@ -801,7 +797,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       // Priority 2: Single proper noun with conditional brand append
       const singleProper = extractedTokens.find(t => properNounsSet.has(t) && !CAR_BRANDS.includes(t) && !KNOWN_CITIES_SET.has(t));
       if (singleProper) {
-        companyName = capitalizeName(singleProper).name;
+        companyName = capitalizeName(singleProper);
         if (!pattern.test(companyName)) {
           log("warn", "Single proper noun pattern validation failed", { domain: normalizedDomain, companyName });
           companyName = "";
@@ -812,7 +808,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
           // Append brand only if the name is ambiguous for cold emails (e.g., too generic)
           const domainBrand = CAR_BRANDS.find(b => cleanDomain.includes(b.toLowerCase()));
           if (domainBrand && (companyName.length < 5 || companyName.toLowerCase() === "smith" || companyName.toLowerCase() === "jones")) {
-            const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
+            const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand);
             const combinedName = `${companyName} ${formattedBrand}`;
             if (!pattern.test(combinedName)) {
               log("warn", "Brand append pattern validation failed", { domain: normalizedDomain, companyName: combinedName });
@@ -832,14 +828,14 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       }
 
       // Priority 3: City + Brand or Generic (expanded generic terms)
-      const city = extractedTokens.find(t => KNOWN_CITIES_SET.has(capitalizeName(t).name));
+      const city = extractedTokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
       const domainBrand = CAR_BRANDS.find(b => cleanDomain.includes(b.toLowerCase()));
       const metaBrandResult = getMetaTitleBrand(meta);
       const metaBrand = metaBrandResult ? metaBrandResult.companyName : null;
       if (city) {
         if (domainBrand) {
-          const formattedCity = capitalizeName(city).name;
-          const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
+          const formattedCity = capitalizeName(city);
+          const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand);
           companyName = `${formattedCity} ${formattedBrand}`;
           if (!pattern.test(companyName)) {
             log("warn", "City + domain brand pattern validation failed", { domain: normalizedDomain, companyName });
@@ -851,8 +847,8 @@ async function fallbackName(domain, originalDomain, meta = {}) {
             confidenceScore = 125;
           }
         } else if (metaBrand) {
-          const formattedCity = capitalizeName(city).name;
-          const formattedBrand = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand).name;
+          const formattedCity = capitalizeName(city);
+          const formattedBrand = BRAND_MAPPING[metaBrand.toLowerCase()] || capitalizeName(metaBrand);
           companyName = `${formattedCity} ${formattedBrand}`;
           if (!pattern.test(companyName)) {
             log("warn", "City + meta brand pattern validation failed", { domain: normalizedDomain, companyName });
@@ -868,8 +864,8 @@ async function fallbackName(domain, originalDomain, meta = {}) {
           const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cars', 'drive', 'center', 'world'];
           const generic = extractedTokens.find(t => genericTerms.includes(t));
           if (generic) {
-            const formattedCity = capitalizeName(city).name;
-            const formattedGeneric = capitalizeName(generic).name;
+            const formattedCity = capitalizeName(city);
+            const formattedGeneric = capitalizeName(generic);
             companyName = `${formattedCity} ${formattedGeneric}`;
             if (!pattern.test(companyName)) {
               log("warn", "City + generic pattern validation failed", { domain: normalizedDomain, companyName });
@@ -881,7 +877,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
               confidenceScore = 95;
             }
           } else {
-            companyName = capitalizeName(city).name;
+            companyName = capitalizeName(city);
             if (!pattern.test(companyName)) {
               log("warn", "City-only pattern validation failed", { domain: normalizedDomain, companyName });
               companyName = "";
@@ -930,8 +926,8 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
         const generic = extractedTokens.find(t => genericTerms.includes(t));
         if (generic) {
-          const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand).name;
-          const formattedGeneric = capitalizeName(generic).name;
+          const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand);
+          const formattedGeneric = capitalizeName(generic);
           companyName = `${formattedBrand} ${formattedGeneric}`;
           if (!pattern.test(companyName)) {
             log("warn", "Brand + generic pattern validation failed", { domain: normalizedDomain, companyName });
@@ -1062,7 +1058,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
 
     // Final fallback
     if (!companyName) {
-      companyName = capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]).name;
+      companyName = capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]);
       if (!pattern.test(companyName)) {
         log("warn", "Final fallback pattern validation failed", { domain: normalizedDomain, companyName });
         companyName = "";
@@ -1079,7 +1075,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       const words = companyName.toLowerCase().split(" ");
       const uniqueWords = [...new Set(words)];
       if (uniqueWords.length !== words.length) {
-        companyName = uniqueWords.map(t => capitalizeName(t).name).join(" ");
+        companyName = uniqueWords.map(t => capitalizeName(t)).join(" ");
         if (!pattern.test(companyName)) {
           log("warn", "Deduplicated output pattern validation failed", { domain: normalizedDomain, companyName });
           companyName = "";
@@ -1196,7 +1192,7 @@ async function handler(req, res) {
     })).filter(lead => lead.domain);
 
     const successful = await Promise.all(validatedLeads.map(async (lead) => {
-      const result = await fallbackName(lead.domain, { title: lead.metaTitle });
+      const result = await fallbackName(lead.domain, lead.domain, { title: lead.metaTitle }); // Note: originalDomain is the same as domain since humanizeName signature changed
       return {
         domain: lead.domain,
         companyName: result.companyName,
