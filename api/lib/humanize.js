@@ -1531,27 +1531,10 @@ function blobSplit(token) {
 }
 
 /**
- * Splits merged tokens using earlyCompoundSplit from humanize.js.
- * @param {string} name - The name to split.
- * @returns {string} - The split name.
+ * Splits compound words in a domain (e.g., "mclartydaniel" → ["McLarty", "Daniel"])
+ * @param {string} text - Text to split
+ * @returns {Array<string>} - Array of split tokens
  */
-function splitMergedTokens(name) {
-  try {
-    if (!name || typeof name !== "string") {
-      log("error", "Invalid name in splitMergedTokens", { name });
-      return name;
-    }
-
-    const splitTokens = earlyCompoundSplit(name);
-    const result = splitTokens.join(" ");
-    log("debug", "splitMergedTokens result", { name, result });
-    return result;
-  } catch (e) {
-    log("error", "splitMergedTokens failed", { name, error: e.message });
-    return name;
-  }
-}
-
 function earlyCompoundSplit(text) {
   try {
     if (!text || typeof text !== 'string') {
@@ -2292,7 +2275,7 @@ function tryHumanNamePattern(tokens) {
 
     // Precompute maps for efficiency
     const firstNamesMap = new Map([...KNOWN_FIRST_NAMES].map(f => [f.toLowerCase(), f]));
-    const lastNamesMap = new Map([...KNOWN_LAST_NAMES].map(l => [l.toLowerCase(), l]));
+    const lastNamesMap = new Map([...KNOWN_LAST_NAMES].map(l => [f.toLowerCase(), l]));
     const properNounsMap = new Map([...KNOWN_PROPER_NOUNS].map(n => [n.toLowerCase(), n]));
     const citiesMap = new Map([...KNOWN_CITIES_SET].map(c => [c.toLowerCase().replace(/\s+/g, ''), c]));
     const carBrandsMap = new Map(CAR_BRANDS.map(b => [b.toLowerCase(), b]));
@@ -2595,6 +2578,9 @@ function tryCityAutoPattern(tokens) {
     const citiesMap = new Map([...KNOWN_CITIES_SET].map(c => [c.toLowerCase().replace(/\s+/g, ''), c]));
     const genericTerms = new Set(['auto', 'automotive', 'motors', 'motor', 'dealer', 'dealers', 'group', 'mall', 'automall', 'cares']);
 
+    // Define regex pattern for company name validation (e.g., "Chicago Auto")
+    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?) ([A-Z][a-z]+)$/; // Matches "City Generic"
+
     // Check for proper nouns to defer
     for (const token of tokens) {
       if (properNounsMap.has(token.toLowerCase())) {
@@ -2616,6 +2602,7 @@ function tryCityAutoPattern(tokens) {
       for (let j = i; j < tokens.length; j++) {
         const combinedTokens = tokens.slice(i, j + 1).join(' ').toLowerCase();
         const combinedNoSpaces = combinedTokens.replace(/\s+/g, '');
+        log("debug", "Checking multi-word city candidate", { combinedTokens, combinedNoSpaces });
         if (citiesMap.has(combinedNoSpaces)) {
           matchedCity = citiesMap.get(combinedNoSpaces);
           i = j + 1;
@@ -2688,6 +2675,10 @@ function tryCityAutoPattern(tokens) {
       }
 
       const name = `${formattedCity} ${formattedGeneric}`;
+      if (!pattern.test(name)) {
+        log("warn", "City + generic pattern validation failed", { name });
+        return { companyName: formattedCity, confidenceScore: 100, flags: Array.from(flags) };
+      }
       if (name.split(' ').length > 3) {
         flags.add('TokenLimitExceeded');
         return { companyName: formattedCity, confidenceScore: 95, flags: Array.from(flags) };
@@ -2699,7 +2690,7 @@ function tryCityAutoPattern(tokens) {
 
     return { companyName: '', confidenceScore: 0, flags: Array.from(flags) };
   } catch (e) {
-    log('error', 'tryCityAutoPattern failed', { tokens, error: e.message, stack: e.stack });
+    log("error", "tryCityAutoPattern failed", { tokens, error: e.message, stack: e.stack });
     flags.add('CityAutoPatternError');
     flags.add('ManualReviewRecommended');
     return { companyName: '', confidenceScore: 0, flags: Array.from(flags) };
