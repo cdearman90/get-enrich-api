@@ -121,7 +121,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
     for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
       try {
         logger.debug(`Attempt ${attempt} to call fallback`, { domain, attempt });
-        const fallback = await fallbackName(domain, { title: meta.title });
+        const fallback = await fallbackName(domain, domain, meta); // Pass domain as originalDomain
 
         logger.debug("Fallback result", { domain, fallback });
         return {
@@ -290,6 +290,9 @@ export default async function handler(req, res) {
       logger.debug("Processing lead", { domain, rowNum });
 
       try {
+        // Define regex pattern for company name validation (e.g., "Chicago Auto")
+        const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/; // Matches "Name", "First Last", or "Name Generic"
+
         // Check cache for duplicates
         if (processedDomains.has(domainKey)) {
           const cached = domainCache.get(domainKey);
@@ -319,6 +322,7 @@ export default async function handler(req, res) {
           logger.debug("extractBrandOfCityFromDomain result", { domain: domainKey, brandDetected, cityDetected });
         } catch (error) {
           logger.error("extractBrandOfCityFromDomain failed", { domain: domainKey, error: error.message, stack: error.stack });
+          finalResult.flags.push("ExtractBrandCityFailed");
         }
 
         if (BRAND_ONLY_DOMAINS.includes(`${domainKey}.com`)) {
@@ -337,6 +341,15 @@ export default async function handler(req, res) {
               logger.debug(`Attempt ${attempt} to humanize domain`, { domain });
               initialResult = await humanizeName(domain, domain, !!metaTitle);
               logger.debug("humanizeName result", { domain, result: initialResult });
+
+              // Validate the result against the pattern
+              if (initialResult.companyName && !pattern.test(initialResult.companyName)) {
+                logger.warn("humanizeName result pattern validation failed", { domain, companyName: initialResult.companyName });
+                initialResult.companyName = "";
+                initialResult.flags.push("PatternValidationFailed");
+                initialResult.confidenceScore = 0;
+              }
+
               finalResult = {
                 companyName: initialResult.companyName || "",
                 confidenceScore: initialResult.confidenceScore || 80,
@@ -353,6 +366,15 @@ export default async function handler(req, res) {
                   // Retry with relaxed possessive rules
                   initialResult = await humanizeName(domain, domain, !!metaTitle, false);
                   initialResult.flags.push("FallbackTriggered");
+
+                  // Validate the retry result against the pattern
+                  if (initialResult.companyName && !pattern.test(initialResult.companyName)) {
+                    logger.warn("humanizeName retry result pattern validation failed", { domain, companyName: initialResult.companyName });
+                    initialResult.companyName = "";
+                    initialResult.flags.push("PatternValidationFailed");
+                    initialResult.confidenceScore = 0;
+                  }
+
                   finalResult = {
                     companyName: initialResult.companyName || "",
                     confidenceScore: initialResult.confidenceScore || 80,
@@ -382,6 +404,15 @@ export default async function handler(req, res) {
             logger.debug("Calling fallback API", { domain });
             const meta = metaTitle ? { title: metaTitle } : {};
             const fallback = await callFallbackAPI(domain, rowNum, meta);
+
+            // Validate the fallback result against the pattern
+            if (fallback.companyName && !pattern.test(fallback.companyName)) {
+              logger.warn("callFallbackAPI result pattern validation failed", { domain, companyName: fallback.companyName });
+              fallback.companyName = "";
+              fallback.flags.push("PatternValidationFailed");
+              fallback.confidenceScore = 0;
+            }
+
             finalResult = {
               companyName: fallback.companyName,
               confidenceScore: fallback.confidenceScore,
@@ -429,16 +460,25 @@ export default async function handler(req, res) {
           }
         }
 
-              if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
+        if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[A-Z]{1,3}$/.test(w))) {
           logger.debug("Expanding initials", { domain, companyName: finalResult.companyName });
           const expandedName = expandInitials(finalResult.companyName);
           if (expandedName && expandedName.name !== finalResult.companyName) {
-            finalResult.companyName = expandedName.name;
-            finalResult.flags = Array.from(new Set([...finalResult.flags, "InitialsExpandedLocally"]));
-            finalResult.confidenceScore -= 5;
+            const expandedNameValidated = expandedName.name;
+            if (!pattern.test(expandedNameValidated)) {
+              logger.warn("Expanded initials pattern validation failed", { domain, companyName: expandedNameValidated });
+              finalResult.flags.push("PatternValidationFailed");
+            } else {
+              finalResult.companyName = expandedNameValidated;
+              finalResult.flags = Array.from(new Set([...finalResult.flags, "InitialsExpandedLocally"]));
+              finalResult.confidenceScore -= 5;
+            }
           }
           logger.debug("Expanded initials result", { domain, result: finalResult });
         }
+
+        // Ensure all flags are strings and serializable
+        finalResult.flags = finalResult.flags.map(flag => String(flag));
 
         domainCache.set(domainKey, {
           companyName: finalResult.companyName,
@@ -472,9 +512,24 @@ export default async function handler(req, res) {
     const results = await Promise.all(validatedLeads.map(lead => limit(() => processLead(lead))));
     successful.push(...results);
 
-    logger.info("Handler completed successfully", {});
+    // Sanitize results to ensure JSON serialization
+    const sanitizedResults = results.map(result => ({
+      domain: result.domain,
+      companyName: result.companyName || "",
+      confidenceScore: result.confidenceScore || 80,
+      flags: result.flags ? result.flags.map(flag => String(flag)) : [],
+      tokens: result.tokens || 0,
+      rowNum: result.rowNum
+    }));
+
+    logger.info("Handler completed successfully", {
+      successful: sanitizedResults.length,
+      manualReviewQueue: manualReviewQueue.length,
+      fallbackTriggers: fallbackTriggers.length,
+      totalTokens
+    });
     return res.status(200).json({
-      successful,
+      successful: sanitizedResults,
       manualReviewQueue,
       fallbackTriggers,
       totalTokens,
