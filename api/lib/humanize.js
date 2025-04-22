@@ -3243,6 +3243,8 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
       originalDomain = domain;
     }
 
+    log("debug", "Processing domain", { normalizedDomain, originalDomain });
+
     if (enrichmentCache.has(normalizedDomain)) {
       const cached = enrichmentCache.get(normalizedDomain);
       log("debug", "Cache hit for duplicate domain", { domain, cached });
@@ -3254,18 +3256,23 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
     if (useMeta) {
       try {
         meta = await fetchMetaData(domain);
+        log("debug", "Metadata fetched successfully", { domain, meta });
       } catch (err) {
         log("error", "fetchMetaData failed", { domain, error: err.message, stack: err.stack });
         flags.add("MetaDataFailed");
       }
     }
 
-    if (BRAND_ONLY_DOMAINS.includes(`${normalizedDomain}.com`)) {
+    // Ensure the domain is properly formatted before comparison
+    const domainWithTLD = normalizedDomain.endsWith('.com') ? normalizedDomain : `${normalizedDomain}.com`;
+    log("debug", "Checking BRAND_ONLY_DOMAINS", { domainWithTLD, brandOnlyDomains: BRAND_ONLY_DOMAINS });
+    if (BRAND_ONLY_DOMAINS.includes(domainWithTLD)) {
       const result = { companyName: "", confidenceScore: 0, flags: Array.from(new Set(["BrandOnlyDomainSkipped"])), tokens };
       enrichmentCache.set(normalizedDomain, result);
       return result;
     }
 
+    log("debug", "Checking TEST_CASE_OVERRIDES", { originalDomain, testCaseOverrides: TEST_CASE_OVERRIDES });
     if (TEST_CASE_OVERRIDES[originalDomain]) {
       const result = {
         companyName: TEST_CASE_OVERRIDES[originalDomain],
@@ -3273,10 +3280,12 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
         flags: Array.from(new Set(["TestCaseOverride"])),
         tokens
       };
+      log("info", "Applied TEST_CASE_OVERRIDES", { originalDomain, companyName: result.companyName });
       enrichmentCache.set(normalizedDomain, result);
       return result;
     }
 
+    log("debug", "Checking OVERRIDES", { normalizedDomain, overrides: OVERRIDES });
     if (OVERRIDES[normalizedDomain]) {
       const result = {
         companyName: OVERRIDES[normalizedDomain],
@@ -3284,6 +3293,7 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
         flags: Array.from(new Set(["OverrideApplied"])),
         tokens
       };
+      log("info", "Applied OVERRIDES", { normalizedDomain, companyName: result.companyName });
       enrichmentCache.set(normalizedDomain, result);
       return result;
     }
@@ -3412,6 +3422,7 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
     }
 
     enrichmentCache.set(normalizedDomain, finalResult);
+    log("info", "humanizeName completed successfully", { domain: normalizedDomain, result: finalResult });
     return finalResult;
   } catch (err) {
     log("error", "humanizeName failed", {
