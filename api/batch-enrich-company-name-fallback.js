@@ -577,8 +577,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     // Enhanced blob-like name recovery
     if (validatedName && validatedName.length > 12 && !/\s/.test(validatedName)) {
       const lowerName = validatedName.toLowerCase();
-      const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
-      if (properNounsSet.has(lowerName)) {
+      if (properNounsSet.has(lowerName)) { // Fixed: Use precomputed properNounsSet
         validatedName = capitalizeName(validatedName);
         log("info", "Blob-like name recovered as proper noun", { domain, validatedName });
         flags.add("BlobLikeRecovered");
@@ -601,7 +600,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     if (validatedName) {
       const tokens = validatedName.split(" ");
       const isBrand = CAR_BRANDS.includes(validatedName.toLowerCase());
-      const isProper = KNOWN_PROPER_NOUNS.has(validatedName.toLowerCase());
+      const isProper = properNounsSet.has(validatedName.toLowerCase()); // Fixed: Use precomputed properNounsSet
       const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
       const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
       const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
@@ -705,17 +704,17 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
-try {
-  if (validatedName) {
-    log("info", "Output validated successfully", { domain, validatedName, confidenceScore, flags: Array.from(flags) });
-  }
+    // Log successful validation
+    if (validatedName) {
+      log("info", "Output validated successfully", { domain, validatedName, confidenceScore, flags: Array.from(flags) });
+    }
 
-  return { validatedName, flags: Array.from(flags), confidenceScore };
-} catch (e) {
-  log("error", "validateFallbackName failed", { domain, error: e.message, stack: e.stack });
-  flags.add("FallbackNameError");
-  flags.add("ReviewNeeded");
-  return { validatedName: null, flags: Array.from(flags), confidenceScore };
+    return { validatedName, flags: Array.from(flags), confidenceScore };
+  } catch (e) {
+    log("error", "validateFallbackName failed", { domain, error: e.message, stack: e.stack });
+    flags.add("FallbackNameError");
+    flags.add("ReviewNeeded");
+    return { validatedName: null, flags: Array.from(flags), confidenceScore };
   }
 }
 
