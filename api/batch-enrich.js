@@ -111,7 +111,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
         domain,
         companyName: "",
         confidenceScore: 0,
-        flags: Array.from(new Set(["BrandOnlyDomainSkipped"])),
+        flags: ["BrandOnlyDomainSkipped"],
         tokens: 0,
         rowNum
       };
@@ -121,14 +121,14 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
     for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
       try {
         logger.debug(`Attempt ${attempt} to call fallback`, { domain, attempt });
-        const fallback = await fallbackName(domain, domain, meta); // Pass domain as originalDomain
+        const fallback = await fallbackName(domain, domain, meta);
 
         logger.debug("Fallback result", { domain, fallback });
         return {
           domain,
           companyName: fallback.companyName,
           confidenceScore: fallback.confidenceScore,
-          flags: Array.from(new Set([...fallback.flags, "FallbackAPIUsed"])),
+          flags: ["FallbackAPIUsed", ...fallback.flags],
           tokens: fallback.tokens || 0,
           rowNum
         };
@@ -140,7 +140,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
         }
       }
     }
-    logger.error("Fallback exhausted retries", { domain, error: lastError.message, stack: lastError.stack });
+    logger.error("Fallback exhausted retries", { domain, error: lastError?.message, stack: lastError?.stack });
     let local;
     try {
       logger.debug("Attempting local humanizeName", { domain });
@@ -164,14 +164,15 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
       logger.debug("Local compound split result", { domain, result: local });
     }
 
+    const combinedFlags = [...(local.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"];
     return {
       domain,
       companyName: local.companyName,
       confidenceScore: local.confidenceScore,
-      flags: Array.from(new Set([...(local.flags || []), "FallbackAPIFailed", "LocalFallbackUsed"])),
+      flags: Array.from(new Set(combinedFlags)),
       tokens: local.tokens || 0,
       rowNum,
-      error: lastError.message
+      error: lastError ? lastError.message : "Unknown error"
     };
   } catch (err) {
     logger.error("callFallbackAPI failed", { domain, rowNum, error: err.message, stack: err.stack });
@@ -179,7 +180,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
       domain,
       companyName: "",
       confidenceScore: 80,
-      flags: Array.from(new Set(["FallbackAPIFailed", "ManualReviewRecommended"])),
+      flags: ["FallbackAPIFailed", "ManualReviewRecommended"],
       tokens: 0,
       rowNum
     };
