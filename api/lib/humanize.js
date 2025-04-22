@@ -2,7 +2,7 @@
 // Logger configuration with Vercel-safe transports only
 
 import winston from "winston";
-import { validateFallbackName } from "../batch-enrich-company-name-fallback.js"; 
+import { validateFallbackName } from "../batch-enrich-company-name-fallback.js";
 
 const logger = winston.createLogger({
   level: "debug",
@@ -425,7 +425,6 @@ const TEST_CASE_OVERRIDES = {
   "rbmofatlanta.com": "RBM Atlanta",
   "samscismfordlm.com": "Sam Cism",
   "suntrupbuickgmc.com": "Suntrup",
-<<<<<<< HEAD
   "acdealergroup.com": "AC Dealer",
   "daytonandrews.com": "Dayton Andrews",
   "fordofdalton.com": "Dalton Ford",
@@ -440,22 +439,6 @@ const TEST_CASE_OVERRIDES = {
   "regalauto.com": "Regal Auto",
   "elwaydealers.net": "Elway",
   "chapmanchoice.com": "Chapman"
-=======
-  'acdealergroup.com': 'AC Dealer',
-  'daytonandrews.com': 'Dayton Andrews',
-  'fordofdalton.com': 'Dalton Ford',
-  'metrofordofmadison.com': 'Metro Ford',
-  'williamssubarucharlotte.com': 'Williams Subaru',
-  'vwsouthtowne.com': 'VW South Towne',
-  'scottclarkstoyota.com': 'Scott Clark',
-  'duvalford.com': 'Duval',
-  'devineford.com': 'Devine',
-  'allamericanford.net': 'All American',
-  'slvdodge.com': 'Silver Dodge',
-  'regalauto.com': 'Regal Auto',
-  'elwaydealers.net': 'Elway',
-  'chapmanchoice.com': 'Chapman'
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 };
 
 const BRAND_ONLY_DOMAINS = [
@@ -854,7 +837,6 @@ const KNOWN_CITIES_SET = new Set([
   "lakewood", "brookhaven", "caldwell", "manhattan", "lagrange", "beachwood", "bedford", "cookeville", "freehold", "newton",
   "northborough", "bloomington", "bristol", "cuyahoga", "dalton", "elyria", "midland", "milwaukee", "pinehurst", "st. petersburg", "tuscaloosa",
   "waco", "woodland hills", "fort myers", "livermore", "lakeside", "inver grove", "southtown", "akins",
-<<<<<<< HEAD
 
     // Alabama (20 new, focusing on smaller cities with dealerships)
   "andalusia", "attalla", "bay minette", "brewton", "clanton", "demopolis", "dothan", "evergreen", "fayette", "fort rucker",
@@ -1057,216 +1039,11 @@ const KNOWN_CITIES_SET = new Set([
   "afton", "evanston", "glenrock", "green river", "jackson hole", "kemmerer", "lander", "powell", "riverton", "sheridan", "birmingham", "montgomery",
   "hunstville", "lakeland", "wilsonville", "palm coast", "morristown", "palm coast", "morristown", "roseville", "novato", "jacksonville", "richmond",
   "san leandro"
-=======
-  
-    // Alabama (20 new, focusing on smaller cities with dealerships)
-  'andalusia', 'attalla', 'bay minette', 'brewton', 'clanton', 'demopolis', 'dothan', 'evergreen', 'fayette', 'fort rucker',
-  'geneva', 'greenville', 'guntersville', 'haleyville', 'luverne', 'monroeville', 'roanoke', 'russellville', 'tuscumbia', 'valley',
-
-  // Alaska (10 new, smaller communities with auto sales)
-  'anchorage', 'bethel island', 'eagle river', 'fairbanks north star', 'kenai peninsula', 'ketchikan gateway', 'matanuska-susitna', 'palmer', 'sitka city', 'skagway-hoonah-angoon',
-
-  // Arizona (25 new, mid-sized cities and auto hubs)
-  'avondale estates', 'bisbee', 'casa blanca', 'chandler heights', 'eloy', 'fort mohave', 'gilbertown', 'goodyear village', 'green valley', 'litchfield park',
-  'maricopa wells', 'oro valley', 'paradise', 'peoria heights', 'phoenixville', 'prescott south', 'safford valley', 'santa cruz', 'scottsdale north', 'sierra vista southeast',
-  'sun city', 'surprise valley', 'tempe junction', 'tuba city', 'yuma foothills',
-
-  // Arkansas (15 new, smaller cities with dealership presence)
-  'ash flat', 'batesville', 'blytheville', 'camden south', 'conway west', 'crossett south', 'dumas', 'el dorado south', 'helena-west helena', 'malvern',
-  'monticello', 'newport', 'pine bluff south', 'sheridan', 'wynne',
-
-  // California (50 new, covering Central Valley, Inland Empire, and smaller coastal cities)
-  'aliso viejo', 'antioch', 'apple valley', 'arcadia', 'arroyo grande', 'atascadero', 'baldwin park', 'banning', 'bellflower', 'brea',
-  'buena park', 'burbank', 'carlsbad', 'cathedral city', 'cerritos hills', 'chico', 'chino', 'clovis', 'compton', 'costa mesa',
-  'covina', 'culver city', 'daly city', 'del mar', 'downey', 'el centro', 'el monte', 'encinitas', 'escondido hills', 'fairfield',
-  'folsom', 'gilroy', 'hawthorne', 'hemet valley', 'indio', 'la mesa', 'lake forest', 'livermore', 'lodi', 'manteca',
-  'murrieta', 'norco', 'palo alto', 'pittsburg', 'redondo beach', 'san clemente', 'san mateo', 'santa barbara', 'santa monica', 'tustin',
-
-  // Colorado (20 new, focusing on Front Range and Western Slope)
-  'alamosa', 'brighton south', 'broomfield west', 'brush', 'cortez', 'craig', 'eatonton', 'fort morgan', 'fountain', 'fruita',
-  'glenwood springs', 'grand lake', 'gunnison', 'la junta', 'lamar', 'littleton west', 'longmont east', 'loveland north', 'pueblo west', 'vail',
-
-  // Connecticut (15 new, smaller towns with dealerships)
-  'branford', 'cheshire', 'colchester', 'east lyme', 'groton', 'madison', 'milford city', 'monroe', 'new canaan', 'north branford',
-  'old saybrook', 'orange', 'stonington', 'westbrook', 'wilton',
-
-  // Delaware (10 new, smaller communities)
-  'bear', 'brookside', 'glasgow', 'hockessin', 'middletown crossing', 'milford crossing', 'newark south', 'pike creek', 'seaford west', 'wilmington manor',
-
-  // Florida (30 new, focusing on Central and South Florida)
-  'altamonte springs', 'aventura', 'belle glade', 'boca del mar', 'bonita springs', 'brandon', 'cape canaveral', 'casselberry', 'coconut grove', 'coral gables',
-  'crestview', 'cutler bay', 'dania beach', 'deland', 'destin', 'fernandina beach', 'fort myers', 'fort pierce', 'greenacres', 'hialeah gardens',
-  'jensen beach', 'key west', 'lake worth', 'melbourne', 'merritt island', 'miami beach', 'north lauderdale', 'palmetto', 'punta gorda', 'vero beach',
-
-  // Georgia (25 new, covering South and Central Georgia)
-  'bainbridge', 'barnesville', 'blakely', 'brunswick', 'cairo', 'calhoun', 'cartersville', 'cedartown', 'commerce', 'cordele',
-  'dublin', 'fitzgerald', 'forsyth', 'hawkinsville', 'jesup', 'mcdonough', 'milledgeville', 'moultrie', 'sandersville', 'swainsboro',
-  'thomasville', 'tifton', 'vidalia', 'waycross', 'west point',
-
-  // Hawaii (10 new, smaller communities)
-  'ewa beach', 'hanamaulu', 'kapalua', 'lahaina west', 'lihue', 'makaha', 'mililani town', 'pearl harbor', 'wahiawa heights', 'waimanalo',
-
-  // Idaho (15 new, rural and mid-sized cities)
-  'bliss', 'burley south', 'challis', 'driggs', 'fort hall', 'gooding', 'idaho city', 'jerome north', 'kamiah', 'kellogg',
-  'malad city', 'osburn', 'parma', 'priest river', 'saint anthony',
-
-  // Illinois (25 new, covering Chicagoland and Central Illinois)
-  'algonquin', 'alsip', 'batavia', 'bloomingdale', 'blue island', 'bridgeview', 'calumet city', 'cary', 'crest hill', 'crystal lake',
-  'deerfield', 'dixon', 'elmwood park', 'frankfort', 'geneva', 'grayslake', 'homer glen', 'lake zurich', 'lisle', 'lockport',
-  'mchenry', 'niles', 'north aurora', 'romeoville', 'streamwood',
-
-  // Indiana (20 new, focusing on Northern and Central Indiana)
-  'angola', 'auburn', 'bedford', 'bluffton', 'columbia city', 'crawfordsville', 'decatur', 'frankfort', 'greensburg', 'huntingburg',
-  'jasper', 'kendallville', 'lafayette west', 'madison', 'monticello', 'peru', 'portland', 'princeton', 'rochester', 'warsaw',
-
-  // Iowa (15 new, smaller cities with dealerships)
-  'algona', 'anamosa', 'chariton', 'clarinda', 'creston', 'estonia', 'forest city', 'guttenberg', 'hampton', 'humboldt',
-  'maquoketa', 'monticello', 'red oak', 'sioux center', 'vinton',
-
-  // Kansas (15 new, rural and mid-sized cities)
-  'belleville', 'colby', 'concordia', 'ellsworth', 'eureka', 'fredonia', 'goodland', 'hillsboro', 'hugoton', 'kingman',
-  'lyons', 'marysville', 'pratt', 'russell', 'wellington',
-
-  // Kentucky (20 new, covering Eastern and Central Kentucky)
-  'ashland', 'barbourville', 'berea', 'cynthiana', 'flemingsburg', 'georgetown', 'grayson', 'harlan', 'hazard', 'hyden',
-  'jackson', 'london', 'louisa', 'manchester', 'monticello', 'morehead', 'paintsville', 'pikeville', 'prestonburg', 'somerset',
-
-  // Louisiana (15 new, smaller cities with dealerships)
-  'amite', 'bunkie', 'dequincy', 'franklin', 'homer', 'jonesboro', 'kinder', 'leesville', 'many', 'marksville',
-  'new roads', 'oak grove', 'rayville', 'vidalia', 'winnsboro',
-
-  // Maine (10 new, smaller towns)
-  'bar harbor', 'bethel', 'calais', 'caribou', 'dexter', 'houlton', 'limestone', 'madawaska', 'presque isle', 'van buren',
-
-  // Maryland (15 new, covering Eastern Shore and Western Maryland)
-  'beltsville', 'cheverly', 'chestertown', 'easton', 'edgewood', 'elkton', 'emmitsburg', 'frostburg', 'fruitland', 'havre de grace',
-  'la plata', 'mount airy', 'ocean city', 'pocomoke city', 'salisbury',
-
-  // Massachusetts (20 new, smaller cities and towns)
-  'amherst', 'andover', 'ayer', 'belmont', 'burlington', 'dedham', 'dracut', 'foxborough', 'greenfield', 'holbrook',
-  'hudson', 'ipswich', 'melrose', 'milton', 'north adams', 'north reading', 'stoneham', 'swampscott', 'westborough', 'winthrop',
-
-  // Michigan (25 new, covering Upper Peninsula and Lower Peninsula)
-  'adrian', 'alma', 'alpena', 'big rapids', 'cadillac', 'charlevoix', 'cheboygan', 'coldwater', 'escanaba', 'gaylord',
-  'hancock', 'hillsdale', 'houghton', 'ionia', 'iron mountain', 'ishpeming', 'ludington', 'manistee', 'marquette', 'menominee',
-  'owosso', 'petoskey', 'sault ste. marie', 'sturgis', 'three rivers',
-
-  // Minnesota (20 new, covering Twin Cities suburbs and Greater Minnesota)
-  'albert lea', 'alexandria', 'bemidji', 'brainerd', 'buffalo', 'cambridge', 'detroit lakes', 'fairmont', 'fergus falls', 'grand rapids',
-  'hibbing', 'hutchinson', 'marshall', 'monticello', 'morris', 'new ulm', 'north branch', 'owatonna', 'thief river falls', 'willmar',
-
-  // Mississippi (15 new, smaller cities with dealerships)
-  'batesville', 'brookhaven', 'carthage', 'clarksdale', 'cleveland', 'columbia', 'forest', 'hazlehurst', 'houston', 'kosciusko',
-  'louisville', 'magee', 'philadelphia', 'pontotoc', 'west point',
-
-  // Missouri (20 new, covering Ozarks and Northern Missouri)
-  'bolivar', 'branson', 'carthage', 'chillicothe', 'clinton', 'excelsior springs', 'festus', 'fulton', 'jackson', 'kennett',
-  'lebanon', 'macon', 'maryville', 'mexico', 'nevada', 'perryville', 'poplar bluff', 'saint robert', 'union', 'west plains',
-
-  // Montana (10 new, rural communities)
-  'anaconda-deer lodge', 'bigfork', 'cut bank', 'deer lodge', 'glasgow', 'libby', 'livingston', 'polson', 'sidney', 'whitefish',
-
-  // Nebraska (15 new, smaller cities)
-  'albion', 'aurora', 'blair', 'chadron', 'falls city', 'geneva', 'gothenburg', 'hastings', 'kearney', 'lexington',
-  'mccook', 'norfolk', 'plattsmouth', 'seward', 'york',
-
-  // Nevada (10 new, smaller cities and towns)
-  'boulder', 'carson', 'elko', 'fallon', 'fernley', 'mesquite', 'reno south', 'sparks east', 'winnemucca', 'yerington',
-
-  // New Hampshire (10 new, smaller towns)
-  'barrington', 'belmont', 'colebrook', 'gorham', 'hillsborough', 'lisbon', 'new ipswich', 'newport', 'northwood', 'tamworth',
-
-  // New Jersey (25 new, covering North and Central Jersey)
-  'asbury park', 'bayville', 'bloomfield', 'bound brook', 'carteret', 'closter', 'dover', 'dumont', 'elmwood park', 'englewood',
-  'fort lee', 'hoboken', 'keyport', 'lodi', 'lyndhurst', 'mahwah', 'maplewood', 'montclair', 'morristown', 'point pleasant', 'ridgewood',
-  'rutherford', 'summit', 'union', 'westwood',
-
-  // New Mexico (15 new, smaller cities)
-  'alamo', 'artesia', 'bloomfield', 'carlsbad', 'clovis east', 'deming', 'espanola', 'gallup', 'grants', 'hobbs',
-  'lovington', 'portales', 'roswell', 'ruidoso', 'silver city',
-
-  // New York (25 new, covering Upstate and Long Island)
-  'amityville', 'baldwinsville', 'batavia', 'beacon', 'canandaigua', 'cortland', 'endicott', 'geneva', 'hornell', 'horseheads',
-  'jamestown', 'johnstown', 'malone', 'massena', 'medina', 'new paltz', 'north syracuse', 'ogdensburg', 'oneida', 'oneonta',
-  'oswego', 'port jervis', 'rochester hills', 'saratoga', 'watertown',
-
-  // North Carolina (20 new, covering Piedmont and Coastal regions)
-  'ahoskie', 'belmont', 'brevard', 'dunn', 'elizabeth city', 'farmville', 'graham', 'hamlet', 'haverford', 'hendersonville',
-  'laurinburg', 'lenoir', 'lillington', 'lincolnton', 'lumberton', 'mocksville', 'mount airy', 'reidsville', 'roxboro', 'siler city',
-
-  // North Dakota (10 new, smaller communities)
-  'belcourt', 'cavalier', 'devils lake', 'grafton', 'harvey', 'larimore', 'lisbon', 'new rockford', 'rugby', 'valley city',
-
-  // Ohio (25 new, covering Northeast and Central Ohio)
-  'alliance', 'ashland', 'ashtabula', 'athens', 'barberton', 'berea', 'chardon', 'coshocton', 'defiance', 'dover',
-  'eastlake', 'fostoria', 'galion', 'greenville', 'kent', 'marietta', 'medina', 'painesville', 'portsmouth', 'sandusky',
-  'sidney', 'tiffin', 'wadsworth', 'willoughby', 'zanesville',
-
-  // Oklahoma (15 new, smaller cities)
-  'anadarko', 'blackwell', 'bristow', 'chandler', 'cushing', 'frederick', 'henryetta', 'hobart', 'holdenville', 'idabel',
-  'pauls valley', 'perry', 'purcell', 'sulphur', 'vinita',
-
-  // Oregon (15 new, covering Willamette Valley and Eastern Oregon)
-  'astoria', 'baker city', 'coquille', 'florence', 'hood river', 'junction city', 'la pine', 'lincoln city', 'madras', 'milton-freewater',
-  'north bend', 'seaside', 'sutherlin', 'tillamook', 'umatilla',
-
-  // Pennsylvania (25 new, covering Western and Central Pennsylvania)
-  'ambridge', 'beaver', 'bellefonte', 'blairsville', 'bloomsburg', 'clarion', 'clearfield', 'coraopolis', 'corry', 'doylestown',
-  'du bois', 'east stroudsburg', 'edensburg', 'gettysburg', 'hollidaysburg', 'huntingdon', 'kittanning', 'kutzton', 'lewisburg', 'lock haven',
-  'milton', 'monroeville', 'new kensington', 'punxsutawney', 'selinsgrove',
-
-  // Rhode Island (10 new, smaller communities)
-  'barrington', 'bristol', 'central falls', 'coventry', 'exeter', 'narragansett', 'newport', 'tiverton', 'westerly', 'woonsocket',
-
-  // South Carolina (15 new, covering Upstate and Lowcountry)
-  'abbeville', 'anderson', 'bennettsville', 'cheraw', 'chester', 'clover', 'gaffney', 'lake city', 'marion', 'mullins',
-  'newberry', 'pageland', 'union', 'walterboro', 'williamston',
-
-  // South Dakota (10 new, smaller communities)
-  'beresford', 'brookings', 'canton', 'chamberlain', 'dell rapids', 'hot springs', 'lead', 'mobridge', 'sturgis', 'vermillion',
-
-  // Tennessee (20 new, covering East and Middle Tennessee)
-  'alcoa', 'bristol', 'crossville', 'dayton', 'elizabethton', 'fayetteville', 'gallatin', 'harriman', 'hohenwald', 'jackson',
-  'lafayette', 'lafollette', 'loudon', 'manchester', 'mcminnville', 'milan', 'paris', 'pigeon forge', 'ripley', 'sweetwater',
-
-  // Texas (30 new, covering Panhandle, Hill Country, and South Texas)
-  'alvin', 'angleton', 'bastrop', 'bay city', 'boerne', 'brenham', 'brownwood', 'burleson', 'canyon', 'cleburne',
-  'conroe', 'corsicana', 'del rio', 'eagle pass', 'ennis', 'fredericksburg', 'galveston', 'georgetown', 'huntsville', 'kerrville',
-  'kingsville', 'lampasas', 'lufkin', 'marshall', 'nacogdoches', 'palestine', 'port arthur', 'seguin', 'sherman', 'weatherford',
-
-  // Utah (15 new, covering Wasatch Front and Southern Utah)
-  'blanding', 'brigham', 'cedar hills', 'delta', 'ephraim', 'fillmore', 'moab', 'morgan', 'nephi', 'park city',
-  'price', 'richfield', 'roosevelt', 'tremonton', 'vernal',
-
-  // Vermont (10 new, smaller towns)
-  'barre', 'bellows falls', 'bethel', 'brandon', 'enosburg', 'fair haven', 'lyndon', 'newport', 'stowe', 'vergennes',
-
-  // Virginia (20 new, covering Shenandoah Valley and Tidewater)
-  'blackstone', 'bridgewater', 'chincoteague', 'colonial beach', 'dumfries', 'emporia', 'falmouth', 'front royal', 'luray', 'marion',
-  'norton', 'orange', 'pulaski', 'south boston', 'south hill', 'tappahannock', 'vinton', 'warrenton', 'wise', 'wytheville',
-
-  // Washington (15 new, covering Puget Sound and Eastern Washington)
-  'anacortes', 'arlington', 'battle ground', 'bonney lake', 'chehalis', 'cheney', 'colville', 'ellensburg', 'enumclaw', 'ferndale',
-  'gig harbor', 'monroe', 'port orchard', 'sequim', 'shelton',
-
-  // West Virginia (10 new, smaller communities)
-  'beckley', 'clendenin', 'fayetteville', 'lewisburg', 'moorefield', 'oak hill', 'parsons', 'petersburg', 'romney', 'summersville',
-
-  // Wisconsin (20 new, covering Southeast and Central Wisconsin)
-  'baraboo', 'cedarburg', 'chippewa falls', 'delafield', 'delavan', 'fort atkinson', 'grafton', 'hartford', 'lake geneva', 'menomonie',
-  'merrill', 'monroe', 'oconto', 'pewaukee', 'portage', 'reedsburg', 'rice lake', 'river falls', 'stoughton', 'sturgeon bay',
-
-  // Wyoming (10 new, smaller communities)
-  'afton', 'evanston', 'glenrock', 'green river', 'jackson hole', 'kemmerer', 'lander', 'powell', 'riverton', 'sheridan', 'birmingham', 'montgomery',
-  'hunstville', 'lakeland', 'wilsonville', 'palm coast', 'morristown', 'palm coast', 'morristown', 'roseville', 'novato', 'jacksonville', 'richmond',
-  'san leandro'
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 ]);
 
  // Define known first and last names for human name splitting
 const KNOWN_FIRST_NAMES = new Set([
   // Existing first names (~600, summarized from humanize.js lines 299–368)
-<<<<<<< HEAD
   "aaron", "abel", "al", "abraham", "adam", "arnie", "adrian", "al", "alan", "allan", "allen", "albert", "alden", "alex",
   "alexander", "alfred", "allan", "allen", "alton", "alvin", "amos", "andre", "andrew",
   "andy", "angus", "anthony", "archie", "arnold", "arthur", "asa", "austin", "avery",
@@ -1385,132 +1162,11 @@ const KNOWN_FIRST_NAMES = new Set([
   "ward", "warner", "warren", "weldon", "wendell", "wesley", "weston", "whitman",
   "wilbur", "wilder", "wilfred", "willard", "willis", "winfield", "winston",
   "woodrow", "wyatt", "zachariah", "zephaniah", "scott"
-=======
-  'aaron', 'abel', 'al', 'abraham', 'adam', 'arnie', 'adrian', 'al', 'alan', 'allan', 'allen', 'albert', 'alden', 'alex',
-  'alexander', 'alfred', 'allan', 'allen', 'alton', 'alvin', 'amos', 'andre', 'andrew',
-  'andy', 'angus', 'anthony', 'archie', 'arnold', 'arthur', 'asa', 'austin', 'avery',
-  'barney', 'barnett', 'barrett', 'barry', 'bart', 'basil', 'bo', 'beau', 'beauford', 'ben',
-  'benedict', 'benjamin', 'bennie', 'benny', 'bernard', 'bernie', 'bert', 'beverly',
-  'bill', 'billy', 'blaine', 'blair', 'blake', 'bob', 'bobbie', 'bobby', 'boyd',
-  'brad', 'bradford', 'bradley', 'brand', 'brant', 'brent', 'brett', 'brian', 'brock',
-  'bruce', 'bryan', 'bryce', 'buck', 'bud', 'buddy', 'burl', 'burton', 'byron',
-  'cal', 'caleb', 'calvin', 'cameron', 'carey', 'carl', 'carlton', 'carroll', 'carson',
-  'casey', 'cecil', 'cedric', 'chad', 'chadwick', 'chandler', 'charles', 'charlie',
-  'chester', 'chip', 'chris', 'christian', 'chuck', 'ches', 'clair', 'clarence', 'clark',
-  'claude', 'clay', 'clayton', 'clem', 'clement', 'cletus', 'cliff', 'clifford',
-  'clifton', 'clyde', 'cody', 'coleman', 'colin', 'connor', 'conrad', 'corey',
-  'cornell', 'cory', 'courtney', 'craig', 'curt', 'curtis', 'cyrus', 'dale',
-  'dallas', 'damon', 'dan', 'diane', 'dane', 'daniel', 'danny', 'daren', 'dayton', 'darrel', 'darrell',
-  'darren', 'darryl', 'dave', 'david', 'dawson', 'dean', 'delbert', 'delmar',
-  'denis', 'dennis', 'denny', 'derek', 'derrick', 'desmond', 'devin', 'dewey',
-  'dexter', 'dick', 'dickie', 'dillon', 'dino', 'dominic', 'don', 'donald',
-  'donnie', 'donovan', 'doyle', 'doug', 'drake', 'drew', 'duane', 'dudley', 'duncan',
-  'dustin', 'dwight', 'earl', 'earnest', 'ed', 'eddie', 'edgar', 'edmond',
-  'edward', 'edwin', 'elbert', 'elden', 'eldon', 'eli', 'eliot', 'elliot',
-  'elliott', 'ellis', 'ed', 'elmer', 'elton', 'elwood', 'emery', 'emmett', 'ernest',
-  'ernie', 'ethan', 'eugene', 'evan', 'everett', 'ezra', 'felix', 'ferdinand',
-  'finn', 'fletcher', 'floyd', 'forrest', 'francis', 'frank', 'franklin', 'fred',
-  'freddie', 'frederick', 'freddy', 'gabe', 'gabriel', 'gail', 'gale', 'garland',
-  'garrett', 'garry', 'gary', 'gavin', 'gayle', 'gene', 'geoff', 'geoffrey',
-  'george', 'gerald', 'gil', 'gilbert', 'giles', 'glen', 'glenn', 'gordon',
-  'grady', 'graham', 'grant', 'greg', 'gregg', 'gregory', 'grover', 'gus',
-  'guy', 'hal', 'hank', 'hans', 'harlan', 'herb', 'harley', 'harold', 'harris', 'harrison',
-  'harry', 'hart', 'harvey', 'hayden', 'heath', 'hector', 'henry', 'herbert',
-  'herman', 'homer', 'horace', 'hadwin', 'howard', 'hugh', 'hugo', 'ian', 'ira', 'irvin',
-  'irving', 'isaac', 'ivan', 'jack', 'jackson', 'jacob', 'jake', 'jamie',
-  'jared', 'jarrett', 'jasper', 'jay', 'jed', 'jeff', 'jeffery', 'jeffrey',
-  'jerald', 'jeremy', 'jerome', 'jerry', 'jim', 'jessie', 'jim', 'jimmie', 'jimmy',
-  'joel', 'joey', 'john', 'johnnie', 'johnny', 'jon', 'jonah', 'jonas',
-  'jonathan', 'jordan', 'jordy', 'joseph', 'josh', 'joshua', 'judd', 'julian',
-  'julius', 'junior', 'justin', 'keith', 'kelvin', 'kc', 'ken', 'kenneth', 'kenny',
-  'kent', 'kevin', 'kurt', 'kyle', 'lamar', 'lance', 'landon', 'lane',
-  'larry', 'lavern', 'lawrence', 'lee', 'leland', 'lenny', 'leo', 'leon',
-  'leroy', 'les', 'leslie', 'levi', 'lewis', 'lincoln', 'lloyd', 'logan',
-  'lon', 'lonnie', 'loren', 'lou', 'louie', 'louis', 'lowell', 'luc', 'lucas',
-  'lucian', 'luke', 'lyle', 'lyman', 'lynn', 'mack', 'malcolm', 'marc',
-  'marco', 'mario', 'marion', 'mark', 'marshall', 'martin', 'marty', 'marvin',
-  'mason', 'matt', 'matthew', 'maurice', 'max', 'maxwell', 'melvin', 'merle',
-  'merrill', 'michael', 'mickey', 'mike', 'miles', 'milo', 'milton', 'mitch',
-  'mitchell', 'monty', 'morgan', 'morris', 'murray', 'nate', 'nathan', 'nathaniel',
-  'ned', 'neil', 'nelson', 'nick', 'nicholas', 'noah', 'norm', 'norman',
-  'norris', 'oliver', 'orville', 'oscar', 'otis', 'owen', 'pascal', 'pat',
-  'paul', 'percy', 'pete', 'pat', 'peter', 'phil', 'philip', 'quentin', 'quinn',
-  'ralph', 'ramon', 'randall', 'randell', 'randy', 'ray', 'raymond', 'reed',
-  'reginald', 'reid', 'rex', 'rhett', 'richard', 'rick', 'ricky', 'rob',
-  'robert', 'rod', 'rodney', 'roger', 'roland', 'roman', 'ron', 'ronald',
-  'ronnie', 'rory', 'ross', 'roy', 'rudy', 'russ', 'russell', 'russel',
-  'sal', 'sam', 'sammy', 'saul', 'sawyer', 'scott', 'sean', 'seth', 'shawn',
-  'sheldon', 'sherman', 'sid', 'sidney', 'silas', 'simon', 'sol', 'sonny',
-  'spencer', 'stan', 'stanley', 'stewart', 'steve', 'steven', 'stuart',
-  'sylvester', 'tanner', 'ted', 'terry', 'theodore', 'thomas', 'tim', 'timothy',
-  'toby', 'todd', 'tom', 'tony', 'tracy', 'travis', 'trent', 'trevor', 'trey',
-  'tristan', 'troy', 'tucker', 'ty', 'tyler', 'tyrone', 'val', 'vance',
-  'vernon', 'victor', 'vince', 'vincent', 'virgil', 'wade', 'walker', 'wallace',
-  'walter', 'warren', 'wayne', 'walker', 'wendell', 'wes', 'vic', 'wesley', 'whit', 'wilber',
-  'wilbert', 'will', 'willard', 'willie', 'wilson', 'winston', 'woody', 'wyatt',
-  'xavier', 'zach', 'zachary', 'zack', 'zane',
-  // New first names (500, for white males aged 40–80, born ~1945–1985)
-  'abner', 'alden', 'alfonzo', 'alford', 'alpheus', 'alston', 'ambrose', 'anson',
-  'arden', 'arlie', 'arlin', 'armand', 'arno', 'arnold', 'arvel', 'asa', 'aubrey',
-  'august', 'aurelius', 'barrett', 'bartholomew', 'baxter', 'bennett', 'berton',
-  'beverly', 'blaine', 'blair', 'blanchard', 'boyce', 'bradford', 'bradley',
-  'bradshaw', 'brantley', 'brent', 'brett', 'brice', 'broderick', 'bronson',
-  'buckley', 'burl', 'burton', 'byron', 'calvert', 'carey', 'carleton', 'carlton',
-  'carmine', 'cassius', 'cecil', 'cedric', 'chadwick', 'chalmers', 'chance',
-  'channing', 'charlton', 'chester', 'clair', 'clarence', 'claudius', 'clemens',
-  'cletus', 'clifford', 'clinton', 'clyde', 'coleman', 'columbus', 'conrad',
-  'cordell', 'cornelius', 'cortez', 'crawford', 'cullen', 'curtis', 'cyril',
-  'dalton', 'damian', 'darius', 'darrin', 'darwin', 'daryl', 'davey', 'delbert',
-  'delmer', 'denny', 'derrick', 'desmond', 'dewitt', 'dexter', 'dillard',
-  'dion', 'dolph', 'dominick', 'donovan', 'dorian', 'dorsey', 'doyle', 'dudley',
-  'duff', 'duncan', 'dwayne', 'dwight', 'earle', 'easton', 'edgar', 'edison',
-  'edmund', 'edwin', 'eldridge', 'elias', 'elisha', 'elliot', 'ellis', 'elmer',
-  'elton', 'elwood', 'emanuel', 'emerson', 'emery', 'emil', 'emmett', 'enoch',
-  'ephraim', 'erasmus', 'erastus', 'ernest', 'ernie', 'errol', 'ervin', 'esau',
-  'eugene', 'everett', 'ezekiel', 'ezra', 'fabian', 'felton', 'ferdinand', 'ferris',
-  'finley', 'fleming', 'fletcher', 'flora', 'floyd', 'forrest', 'foster', 'frank', 'francis',
-  'franklin', 'fredric', 'freeman', 'gabe', 'garfield', 'garland', 'garrett',
-  'garrison', 'gaston', 'geoff', 'gideon', 'gilbert', 'giles', 'gillian', 'glenn',
-  'godfrey', 'gordon', 'grady', 'granger', 'grant', 'gregg', 'grover', 'gustave',
-  'hadley', 'halbert', 'halsey', 'hammond', 'hanson', 'harlan', 'harmon', 'harold',
-  'harper', 'harris', 'harrison', 'hartley', 'harvey', 'hayden', 'hayes', 'haywood',
-  'heath', 'hector', 'henry', 'herbert', 'herschel', 'hezekiah', 'hilton', 'hiram',
-  'hobart', 'hollis', 'homer', 'horatio', 'hosea', 'howard', 'hoyt', 'hubert',
-  'hugh', 'hugo', 'humbert', 'hunter', 'hyman', 'ignatius', 'irwin', 'isaiah',
-  'israel', 'ivan', 'ivor', 'jacob', 'jared', 'jerry', 'jarvis', 'jasper', 'jeb', 'jedediah',
-  'jefferson', 'jeremiah', 'jerome', 'jesse', 'jethro', 'joab', 'joel', 'johnathan',
-  'jonas', 'jordy', 'josiah', 'jude', 'judson', 'julian', 'julius', 'juniper',
-  'justus', 'kermit', 'king', 'kingsley', 'kirk', 'lambert', 'lamont', 'lance',
-  'larkin', 'laurence', 'lawson', 'layton', 'lemuel', 'lenard', 'leonard', 'leroy',
-  'lester', 'levi', 'lewis', 'lincoln', 'lindsey', 'linus', 'lionel', 'lloyd',
-  'lonnie', 'loren', 'lorenzo', 'lowell', 'lucian', 'luther', 'lyle', 'mackenzie',
-  'malachi', 'malcolm', 'manfred', 'marcus', 'marlin', 'marshall', 'marvin',
-  'mason', 'maurice', 'maxwell', 'merritt', 'micah', 'miles', 'milo', 'montague',
-  'montgomery', 'morgan', 'morris', 'morton', 'moses', 'murphy', 'murray', 'myron',
-  'nathaniel', 'ned', 'nelson', 'newell', 'newton', 'niles', 'noel', 'nolan',
-  'norbert', 'normand', 'obadiah', 'octavius', 'packey', 'odell', 'olaf', 'olin', 'orion',
-  'orlando', 'orville', 'osborn', 'oswald', 'otis', 'otto', 'owens', 'palmer',
-  'pascal', 'patrick', 'percy', 'perry', 'phineas', 'pierce', 'porter', 'prescott',
-  'preston', 'quentin', 'quincy', 'ralph', 'randolph', 'rayburn', 'rayford',
-  'reginald', 'reuben', 'rex', 'reynold', 'rhodes', 'richard', 'rigby', 'robert',
-  'roderick', 'roger', 'roland', 'rollin', 'russell', 'roman', 'ronald', 'roosevelt', 'rory',
-  'roscoe', 'ross', 'royce', 'rudy', 'rufus', 'rupert', 'russell', 'sampson', 'samuel',
-  'saul', 'sebastian', 'seth', 'seymour', 'shadrach', 'sherman', 'sherwood',
-  'sidney', 'sigmond', 'silas', 'simon', 'solomon', 'spencer', 'stanford', 'stephan',
-  'sterling', 'stevens', 'sylvester', 'talmadge', 'teddy', 'terence', 'theodore',
-  'thomas', 'thornton', 'titus', 'tobias', 'troy', 'truman', 'tucker', 'tyrone',
-  'ulysses', 'valentine', 'vance', 'vaughn', 'vernon', 'vic', 'victor', 'vincent',
-  'virgil', 'vito', 'vivian', 'vladimir', 'wade', 'walker', 'wallace', 'walter',
-  'ward', 'warner', 'warren', 'weldon', 'wendell', 'wesley', 'weston', 'whitman',
-  'wilbur', 'wilder', 'wilfred', 'willard', 'willis', 'winfield', 'winston',
-  'woodrow', 'wyatt', 'zachariah', 'zephaniah', 'scott'
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 ]);
 
    // Place immediately after KNOWN_FIRST_NAMES in api/lib/humanize.js
 const KNOWN_LAST_NAMES = new Set([
   // Existing last names (~600, summarized from humanize.js lines 299–368)
-<<<<<<< HEAD
   "abbott", "ackerman", "adams", "adkins", "albert", "aldrich", "alexander", "alford", "allison", "alston",
   "anderson", "andrews", "appleton", "archer", "archibald", "andrews", "armstrong", "arnold", "ashley", "atkins", "atkinson",
   "atwood", "austin", "avery", "babcock", "bain", "baird", "baker", "baldwin", "ball", "ballard",
@@ -1669,166 +1325,6 @@ const KNOWN_LAST_NAMES = new Set([
 
 const SUFFIXES_TO_REMOVE = new Set([
   "llc", "inc", "corp", "co", "ltd", "group", "auto", "motors"
-=======
-  'abbott', 'ackerman', 'adams', 'adkins', 'albert', 'aldrich', 'alexander', 'alford', 'allison', 'alston',
-  'anderson', 'andrews', 'appleton', 'archer', 'archibald', 'andrews', 'armstrong', 'arnold', 'ashley', 'atkins', 'atkinson',
-  'atwood', 'austin', 'avery', 'babcock', 'bain', 'baird', 'baker', 'baldwin', 'ball', 'ballard',
-  'banning', 'barker', 'barlow', 'barr', 'barrett', 'barry', 'bartlett', 'barnett', 'barrett', 'barton', 'bates', 'bauer',
-  'baxter', 'beal', 'beard', 'beasley', 'beck', 'becker', 'bell', 'bellows', 'bennett', 'benson',
-  'berry', 'billings', 'bingham', 'bishop', 'bixby', 'boruff', 'black', 'bestle', 'cecconis', 'blackburn', 'blair', 'blake', 'blanchard',
-  'bolton', 'bond', 'booth', 'bowen', 'bowers', 'bowman', 'boyd', 'boyle', 'bradley', 'brady',
-  'brannon', 'bray', 'brewer', 'briggs', 'bright', 'brink', 'baur', 'britt', 'brock', 'brooks', 'brown',
-  'browne', 'browning', 'bryant', 'bryce', 'buck', 'buckley', 'bullock', 'bumpus', 'burdick', 'burgess',
-  'burke', 'burnett', 'burns', 'burrows', 'burton', 'bush', 'butler', 'byrd', 'calhoun', 'callahan',
-  'calvert', 'cameron', 'campbell', 'cannon', 'cantrell', 'carey', 'cism', 'carlson', 'carmichael', 'carpenter', 'carr',
-  'carroll', 'carson', 'case', 'casey', 'cassidy', 'chaffee', 'chambers', 'chandler', 'chapman', 'chase',
-  'childers', 'church', 'churchill', 'clark', 'clay', 'clayton', 'clemens', 'clements', 'cobb', 'cochran',
-  'cody', 'colburn', 'colby', 'cole', 'coleman', 'collier', 'collins', 'compton', 'conley', 'connolly',
-  'connor', 'conway', 'cook', 'cooke', 'cooper', 'cope', 'corbett', 'chambers', 'corbin', 'cowan', 'cox',
-  'craig', 'crane', 'crawford', 'crews', 'crockett', 'crosby', 'cross', 'crowley', 'cummings', 'cummins',
-  'curry', 'dalton', 'daly', 'daniel', 'daniels', 'daugherty', 'davidson', 'davis', 'dawes', 'day',
-  'dean', 'decker', 'denton', 'dickerson', 'dickinson', 'dillard', 'dillon', 'dixon', 'dodson', 'doherty', 'donnelly',
-  'donovan', 'dorsey', 'dotson', 'dougherty', 'douglas', 'downey', 'downs', 'doyle', 'drake', 'dube',
-  'dudley', 'duff', 'duffy', 'duncan', 'dunn', 'dunbar', 'dutton', 'eastman', 'eaton', 'edmonds',
-  'edwards', 'elliott', 'ellis', 'emerson', 'england', 'english', 'erickson', 'evans', 'farley', 'farmer',
-  'farris', 'faulkner', 'fenton', 'ferguson', 'finley', 'fischer', 'fisher', 'fitzgerald', 'fleming', 'fletcher',
-  'flynn', 'ford', 'foster', 'fowler', 'fox', 'holt', 'kay', 'brand', 'dube', 'summers', 'franklin', 'fraser', 'freeman', 'frost', 'fuller',
-  'gallagher', 'gannett', 'garcia', 'gardner', 'garner', 'garrison', 'gibbons', 'gibbs', 'gibson', 'giles',
-  'gill', 'gilles', 'gilmore', 'glass', 'gleason', 'goddard', 'goodman', 'goodrich', 'goodwin', 'gordon',
-  'gould', 'grady', 'graham', 'granger', 'grant', 'graves', 'gray', 'green', 'greene', 'gregory',
-  'griffin', 'griffith', 'grimes', 'gross', 'grove', 'guthrie', 'hadley', 'hahn', 'hale', 'hall',
-  'hamilton', 'hammond', 'hancock', 'hanna', 'hardy', 'harmon', 'hubler', 'harper', 'harriman', 'harrington', 'harris',
-  'hart', 'hartman', 'hastings', 'hatcher', 'hawkins', 'hawley', 'hayden', 'hayes', 'hayward', 'healey',
-  'heath', 'henderson', 'hendricks', 'hendrickson', 'henry', 'herndon', 'hesser', 'hicks', 'higgins', 'hill', 'hinton',
-  'hitchcock', 'hodges', 'hoffman', 'hogan', 'holbrook', 'holden', 'holder', 'holland', 'holloway', 'holmes',
-  'holt', 'hood', 'hooper', 'hopkins', 'horn', 'horton', 'houghton', 'houston', 'howe', 'howard',
-  'hubbard', 'huffman', 'hughes', 'humphrey', 'hunt', 'hunter', 'hutchinson', 'ingalls', 'ingram', 'irwin',
-  'jackson', 'jack', 'jacobs', 'jacobson', 'james', 'jameson', 'jarvis', 'jennings', 'jensen', 'jewett', 'johnson',
-  'johnston', 'jones', 'jordan', 'judson', 'kane', 'keating', 'keller', 'kelley', 'kellogg', 'kelly',
-  'kemp', 'kendall', 'kennedy', 'kent', 'kerr', 'koehn', 'rinke', 'kimball', 'king', 'kinney', 'kirby', 'kirk',
-  'klein', 'knox', 'lambert', 'lane', 'lang', 'lobb', 'larkin', 'latta', 'larson', 'lawrence', 'lawson', 'leach',
-  'leavitt', 'leblanc', 'lee', 'leta', 'tomlinson', 'lewis', 'lindsey', 'locke', 'logan', 'lombard', 'long', 'lovett',
-  'lowe', 'lowry', 'lucas', 'lynch', 'lyons', 'luther', 'mack', 'mackenzie', 'madden', 'malone', 'mann',
-  'manning', 'marks', 'marlowe', 'marsh', 'martin', 'mason', 'matthews', 'mccarthy', 'mccoy', 'mcdaniel',
-  'mckinney', 'mclaughlin', 'mclean', 'mcmillan', 'mcpherson', 'meadows', 'mercer', 'merrill', 'merritt', 'meyer',
-  'miles', 'miller', 'mills', 'mitchell', 'moody', 'moore', 'morgan', 'morrison', 'morrow', 'morse',
-  'morton', 'moss', 'mullins', 'munson', 'murphy', 'murray', 'myers', 'nash', 'neal', 'nelson',
-  'newell', 'newman', 'newton', 'nichols', 'nixon', 'noble', 'nolan', 'norman', 'norris', 'norton',
-  'oakley', 'obrien', 'oconnor', 'odonnell', 'oliver', 'oneal', 'oneil', 'oneill', 'orr', 'osborne',
-  'osgood', 'owens', 'pace', 'page', 'palmer', 'parker', 'parsons', 'patterson', 'payne', 'peabody',
-  'pearson', 'pennington', 'perkins', 'perry', 'peters', 'peterson', 'phelps', 'philips', 'pierce', 'pollard',
-  'poole', 'porter', 'potter', 'powell', 'pratt', 'prescott', 'polis', 'preston', 'price', 'purcell', 'putnam',
-  'quinn', 'raines', 'ramsey', 'randall', 'ransom', 'raymond', 'reed', 'reese', 'reeves', 'regan',
-  'reid', 'reilly', 'remington', 'reyes', 'reynolds', 'rhodes', 'rice', 'richards', 'richardson', 'ricker',
-  'riley', 'rivera', 'roberts', 'robinson', 'rogers', 'rollins', 'roman', 'rose', 'ross', 'rowe',
-  'rudd', 'rutherford', 'ryan', 'salazar', 'sanders', 'sanderson', 'sargent', 'saunders', 'savage', 'sawyer',
-  'schmidt', 'schneider', 'schroeder', 'schultz', 'scott', 'seiner', 'sears', 'sewell', 'sexton', 'shannon', 'sharp',
-  'shaw', 'shea', 'sheldon', 'shepherd', 'sherman', 'sherwood', 'short', 'simmons', 'simon', 'simpson',
-  'sinclair', 'slater', 'sloan', 'small', 'smith', 'snyder', 'sparks', 'spencer', 'sprague', 'stafford',
-  'stanley', 'stark', 'steele', 'stephens', 'stevens', 'stewart', 'summers', 'stoddard', 'stokes', 'stone', 'stratton',
-  'strickland', 'strong', 'sullivan', 'summers', 'shallotte', 'sumner', 'sutton', 'sweeney', 'swanson', 'talbot', 'tanner',
-  'taylor', 'thayer', 'thomas', 'thorne', 'thornton', 'todd', 'torres', 'tucker', 'turner', 'underwood',
-  'upton', 'vance', 'vaughn', 'vinton', 'wadsworth', 'walker', 'wall', 'wallace', 'walden', 'walters',
-  'walton', 'ward', 'warner', 'warren', 'watson', 'weaver', 'webb', 'welch', 'wells', 'west',
-  'wheeler', 'whitaker', 'whitcomb', 'white', 'whiting', 'whitman', 'whiteames', 'whitney', 'wiley', 'wilcox', 'wilder',
-  'wilkerson', 'wilkins', 'williams', 'williamson', 'willis', 'webb', 'wilson', 'winslow', 'winters', 'wise', 'wolfe',
-  'wood', 'woodard', 'woodruff', 'vigil', 'mello', 'woods', 'wright', 'workman', 'wright', 'wyatt', 'yates', 'york', 'young',
-  'youngblood', 'zimmerman',
-  // New last names (500, for white males aged 40–80, born ~1945–1985)
-  'abbot', 'acker', 'addison', 'ainsworth', 'albright', 'allred', 'ames', 'appleby', 'archibald', 'armistead',
-  'ashburn', 'ashcroft', 'ashford', 'atwater', 'austen', 'badger', 'bagley', 'bainbridge', 'balding', 'barber',
-  'barclay', 'barker', 'barnard', 'barnes', 'barnett', 'barron', 'barton', 'bassett', 'bates', 'baxter',
-  'bayard', 'beadle', 'beall', 'beckett', 'boulware', 'bedford', 'beecham', 'belcher', 'belding', 'bellamy', 'benedict',
-  'benford', 'bennet', 'bentley', 'berkeley', 'bertram', 'beverly', 'bickford', 'biddle', 'bigelow', 'bingham',
-  'birch', 'bird', 'blackwell', 'blair', 'blakeley', 'blanchard', 'blevins', 'bloom', 'blythe', 'bogart',
-  'bogue', 'bolling', 'bolton', 'bondurant', 'boone', 'boswell', 'boughton', 'bowden', 'bowles', 'boynton',
-  'brace', 'bradbury', 'bradford', 'bradshaw', 'bragg', 'bramwell', 'branson', 'brant', 'braxton', 'breckenridge',
-  'brewster', 'brice', 'bridger', 'briggs', 'brigham', 'brinton', 'briscoe', 'britton', 'broadus', 'brockway',
-  'bromley', 'brook', 'brough', 'brownell', 'brunson', 'buckingham', 'buckner', 'buffington', 'bullard', 'burch',
-  'burdett', 'burleigh', 'burnham', 'burr', 'burrows', 'burton', 'bushnell', 'byers', 'byram', 'cabell',
-  'calder', 'caldwell', 'calloway', 'camden', 'cameron', 'camp', 'canfield', 'cannon', 'cantrell', 'capps',
-  'cardwell', 'carleton', 'carlisle', 'carmichael', 'carrington', 'carson', 'cartwright', 'carver', 'cass',
-  'castle', 'caulfield', 'chadwick', 'chambers', 'chandler', 'chapin', 'chase', 'chatfield', 'cheatham', 'childs',
-  'chisholm', 'christenson', 'church', 'clancy', 'clapp', 'clarke', 'clayborne', 'clem', 'clement', 'clifford',
-  'clinch', 'cobb', 'coburn', 'cocker', 'cockrell', 'coddington', 'colburn', 'colgate', 'collier', 'colvin',
-  'comer', 'comstock', 'conant', 'conklin', 'connell', 'converse', 'cooley', 'cooper', 'corbin', 'cornish',
-  'cortland', 'coryell', 'cotton', 'courtney', 'covington', 'cowles', 'craddock', 'crane', 'crawley', 'creighton',
-  'cromwell', 'croswell', 'crum', 'cullen', 'culver', 'cummings', 'cunningham', 'currier', 'curtis', 'cushing',
-  'cutler', 'cutts', 'daly', 'danforth', 'darnell', 'darr', 'davenport', 'davidson', 'dawson', 'deane',
-  'decker', 'delano', 'denham', 'denny', 'derr', 'dewey', 'dickenson', 'dill', 'dinsmore', 'dix',
-  'dixon', 'dodge', 'dole', 'donovan', 'dorsett', 'doughty', 'dow', 'dowling', 'drake', 'draper',
-  'drayton', 'drew', 'driscoll', 'duff', 'duke', 'dunham', 'dunlap', 'dunnell', 'durrence', 'durant', 'durham',
-  'dutton', 'dwyer', 'eads', 'eagle', 'earl', 'easterly', 'eaton', 'eckert', 'eddy', 'edmondson',
-  'eldred', 'eller', 'ellington', 'ellis', 'ellsworth', 'elmore', 'emerson', 'emery', 'emmons', 'engle',
-  'ennis', 'epps', 'ernest', 'esmond', 'evans', 'everett', 'ewing', 'fairchild', 'falkner', 'fanning',
-  'farley', 'farnham', 'farrar', 'farrell', 'farrow', 'faulk', 'fay', 'felton', 'fenn', 'ferris',
-  'field', 'finch', 'fish', 'fisk', 'fitzpatrick', 'flagg', 'fleming', 'flint', 'flynn', 'fogg',
-  'folger', 'forbes', 'fordham', 'forsyth', 'fortune', 'foss', 'foster', 'fowler', 'fox', 'frame',
-  'franks', 'fraser', 'freeland', 'freeman', 'french', 'frost', 'fry', 'fuller', 'gaines', 'gallagher',
-  'galloway', 'gardiner', 'garland', 'garrett', 'garrison', 'gates', 'gaylord', 'geiger', 'gerry', 'gibbs',
-  'giddings', 'gilchrist', 'giles', 'gillespie', 'gilman', 'gilmore', 'gladstone', 'glenn', 'glover', 'godwin',
-  'goldsmith', 'goodwin', 'gore', 'gould', 'grafton', 'grantham', 'graves', 'gray', 'greenleaf', 'greenwood',
-  'gregg', 'gridley', 'griffith', 'grimes', 'grinnell', 'griswold', 'grove', 'gunn', 'hadley', 'haines',
-  'hale', 'hall', 'halsey', 'hamlin', 'hammond', 'hampton', 'hancock', 'hand', 'hanley', 'hanson',
-  'harding', 'hargrove', 'harmon', 'harper', 'harrington', 'hart', 'hartley', 'harvey', 'haskell', 'hatch',
-  'hawes', 'hawthorne', 'hayden', 'hayes', 'hamm', 'hayward', 'heath', 'heaton', 'hedrick', 'hempstead', 'henderson',
-  'henley', 'henson', 'herrick', 'hewitt', 'hickman', 'hicks', 'higgins', 'high', 'hill', 'hilliard',
-  'hilton', 'hines', 'hinson', 'hitchcock', 'hoag', 'hobbs', 'hodge', 'hodgson', 'hogan', 'holbrook',
-  'holden', 'holladay', 'holland', 'hollister', 'holmes', 'holt', 'hooker', 'hooper', 'hopkins', 'horn',
-  'horton', 'houghton', 'houston', 'howard', 'howell', 'hoyt', 'hubbard', 'huber', 'huck', 'huff',
-  'huffman', 'huggins', 'hull', 'hume', 'hunt', 'huntington', 'hurd', 'hurley', 'huston', 'hutchins',
-  'hyde', 'ingalls', 'ingle', 'ireland', 'irvine', 'irving', 'isaacs', 'ives', 'jackson', 'jarrett',
-  'jeffries', 'jensen', 'jessup', 'jewell', 'jobe', 'johns', 'joiner', 'jordan', 'judd', 'keane',
-  'keeler', 'keen', 'kellogg', 'kemp', 'kendall', 'kennedy', 'kenney', 'kent', 'kerr', 'keyes',
-  'kilgore', 'kimball', 'king', 'kingsbury', 'kinsey', 'kirby', 'kirk', 'knapp', 'knighton', 'knott',
-  'knowles', 'knox', 'lacey', 'lamar', 'lambert', 'lamson', 'lancaster', 'landis', 'lane', 'langdon',
-  'langston', 'larkin', 'larson', 'latham', 'law', 'lawton', 'leach', 'leavitt', 'ledger', 'leighton',
-  'leland', 'leonard', 'lester', 'lewis', 'lilly', 'lincoln', 'lindley', 'lindsey', 'litchfield', 'lockwood',
-  'lodge', 'logan', 'long', 'lord', 'lovett', 'lowe', 'lowry', 'lucas', 'luce', 'ludlow',
-  'lundy', 'lusk', 'lyman', 'lyon', 'lyons', 'mace', 'mack', 'maddox', 'magee', 'main',
-  'malcolm', 'mallett', 'manley', 'mann', 'manning', 'mansfield', 'marble', 'marlow', 'marsh', 'martin',
-  'marvin', 'mason', 'mathews', 'maury', 'maxwell', 'may', 'maynard', 'mays', 'mccabe', 'mccall',
-  'mccarter', 'mcclellan', 'mcclure', 'mccormick', 'mcculloch', 'mcdowell', 'mcgee', 'mcgowan', 'mcguire', 'mckay',
-  'mckee', 'mckenna', 'mcknight', 'mclane', 'mcnair', 'mcneil', 'mcrae', 'mead', 'meadows', 'melton',
-  'mercer', 'meredith', 'merrick', 'merrill', 'merritt', 'miles', 'millard', 'miller', 'mills', 'milner',
-  'mitchell', 'moody', 'moore', 'moran', 'moreland', 'morgan', 'morrill', 'morrison', 'morrow', 'morse',
-  'morton', 'moseley', 'moss', 'mott', 'mullins', 'munroe', 'murdoch', 'myers', 'murphy', 'murray', 'myers',
-  'nash', 'naylor', 'neal', 'needham', 'neely', 'nikel', 'rown', 'newcomb', 'newell', 'newton', 'nicholls', 'noble',
-  'nolan', 'norris', 'north', 'norton', 'norwood', 'nutter', 'oakley', 'ober', 'odell', 'ogden',
-  'oliver', 'ormond', 'orr', 'osborn', 'osgood', 'otis', 'overton', 'owens', 'pace', 'page',
-  'paine', 'palmer', 'park', 'parker', 'parrish', 'parsons', 'patten', 'patterson', 'payne', 'peabody',
-  'pearce', 'peck', 'peel', 'pemberton', 'penn', 'pennington', 'perry', 'peters', 'peterson', 'pettigrew',
-  'phelps', 'phillips', 'pickens', 'pierce', 'pike', 'pittman', 'platt', 'plummer', 'poole', 'porter',
-  'potter', 'powell', 'pratt', 'prescott', 'preston', 'price', 'prichard', 'proctor', 'purdy', 'putnam',
-  'quincy', 'raines', 'raleigh', 'rand', 'randall', 'ransom', 'rathbun', 'ray', 'rahal', 'raymond', 'reade',
-  'redding', 'reed', 'rees', 'reese', 'reid', 'remington', 'renfro', 'reynolds', 'rous', 'rhodes', 'rice',
-  'rich', 'richards', 'richardson', 'richmond', 'ricketts', 'rider', 'ridgeway', 'riggs', 'riley', 'ripley',
-  'robbins', 'roberts', 'robertson', 'robinson', 'rockwell', 'rodgers', 'rogers', 'rollins', 'roper', 'ross',
-  'rowland', 'roy', 'rudd', 'rush', 'russell', 'rutherford', 'ryder', 'sabin', 'sampson', 'samuels',
-  'sanders', 'sanford', 'sanger', 'sargent', 'saunders', 'savage', 'sawyer', 'schuyler', 'scott', 'sinclair', 'sears',
-  'seaton', 'seaver', 'sedgwick', 'sewell', 'sextons', 'shannon', 'curley', 'oneal', 'vaden', 'baier', 'winter', 'butler', 'sharp', 'shaw', 'sheldon', 'shelton',
-  'shepherd', 'sheridan', 'sherwood', 'shipman', 'shirley', 'shields', 'short', 'shumway', 'sikes', 'simmons',
-  'simonds', 'simpson', 'sinclair', 'singleton', 'skinner', 'slade', 'slater', 'sloan', 'small', 'smyth',
-  'snell', 'snow', 'somers', 'spalding', 'sparks', 'spear', 'spears', 'spence', 'spencer', 'sprague',
-  'springer', 'stafford', 'sauer', 'stanton', 'stark', 'starr', 'steele', 'stein', 'sterling', 'stetson', 'stevens',
-  'stewart', 'stiles', 'stockton', 'stoddard', 'stone', 'stout', 'stratton', 'street', 'strong', 'stuart',
-  'sullivan', 'sumner', 'sutton', 'swain', 'swanson', 'sweet', 'sykes', 'talbot', 'tanner', 'tate',
-  'taylor', 'teague', 'temple', 'terrell', 'thatcher', 'thayer', 'thompson', 'thorne', 'thornton', 'thurston',
-  'tibbetts', 'tierney', 'tilton', 'todd', 'tomlinson', 'torrey', 'towne', 'townsend', 'tracy', 'travis',
-  'treadwell', 'tucker', 'turnbull', 'turner', 'tyler', 'underwood', 'upham', 'vance', 'vaughan', 'vinton',
-  'wadsworth', 'wainwright', 'waldron', 'walker', 'wall', 'wallace', 'walton', 'ward', 'ware', 'warner',
-  'warren', 'washburn', 'waterman', 'watkins', 'watson', 'watts', 'weaver', 'webber', 'webster', 'weeks',
-  'welch', 'weld', 'wellman', 'wells', 'wendell', 'wentworth', 'west', 'weston', 'wheeler', 'whipple',
-  'whitaker', 'whitcomb', 'white', 'whitehead', 'whiting', 'whitman', 'whitney', 'whittaker', 'whittier', 'wight',
-  'wilbur', 'wilcox', 'wilder', 'wilkerson', 'wilkins', 'willard', 'willcox', 'williams', 'williamson', 'willis',
-  'wilson', 'winchester', 'wing', 'winslow', 'winston', 'winter', 'withers', 'wood', 'woodbridge', 'woodbury',
-  'woodruff', 'woods', 'woodward', 'woolsey', 'worthington', 'wright', 'wyatt', 'yates', 'yeager', 'york',
-  'young', 'youngblood', 'zimmerman', 'kadlac', 'clark', 'caruso', 'perillo', 'stoops', 'weaver'
-]);
-
-const SUFFIXES_TO_REMOVE = new Set([
-  'llc', 'inc', 'corp', 'co', 'ltd', 'group', 'auto', 'motors'
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   // Subset of COMMON_WORDS for trailing removal
 ]);
 
@@ -1837,13 +1333,10 @@ const SORTED_CITY_LIST = Array.from(KNOWN_CITIES_SET).sort((a, b) => b.length - 
 
 // Validates override format for manual audit
 function validateOverrideFormat(override) {
-<<<<<<< HEAD
+
   if (!override || typeof override !== "string") return false;
   const tokens = override.split(" ").filter(Boolean);
-=======
-  if (!override || typeof override !== 'string') return false;
-  const tokens = override.split(' ').filter(Boolean);
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
+
   // Ensure 1-3 tokens, proper capitalization, no connectors
   if (tokens.length < 1 || tokens.length > 3) return false;
   if (!override.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) return false;
@@ -1853,28 +1346,16 @@ function validateOverrideFormat(override) {
 
 // Normalizes domain by removing "www." and extracting base domain
 function normalizeDomain(domain) {
-<<<<<<< HEAD
   if (typeof domain !== "string" || !domain) {
     log("error", "Invalid domain input", { domain });
     return "";
   }
   return domain.toLowerCase().replace(/^www\./, "").split(".")[0];
-=======
-  if (typeof domain !== 'string' || !domain) {
-    log('error', 'Invalid domain input', { domain });
-    return '';
-  }
-  return domain.toLowerCase().replace(/^www\./, '').split('.')[0];
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 }
 
 // Cleans company name by removing trailing suffixes and connectors
 function cleanCompanyName(companyName) {
-<<<<<<< HEAD
   if (!companyName || typeof companyName !== "string") return "";
-=======
-  if (!companyName || typeof companyName !== 'string') return '';
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   let tokens = companyName.trim().split(/\s+/).filter(Boolean);
   // Remove leading connectors (e.g., "Of Ford")
   while (tokens.length > 0 && COMMON_WORDS.has(tokens[0].toLowerCase())) {
@@ -1884,16 +1365,11 @@ function cleanCompanyName(companyName) {
   while (tokens.length > 0 && (SUFFIXES_TO_REMOVE.has(tokens[tokens.length - 1].toLowerCase()) || COMMON_WORDS.has(tokens[tokens.length - 1].toLowerCase()))) {
     tokens.pop();
   }
-<<<<<<< HEAD
   return tokens.join(" ").trim();
-=======
-  return tokens.join(' ').trim();
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 }
 
 // Capitalizes tokens for proper formatting
 function capitalizeName(name) {
-<<<<<<< HEAD
   if (!name || typeof name !== "string") return "";
 
   // Insert spaces between camelCase fragments (e.g., "MikeShawToyota" → "Mike Shaw Toyota")
@@ -1901,72 +1377,40 @@ function capitalizeName(name) {
 
   return name
     .split(" ")
-=======
-  if (!name || typeof name !== 'string') return '';
-  
-  // Insert spaces between camelCase fragments (e.g., "MikeShawToyota" → "Mike Shaw Toyota")
-  name = name.replace(/([a-z])([A-Z])/g, '$1 $2');
-
-  return name
-    .split(' ')
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     .map(word => {
       if (!word) return word;
       // Preserve all-caps words (e.g., "CDJR", "USA") if length <= 5
       if (word.length <= 5 && word === word.toUpperCase()) return word;
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
-<<<<<<< HEAD
     .join(" ");
-=======
-    .join(' ');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 }
 
 // Expands initials in tokens (e.g., 'J.B.' → 'J B')
 function expandInitials(token) {
-<<<<<<< HEAD
   if (!token || typeof token !== "string") return token;
   if (token.match(/^[A-Z]\.[A-Z]\.$/)) {
     return token.replace(/\./g, " ").trim();
-=======
-  if (!token || typeof token !== 'string') return token;
-  if (token.match(/^[A-Z]\.[A-Z]\.$/)) {
-    return token.replace(/\./g, ' ').trim();
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   }
   return token;
 }
 
 // Tokenizes domain into meaningful components
 function earlyCompoundSplit(domain) {
-<<<<<<< HEAD
   if (!domain || typeof domain !== "string") {
     log("error", "Invalid domain for tokenization", { domain });
-=======
-  if (!domain || typeof domain !== 'string') {
-    log('error', 'Invalid domain for tokenization', { domain });
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     return [];
   }
 
   // Check for overrides first
-<<<<<<< HEAD
   const override = TEST_CASE_OVERRIDES.get(domain + ".com");
   if (override) {
     log("info", `Override applied for domain: ${domain}`, { override });
     return override.split(" ").map(word => word.toLowerCase());
-=======
-  const override = TEST_CASE_OVERRIDES.get(domain + '.com');
-  if (override) {
-    log('info', `Override applied for domain: ${domain}`, { override });
-    return override.split(' ').map(word => word.toLowerCase());
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   }
 
   // Initialize tokens
   let tokens = [];
-<<<<<<< HEAD
 
   // Handle camelCase and basic splitting
   const camelCaseTokens = domain.match(/[A-Z]?[a-z]+/g) || [domain];
@@ -1975,16 +1419,7 @@ function earlyCompoundSplit(domain) {
   // Process abbreviations with word boundaries (e.g., 'mb' → 'M.B.')
   for (const [abbr, expansion] of ABBREVIATION_EXPANSIONS) {
     const regex = new RegExp(`\\b${abbr}\\b`, "g");
-=======
 
-  // Handle camelCase and basic splitting
-  const camelCaseTokens = domain.match(/[A-Z]?[a-z]+/g) || [domain];
-  let remaining = camelCaseTokens.join('');
-
-  // Process abbreviations with word boundaries (e.g., 'mb' → 'M.B.')
-  for (const [abbr, expansion] of ABBREVIATION_EXPANSIONS) {
-    const regex = new RegExp(`\\b${abbr}\\b`, 'g');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     if (remaining.match(regex)) {
       remaining = remaining.replace(regex, expansion.toLowerCase());
     }
@@ -1994,7 +1429,6 @@ function earlyCompoundSplit(domain) {
   tokens = remaining.split(/[^a-zA-Z]+/).filter(Boolean);
 
   // Expand initials in tokens
-<<<<<<< HEAD
   tokens = tokens.map(token => expandInitials(token)).flatMap(token => token.split(" ")).filter(Boolean);
 
   // Handle multi-word cities (e.g., 'northlasvegas')
@@ -2007,20 +1441,6 @@ function earlyCompoundSplit(domain) {
         tokens.splice(tokens.findIndex(t => t.includes(cityLower[0])), 0, ...cityTokens);
         tokens = tokens.filter(t => !cityLower.includes(t) || cityTokens.includes(t));
         remaining = remaining.replace(cityLower, "");
-=======
-  tokens = tokens.map(token => expandInitials(token)).flatMap(token => token.split(' ')).filter(Boolean);
-
-  // Handle multi-word cities (e.g., 'northlasvegas')
-  for (const city of SORTED_CITY_LIST) {
-    const cityLower = city.toLowerCase().replace(/\s+/g, '');
-    if (remaining.includes(cityLower)) {
-      const cityTokens = city.toLowerCase().split(' ').filter(Boolean);
-      const index = tokens.join('').indexOf(cityLower);
-      if (index !== -1) {
-        tokens.splice(tokens.findIndex(t => t.includes(cityLower[0])), 0, ...cityTokens);
-        tokens = tokens.filter(t => !cityLower.includes(t) || cityTokens.includes(t));
-        remaining = remaining.replace(cityLower, '');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
       }
     }
   }
@@ -2032,11 +1452,8 @@ function earlyCompoundSplit(domain) {
     let matched = false;
     for (let len = 3; len >= 1; len--) {
       if (i + len > tokenParts.length) continue;
-<<<<<<< HEAD
       const segment = tokenParts.slice(i, i + len).join("");
-=======
-      const segment = tokenParts.slice(i, i + len).join('');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
+
       if (KNOWN_PROPER_NOUNS.has(segment.toLowerCase())) {
         tokens.push(segment.toLowerCase());
         i += len - 1;
@@ -2062,11 +1479,8 @@ function earlyCompoundSplit(domain) {
   // Deduplicate tokens
   const uniqueTokens = [...new Set(finalTokens)];
 
-<<<<<<< HEAD
   log("debug", `Tokenized domain: ${domain}`, { tokens: uniqueTokens });
-=======
-  log('debug', `Tokenized domain: ${domain}`, { tokens: uniqueTokens });
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
+
   return uniqueTokens;
 }
 
@@ -2074,13 +1488,8 @@ function earlyCompoundSplit(domain) {
 function extractBrandOfCityFromDomain(domain) {
   const normalized = normalizeDomain(domain);
   const tokens = earlyCompoundSplit(normalized);
-<<<<<<< HEAD
   let brand = "";
   let city = "";
-=======
-  let brand = '';
-  let city = '';
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 
   for (let i = 0; i < tokens.length; i++) {
     const token = tokens[i].toLowerCase();
@@ -2097,34 +1506,20 @@ function extractBrandOfCityFromDomain(domain) {
     }
   }
 
-<<<<<<< HEAD
   if (!brand || !city) return { brand: "", city: "", connector: "" };
   return { brand: capitalizeName(brand), city: capitalizeName(city), connector: "" };
-=======
-  if (!brand || !city) return { brand: '', city: '', connector: '' };
-  return { brand: capitalizeName(brand), city: capitalizeName(city), connector: '' };
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 }
 
 // Matches first/last name patterns (e.g., 'jimmybrittchevrolet' → 'Jimmy Britt Chevrolet')
 function tryHumanNamePattern(tokens) {
   if (!tokens || !Array.isArray(tokens) || tokens.length < 2) return null;
 
-<<<<<<< HEAD
   let firstName = "";
   let lastName = "";
   let brand = "";
   let confidenceScore = 100;
   const flags = ["humanNamePattern"];
   const confidenceOrigin = "humanNamePattern";
-=======
-  let firstName = '';
-  let lastName = '';
-  let brand = '';
-  let confidenceScore = 100;
-  const flags = ['humanNamePattern'];
-  const confidenceOrigin = 'humanNamePattern';
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 
   // Look for first + last name
   for (let i = 0; i < tokens.length - 1; i++) {
@@ -2142,11 +1537,7 @@ function tryHumanNamePattern(tokens) {
     const token = tokens[i].toLowerCase();
     if (CAR_BRANDS.has(token)) {
       brand = BRAND_MAPPING.get(token) || token;
-<<<<<<< HEAD
       flags.push("brandIncluded");
-=======
-      flags.push('brandIncluded');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
       confidenceScore = 125;
       break;
     }
@@ -2155,59 +1546,37 @@ function tryHumanNamePattern(tokens) {
   // Construct company name
   const nameParts = [firstName, lastName];
   if (brand) nameParts.push(brand);
-<<<<<<< HEAD
+
   const companyName = capitalizeName(nameParts.join(" "));
 
   // Block brand-only or city-only results
   if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
     flags.push("brandOrCityOnlyBlocked");
-=======
-  const companyName = capitalizeName(nameParts.join(' '));
-
-  // Block brand-only or city-only results
-  if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
-    flags.push('brandOrCityOnlyBlocked');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     confidenceScore = 0;
     return null;
   }
 
   // Check for duplicate tokens
-<<<<<<< HEAD
   const wordList = companyName.split(" ").map(w => w.toLowerCase());
   if (new Set(wordList).size !== wordList.length) {
     flags.push("duplicateTokens");
-=======
-  const wordList = companyName.split(' ').map(w => w.toLowerCase());
-  if (new Set(wordList).size !== wordList.length) {
-    flags.push('duplicateTokens');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     confidenceScore = Math.min(confidenceScore, 95);
   }
 
   // Validate token count and pattern
-<<<<<<< HEAD
   const nameTokens = companyName.split(" ").filter(Boolean);
   if (nameTokens.length > 3) {
     confidenceScore = Math.min(confidenceScore, 85);
     flags.push("tokenLimitExceeded");
-=======
-  const nameTokens = companyName.split(' ').filter(Boolean);
-  if (nameTokens.length > 3) {
-    confidenceScore = Math.min(confidenceScore, 85);
-    flags.push('tokenLimitExceeded');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   }
 
   if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) {
     return null;
   }
 
-<<<<<<< HEAD
+
   log("info", "Human name pattern matched", { companyName, tokens });
-=======
-  log('info', `Human name pattern matched`, { companyName, tokens });
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
+
   return {
     companyName,
     confidenceScore,
@@ -2221,21 +1590,12 @@ function tryHumanNamePattern(tokens) {
 function tryProperNounPattern(tokens) {
   if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
 
-<<<<<<< HEAD
   let properNoun = "";
   let brand = "";
   let generic = "";
   let confidenceScore = 100;
   const flags = ["properNounPattern"];
   const confidenceOrigin = "properNounPattern";
-=======
-  let properNoun = '';
-  let brand = '';
-  let generic = '';
-  let confidenceScore = 100;
-  const flags = ['properNounPattern'];
-  const confidenceOrigin = 'properNounPattern';
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 
   // Look for proper noun
   for (const token of tokens) {
@@ -2253,21 +1613,13 @@ function tryProperNounPattern(tokens) {
     const token = tokens[i].toLowerCase();
     if (CAR_BRANDS.has(token)) {
       brand = BRAND_MAPPING.get(token) || token;
-<<<<<<< HEAD
+
       flags.push("brandIncluded");
       confidenceScore = 125;
       break;
     } else if (["motors", "auto", "dealership"].includes(token)) {
       generic = token;
       flags.push("genericIncluded");
-=======
-      flags.push('brandIncluded');
-      confidenceScore = 125;
-      break;
-    } else if (['motors', 'auto', 'dealership'].includes(token)) {
-      generic = token;
-      flags.push('genericIncluded');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
       confidenceScore = 100;
       break;
     }
@@ -2282,59 +1634,37 @@ function tryProperNounPattern(tokens) {
   const nameParts = [properNoun];
   if (brand) nameParts.push(brand);
   else if (generic) nameParts.push(generic);
-<<<<<<< HEAD
+
   const companyName = capitalizeName(nameParts.join(" "));
 
   // Block brand-only or city-only results
   if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
     flags.push("brandOrCityOnlyBlocked");
-=======
-  const companyName = capitalizeName(nameParts.join(' '));
-
-  // Block brand-only or city-only results
-  if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
-    flags.push('brandOrCityOnlyBlocked');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     confidenceScore = 0;
     return null;
   }
 
   // Check for duplicate tokens
-<<<<<<< HEAD
+
   const wordList = companyName.split(" ").map(w => w.toLowerCase());
   if (new Set(wordList).size !== wordList.length) {
     flags.push("duplicateTokens");
-=======
-  const wordList = companyName.split(' ').map(w => w.toLowerCase());
-  if (new Set(wordList).size !== wordList.length) {
-    flags.push('duplicateTokens');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
+
     confidenceScore = Math.min(confidenceScore, 95);
   }
 
   // Validate token count and pattern
-<<<<<<< HEAD
   const nameTokens = companyName.split(" ").filter(Boolean);
   if (nameTokens.length > 3) {
     confidenceScore = Math.min(confidenceScore, 85);
     flags.push("tokenLimitExceeded");
-=======
-  const nameTokens = companyName.split(' ').filter(Boolean);
-  if (nameTokens.length > 3) {
-    confidenceScore = Math.min(confidenceScore, 85);
-    flags.push('tokenLimitExceeded');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   }
 
   if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) {
     return null;
   }
 
-<<<<<<< HEAD
   log("info", "Proper noun pattern matched", { companyName, tokens });
-=======
-  log('info', `Proper noun pattern matched`, { companyName, tokens });
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   return {
     companyName,
     confidenceScore,
@@ -2349,81 +1679,47 @@ function tryBrandCityPattern(tokens) {
   if (!tokens || !Array.isArray(tokens) || tokens.length < 2) return null;
 
   // Reuse logic from extractBrandOfCityFromDomain
-<<<<<<< HEAD
   const domain = tokens.join("");
-=======
-  const domain = tokens.join('');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   const { brand, city } = extractBrandOfCityFromDomain(domain); // [Fix 3: Removed unused connector]
   if (!brand || !city) return null;
 
   let confidenceScore = 100;
-<<<<<<< HEAD
   const flags = ["brandCityPattern"];
   const confidenceOrigin = "brandCityPattern";
 
   // Always use 'Brand City' format for consistency
   const nameParts = [brand, city];
   const companyName = capitalizeName(nameParts.join(" "));
-=======
-  const flags = ['brandCityPattern'];
-  const confidenceOrigin = 'brandCityPattern';
-
-  // Always use 'Brand City' format for consistency
-  const nameParts = [brand, city];
-  const companyName = capitalizeName(nameParts.join(' '));
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 
   // Adjust confidenceScore (no bonus for connector since format is overridden)
   confidenceScore = 100;
 
   // Block brand-only or city-only results
   if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
-<<<<<<< HEAD
     flags.push("brandOrCityOnlyBlocked");
-=======
-    flags.push('brandOrCityOnlyBlocked');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     confidenceScore = 0;
     return null;
   }
 
   // Check for duplicate tokens
-<<<<<<< HEAD
   const wordList = companyName.split(" ").map(w => w.toLowerCase());
   if (new Set(wordList).size !== wordList.length) {
     flags.push("duplicateTokens");
-=======
-  const wordList = companyName.split(' ').map(w => w.toLowerCase());
-  if (new Set(wordList).size !== wordList.length) {
-    flags.push('duplicateTokens');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     confidenceScore = Math.min(confidenceScore, 95);
   }
 
   // Validate token count and pattern
-<<<<<<< HEAD
   const nameTokens = companyName.split(" ").filter(Boolean);
   if (nameTokens.length > 3) {
     confidenceScore = Math.min(confidenceScore, 85);
     flags.push("tokenLimitExceeded");
-=======
-  const nameTokens = companyName.split(' ').filter(Boolean);
-  if (nameTokens.length > 3) {
-    confidenceScore = Math.min(confidenceScore, 85);
-    flags.push('tokenLimitExceeded');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   }
 
   if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) {
     return null;
   }
 
-<<<<<<< HEAD
   log("info", "Brand city pattern matched", { companyName, tokens });
-=======
-  log('info', `Brand city pattern matched`, { companyName, tokens });
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   return {
     companyName,
     confidenceScore,
@@ -2441,19 +1737,11 @@ function tryBrandGenericPattern(tokens) {
   }
 
   // Initialize variables
-<<<<<<< HEAD
   let properNoun = "";
   let brand = "";
   let confidenceScore = 100;
   const flags = ["brandGenericPattern"];
   const confidenceOrigin = "brandGenericPattern";
-=======
-  let properNoun = '';
-  let brand = '';
-  let confidenceScore = 100;
-  const flags = ['brandGenericPattern'];
-  const confidenceOrigin = 'brandGenericPattern';
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
 
   // Find proper noun followed by brand in a single loop
   for (let i = 0; i < tokens.length - 1; i++) {
@@ -2465,11 +1753,7 @@ function tryBrandGenericPattern(tokens) {
       properNoun = currentToken;
       brand = BRAND_MAPPING.get(nextToken) || nextToken;
       confidenceScore = 125; // Bonus for brand match
-<<<<<<< HEAD
       flags.push("brandIncluded");
-=======
-      flags.push('brandIncluded');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
       break;
     }
   }
@@ -2486,36 +1770,25 @@ function tryBrandGenericPattern(tokens) {
 
   // Construct and clean company name
   const companyName = cleanCompanyName(capitalizeName(`${properNoun} ${brand}`));
-<<<<<<< HEAD
   const nameTokens = companyName.split(" ").filter(Boolean);
 
   // Block brand-only or city-only results
   if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
     flags.push("brandOrCityOnlyBlocked");
-=======
-  const nameTokens = companyName.split(' ').filter(Boolean);
-
-  // Block brand-only or city-only results
-  if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
-    flags.push('brandOrCityOnlyBlocked');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     return null;
   }
 
   // Check for duplicate tokens
   const uniqueTokens = new Set(nameTokens.map(t => t.toLowerCase()));
   if (uniqueTokens.size !== nameTokens.length) {
-<<<<<<< HEAD
     flags.push("duplicateTokens");
-=======
-    flags.push('duplicateTokens');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
+
     confidenceScore = Math.min(confidenceScore, 95);
   }
 
   // Validate token count (1–3 tokens)
   if (nameTokens.length > 3) {
-<<<<<<< HEAD
+
     flags.push("tokenLimitExceeded");
     confidenceScore = Math.min(confidenceScore, 85);
   }
@@ -2535,7 +1808,6 @@ function tryBrandGenericPattern(tokens) {
     tokens: nameTokens.map(t => t.toLowerCase()).slice(0, 3)
   };
 }
-
 // tryGenericPattern function
 function tryGenericPattern(tokens, properNounsSet) {
   if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
@@ -2544,52 +1816,16 @@ function tryGenericPattern(tokens, properNounsSet) {
   let properNoun = null;
   let generic = null;
 
-=======
-    flags.push('tokenLimitExceeded');
-    confidenceScore = Math.min(confidenceScore, 85);
-  }
 
-  // Validate capitalization pattern
-  if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) {
-    return null;
-  }
-
-  // Log and return result
-  log('info', 'Brand generic pattern matched', { companyName, tokens });
-  return {
-    companyName,
-    confidenceScore,
-    confidenceOrigin,
-    flags,
-    tokens: nameTokens.map(t => t.toLowerCase()).slice(0, 3)
-  };
-}
-
-// tryGenericPattern function
-function tryGenericPattern(tokens, properNounsSet) {
-  if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
-
-  const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
-  let properNoun = null;
-  let generic = null;
-
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   // Find a proper noun and a generic term in a single pass
   for (const token of tokens) {
     const lowerToken = token.toLowerCase();
     if (!properNoun && properNounsSet.has(lowerToken) && !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken)) {
       properNoun = capitalizeName(token);
-<<<<<<< HEAD
     }
     if (!generic && genericTerms.includes(lowerToken)) {
       generic = capitalizeName(token);
     }
-=======
-    }
-    if (!generic && genericTerms.includes(lowerToken)) {
-      generic = capitalizeName(token);
-    }
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     if (properNoun && generic) break;
   }
 
@@ -2606,7 +1842,13 @@ function tryGenericPattern(tokens, properNounsSet) {
     tokens: nameTokens
   };
 }
-<<<<<<< HEAD
+
+// Ensure cleanCompanyName is defined earlier in the file (e.g., near other utilities)
+// Utility to clean company names
+// function cleanCompanyName(name) {
+//   if (!name || typeof name !== "string") return "";
+//   return name.trim().replace(/\s+/g, " "); // Remove extra spaces and trim
+// }
 
 // Helper: Handle override logic
 function handleOverride(normalizedDomain, override) {
@@ -2617,46 +1859,10 @@ function handleOverride(normalizedDomain, override) {
       confidenceScore: 0,
       flags: ["override", "invalidOverrideFormat"],
       tokens: [],
-      confidenceOrigin: "invalidOverrideFormat",
-=======
-
-// Helper: Handle override logic
-function handleOverride(normalizedDomain, override) {
-  if (!validateOverrideFormat(override)) {
-    log('warn', `Invalid override format`, { domain: normalizedDomain, override });
-    return {
-      companyName: '',
-      confidenceScore: 0,
-      flags: ['override', 'invalidOverrideFormat'],
-      tokens: [],
-      confidenceOrigin: 'invalidOverrideFormat',
-      rawTokenCount: 0
+      confidenceOrigin: "invalidOverrideFormat"
     };
   }
 
-  const companyName = cleanCompanyName(capitalizeName(override));
-  const nameTokens = companyName.split(' ').filter(Boolean);
-  const validation = validateFallbackName(
-    { name: companyName, brand: null, flagged: false },
-    normalizedDomain,
-    null,
-    125
-  );
-
-  if (!validation.validatedName) {
-    log('warn', `Override validation failed`, { domain: normalizedDomain, override });
-    return {
-      companyName: '',
-      confidenceScore: 0,
-      flags: ['override', 'patternValidationFailed'],
-      tokens: [],
-      confidenceOrigin: 'overrideValidationFailed',
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
-      rawTokenCount: 0
-    };
-  }
-
-<<<<<<< HEAD
   const companyName = cleanCompanyName(capitalizeName(override));
   const nameTokens = companyName.split(" ").filter(Boolean);
   const validation = validateFallbackName(
@@ -2685,18 +1891,10 @@ function handleOverride(normalizedDomain, override) {
     flags: ["override", ...validation.flags],
     tokens: nameTokens.map(t => t.toLowerCase()),
     confidenceOrigin: "override",
-=======
-  log('info', `Override applied`, { domain: normalizedDomain, companyName: validation.validatedName });
-  return {
-    companyName: validation.validatedName,
-    confidenceScore: validation.confidenceScore,
-    flags: ['override', ...validation.flags],
-    tokens: nameTokens.map(t => t.toLowerCase()),
-    confidenceOrigin: 'override',
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     rawTokenCount: nameTokens.length
   };
 }
+
 
 // Helper: Validate and update result using validateFallbackName
 function validateAndUpdateResult(result, normalizedDomain) {
@@ -2710,17 +1908,10 @@ function validateAndUpdateResult(result, normalizedDomain) {
   if (!validation.validatedName) {
     return {
       ...result,
-<<<<<<< HEAD
       companyName: "",
       confidenceScore: 0,
       flags: [...result.flags, "patternValidationFailed"],
       confidenceOrigin: "patternValidationFailed"
-=======
-      companyName: '',
-      confidenceScore: 0,
-      flags: [...result.flags, 'patternValidationFailed'],
-      confidenceOrigin: 'patternValidationFailed'
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     };
   }
 
@@ -2734,21 +1925,14 @@ function validateAndUpdateResult(result, normalizedDomain) {
 
 // Main function to humanize domain names
 function humanizeName(domain) {
-<<<<<<< HEAD
   if (!domain || typeof domain !== "string") {
     log("error", "Invalid domain input", { domain });
     return { companyName: "", confidenceScore: 0, flags: ["invalidInput"], tokens: [], confidenceOrigin: "invalidInput", rawTokenCount: 0 };
-=======
-  if (!domain || typeof domain !== 'string') {
-    log('error', 'Invalid domain input', { domain });
-    return { companyName: '', confidenceScore: 0, flags: ['invalidInput'], tokens: [], confidenceOrigin: 'invalidInput', rawTokenCount: 0 };
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   }
 
   const normalizedDomain = normalizeDomain(domain);
 
   // Check for brand-only domains
-<<<<<<< HEAD
   if (BRAND_ONLY_DOMAINS.has(normalizedDomain + ".com")) {
     log("info", `Brand-only domain detected: ${normalizedDomain}`);
     return {
@@ -2757,32 +1941,15 @@ function humanizeName(domain) {
       flags: ["brandOnly"],
       tokens: [],
       confidenceOrigin: "brandOnly",
-=======
-  if (BRAND_ONLY_DOMAINS.has(normalizedDomain + '.com')) {
-    log('info', `Brand-only domain detected: ${normalizedDomain}`);
-    return {
-      companyName: '',
-      confidenceScore: 0,
-      flags: ['brandOnly'],
-      tokens: [],
-      confidenceOrigin: 'brandOnly',
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
       rawTokenCount: 0
     };
   }
 
   // Check for override
-<<<<<<< HEAD
   const override = TEST_CASE_OVERRIDES.get(normalizedDomain + ".com");
   if (override) {
     const overrideResult = handleOverride(normalizedDomain, override);
     log("debug", "Final result confidence", { companyName: overrideResult.companyName, confidenceScore: overrideResult.confidenceScore });
-=======
-  const override = TEST_CASE_OVERRIDES.get(normalizedDomain + '.com');
-  if (override) {
-    const overrideResult = handleOverride(normalizedDomain, override);
-    log('debug', 'Final result confidence', { companyName: overrideResult.companyName, confidenceScore: overrideResult.confidenceScore });
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     overrideResult.tokens = overrideResult.tokens.slice(0, 3);
     return overrideResult;
   }
@@ -2794,7 +1961,7 @@ function humanizeName(domain) {
   // Early exit if token set is too weak
   if (tokens.length < 2 || tokens.every(t => COMMON_WORDS.has(t.toLowerCase()))) {
     const result = {
-<<<<<<< HEAD
+
       companyName: "",
       confidenceScore: 0,
       flags: ["tokenSetTooWeak"],
@@ -2803,16 +1970,7 @@ function humanizeName(domain) {
       rawTokenCount
     };
     log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
-=======
-      companyName: '',
-      confidenceScore: 0,
-      flags: ['tokenSetTooWeak'],
-      tokens,
-      confidenceOrigin: 'tokenSanityCheck',
-      rawTokenCount
-    };
-    log('debug', 'Final result confidence', { companyName: result.companyName, confidenceScore: result.confidenceScore });
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
+
     result.tokens = result.tokens.slice(0, 3);
     return result;
   }
@@ -2823,7 +1981,7 @@ function humanizeName(domain) {
   // If no match, return failure
   if (!result) {
     const result = {
-<<<<<<< HEAD
+
       companyName: "",
       confidenceScore: 0,
       flags: ["noPatternMatch"],
@@ -2832,16 +1990,6 @@ function humanizeName(domain) {
       rawTokenCount
     };
     log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
-=======
-      companyName: '',
-      confidenceScore: 0,
-      flags: ['noPatternMatch'],
-      tokens: [],
-      confidenceOrigin: 'noPatternMatch',
-      rawTokenCount
-    };
-    log('debug', 'Final result confidence', { companyName: result.companyName, confidenceScore: result.confidenceScore });
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     result.tokens = result.tokens.slice(0, 3);
     return result;
   }
@@ -2852,15 +2000,9 @@ function humanizeName(domain) {
   }
 
   // Apply confidence tuning based on domain structure
-<<<<<<< HEAD
   if (tokens.includes("auto") && tokens.includes("group")) {
     result.confidenceScore = Math.min(result.confidenceScore, 90);
     result.flags.push("genericStructurePenalty");
-=======
-  if (tokens.includes('auto') && tokens.includes('group')) {
-    result.confidenceScore = Math.min(result.confidenceScore, 90);
-    result.flags.push('genericStructurePenalty');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   }
 
   // Add rawTokenCount to result
@@ -2869,13 +2011,8 @@ function humanizeName(domain) {
   // Final validation
   result = validateAndUpdateResult(result, normalizedDomain);
 
-<<<<<<< HEAD
   log("info", `Processed domain: ${normalizedDomain}`, { result });
   log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
-=======
-  log('info', `Processed domain: ${normalizedDomain}`, { result });
-  log('debug', 'Final result confidence', { companyName: result.companyName, confidenceScore: result.confidenceScore });
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   result.tokens = result.tokens.slice(0, 3);
   return result;
 }
@@ -2885,9 +2022,12 @@ export {
   humanizeName,
   earlyCompoundSplit,
   capitalizeName,
+  cleanCompanyName,
+  validateOverrideFormat,
   expandInitials,
   extractBrandOfCityFromDomain,
-  KNOWN_CITIES_SET // Added: Export for use in company-name-fallback.js
+  KNOWN_CITIES_SET,
+  KNOWN_PROPER_NOUNS
 };
 
 

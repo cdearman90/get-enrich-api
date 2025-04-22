@@ -1,7 +1,7 @@
-// ap../batch-enrich-company-name-fallback.js
+// api/batch-enrich-company-name-fallback.js
 // Fallback logic using OpenAI with caching
 
-import { humanizeName, KNOWN_CITIES_SET, capitalizeName, earlyCompoundSplit } from "./lib/humanize.js";
+import { humanizeName, KNOWN_CITIES_SET, KNOWN_PROPER_NOUNS, capitalizeName, earlyCompoundSplit } from "./lib/humanize.js";
 
 import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
@@ -392,62 +392,36 @@ function extractTokens(domain) {
   const flags = [];
   let confidenceScore = 80; // Default for token extraction
 
-<<<<<<< HEAD
   if (!domain || typeof domain !== "string") {
     log("error", "Invalid domain input in extractTokens", { domain });
     return { tokens: [], confidenceScore: 0, flags: ["InvalidDomainInput"] };
-=======
-  if (!domain || typeof domain !== 'string') {
-    log('error', 'Invalid domain input in extractTokens', { domain });
-    return { tokens: [], confidenceScore: 0, flags: ['InvalidDomainInput'] };
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   }
 
   // Split on separators and camelCase boundaries
   let tokens = domain
     .toLowerCase()
-<<<<<<< HEAD
     .replace(/([a-z])([A-Z])/g, "$1-$2") // Split camelCase (e.g., "JimmyBritt" → "Jimmy-Britt")
-=======
-    .replace(/([a-z])([A-Z])/g, '$1-$2') // Split camelCase (e.g., "JimmyBritt" → "Jimmy-Britt")
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     .split(/[-_]/) // Split on hyphens and underscores
     .filter(token => token && /^[a-z0-9]+$/.test(token)); // Remove empty or invalid tokens
 
   // Remove suffixes and spammy tokens
-<<<<<<< HEAD
   const SUFFIXES = new Set(["llc", "inc", "corp", "co", "ltd", "motors", "auto", "group"]);
-=======
-  const SUFFIXES = new Set(['llc', 'inc', 'corp', 'co', 'ltd', 'motors', 'auto', 'group']);
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   tokens = tokens.filter(token => !SUFFIXES.has(token) && !SPAMMY_TOKENS.includes(token));
 
   // Cap at 3 tokens for cold-email safety
   if (tokens.length > 3) {
-<<<<<<< HEAD
     flags.push("TokenCountAdjusted");
-=======
-    flags.push('TokenCountAdjusted');
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     confidenceScore = Math.min(confidenceScore, 95);
     tokens = tokens.slice(0, 3);
   }
 
   // Log tokenization details
-<<<<<<< HEAD
   log("debug", "Extracted tokens", {
-=======
-  log('debug', 'Extracted tokens', {
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     domain,
     tokens,
     rawTokenCount: tokens.length,
     confidenceScore,
-<<<<<<< HEAD
     flags
-=======
-    flags,
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
   });
 
   return { tokens, confidenceScore, flags };
@@ -557,11 +531,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     const isBrand = CAR_BRANDS.includes(validatedName.toLowerCase());
     const isProper = properNounsSet.has(validatedName.toLowerCase());
     const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
-<<<<<<< HEAD
     const genericTerms = ["auto", "motors", "dealers", "group", "cares", "cars", "drive", "center", "world"];
-=======
-    const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
 
     if (!isProper) {
@@ -626,11 +596,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     }
 
     // Check spammy tokens (exclude valid generics)
-<<<<<<< HEAD
     const safeGenerics = ["auto", "motors", "dealers", "group", "cares", "cars", "drive", "center", "world"];
-=======
-    const safeGenerics = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
->>>>>>> 894170bbd7ce986c56936168ae02979606e765f2
     const hasSpammyTokens = SPAMMY_TOKENS.some(token => validatedName.toLowerCase().includes(token) && !safeGenerics.includes(token));
     if (hasSpammyTokens) {
       log("warn", "Output contains spammy tokens", { domain, validatedName });
@@ -674,7 +640,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
   const normalizedDomain = domain?.toLowerCase().trim() || "";
   let companyName = "";
   let confidenceScore = 0; // Default to 0 for consistency
-  let flags = new Set(['FallbackName']);
+  let flags = new Set(["FallbackName"]);
   let tokens = 0;
 
   try {
@@ -760,28 +726,28 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         .filter(t => !SPAMMY_TOKENS.includes(t) && t !== "of");
 
       // Priority 1: Retry humanizeName with proper noun sequence (support multi-word proper nouns)
-      const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
-      const properNounTokens = extractedTokens.filter(t => properNounsSet.has(t));
-      if (properNounTokens.length >= 2) {
-        const tempName = properNounTokens.map(t => capitalizeName(t)).join(" ");
-        const retryResult = await humanizeName(tempName);
-        if (retryResult.confidenceScore >= 95) {
-          const validatedName = retryResult.companyName;
-          if (!pattern.test(validatedName)) {
-            log("warn", "Retry humanizeName result pattern validation failed", { domain: normalizedDomain, companyName: validatedName });
-            flags.add("RetryPatternFailed");
-          } else {
-            log("info", "Retry humanizeName success with proper noun", { domain: normalizedDomain, companyName: validatedName });
-            flags.add("RetryHumanizeSuccess");
-            return {
-              companyName: validatedName,
-              confidenceScore: retryResult.confidenceScore,
-              flags: Array.from(new Set([...retryResult.flags, ...flags])),
-              tokens
-            };
-          }
-        }
-      }
+// Removed redundant declaration: const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
+const properNounTokens = extractedTokens.filter(t => properNounsSet.has(t));
+if (properNounTokens.length >= 2) {
+  const tempName = properNounTokens.map(t => capitalizeName(t)).join(" ");
+  const retryResult = await humanizeName(tempName);
+  if (retryResult.confidenceScore >= 95) {
+    const validatedName = retryResult.companyName;
+    if (!pattern.test(validatedName)) {
+      log("warn", "Retry humanizeName result pattern validation failed", { domain: normalizedDomain, companyName: validatedName });
+      flags.add("RetryPatternFailed");
+    } else {
+      log("info", "Retry humanizeName success with proper noun", { domain: normalizedDomain, companyName: validatedName });
+      flags.add("RetryHumanizeSuccess");
+      return {
+        companyName: validatedName,
+        confidenceScore: retryResult.confidenceScore,
+        flags: Array.from(new Set([...retryResult.flags, ...flags])),
+        tokens
+      };
+    }
+  }
+}
 
       // Priority 2: Single proper noun with conditional brand append
       const singleProper = extractedTokens.find(t => properNounsSet.has(t) && !CAR_BRANDS.includes(t) && !KNOWN_CITIES_SET.has(t));
@@ -834,7 +800,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
             confidenceScore = 125;
           }
         } else {
-          const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cars', 'drive', 'center', 'world'];
+          const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
           const generic = extractedTokens.find(t => genericTerms.includes(t));
           if (generic) {
             const formattedCity = capitalizeName(city);
@@ -896,7 +862,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
 
       // Priority 5: Brand + Generic (expanded generic terms)
       if (domainBrand && !companyName) {
-        const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
+        const genericTerms = ["auto", "motors", "dealers", "group", "cares", "cars", "drive", "center", "world"];
         const generic = extractedTokens.find(t => genericTerms.includes(t));
         if (generic) {
           const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand);
