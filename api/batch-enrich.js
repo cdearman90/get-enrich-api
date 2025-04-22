@@ -474,26 +474,25 @@ if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[
     processedDomains.add(domainKey);
 
     totalTokens += tokensUsed;
-    return {
-      domain,
-      companyName: finalResult.companyName,
-      confidenceScore: finalResult.confidenceScore,
-      flags: finalResult.flags,
-      tokens: tokensUsed,
-      rowNum
-    };
-  } catch (err) { // Fixed: Removed extra semicolon
-    logger.error("processLead failed", { domain, rowNum, error: err.message, stack: err.stack });
-    return {
-      domain,
-      companyName: "",
-      confidenceScore: 80,
-      flags: Array.from(new Set(["EnrichmentFailed", "ManualReviewRecommended"])),
-      tokens: 0,
-      rowNum
-    };
-  }
-};
+return {
+  domain,
+  companyName: finalResult.companyName,
+  confidenceScore: finalResult.confidenceScore,
+  flags: finalResult.flags,
+  tokens: tokensUsed,
+  rowNum
+}; // ✅ ADD THIS CLOSING BRACE
+} catch (err) {
+  logger.error("processLead failed", { domain, rowNum, error: err.message, stack: err.stack });
+  return {
+    domain,
+    companyName: "",
+    confidenceScore: 80,
+    flags: Array.from(new Set(["EnrichmentFailed", "ManualReviewRecommended"])),
+    tokens: 0,
+    rowNum
+  };
+}
 
     const results = await Promise.all(validatedLeads.map(lead => limit(() => processLead(lead))));
     successful.push(...results);
