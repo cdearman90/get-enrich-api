@@ -1704,6 +1704,82 @@ function earlyCompoundSplit(text) {
   }
 }
 
+function capitalizeName(name) {
+  try {
+    // Robust type guard for invalid inputs
+    if (!name || (typeof name !== 'string' && !Array.isArray(name))) {
+      log('warn', 'Invalid input in capitalizeName', { name });
+      return { name: '', flags: ['InvalidInput'] };
+    }
+
+    let words = name;
+    let flags = [];
+
+    // Normalize input to array of words
+    if (typeof words === 'string') {
+      words = words.trim();
+      if (!words) {
+        flags.push('EmptyInput');
+        return { name: '', flags };
+      }
+      // Split on spaces only (camelCase handled by earlyCompoundSplit)
+      words = words.split(/\s+/).filter(Boolean);
+    }
+    if (!Array.isArray(words)) {
+      words = [words];
+    }
+    if (!words.length) {
+      flags.push('EmptyInput');
+      return { name: '', flags };
+    }
+
+    // Validate and capitalize words
+    const properNounsSet = new Set([...KNOWN_PROPER_NOUNS, ...KNOWN_LAST_NAMES].map(n => n.toLowerCase()));
+    const citiesSet = new Set(KNOWN_CITIES_SET.map(c => c.toLowerCase()));
+    const carBrandsSet = new Set(CAR_BRANDS.map(b => b.toLowerCase()));
+    const seen = new Set();
+    const fixedWords = words
+      .map(word => {
+        if (!word || typeof word !== 'string') return null;
+        const wordLower = word.toLowerCase();
+
+        // Check for known proper nouns, cities, or brands
+        if (properNounsSet.has(wordLower)) {
+          return [...KNOWN_PROPER_NOUNS, ...KNOWN_LAST_NAMES].find(n => n.toLowerCase() === wordLower) || word;
+        }
+        if (citiesSet.has(wordLower)) {
+          return Array.from(KNOWN_CITIES_SET).find(c => c.toLowerCase() === wordLower) || word;
+        }
+        if (carBrandsSet.has(wordLower)) {
+          return BRAND_MAPPING[wordLower] || CAR_BRANDS.find(b => b.toLowerCase() === wordLower) || word;
+        }
+
+        // Default capitalization
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .filter(word => {
+        if (!word) return false;
+        const lower = word.toLowerCase();
+        if (seen.has(lower)) return false;
+        seen.add(lower);
+        return true;
+      });
+
+    const finalName = fixedWords.join(' ').trim();
+    if (!finalName) {
+      flags.push('EmptyOutput');
+    }
+
+    return {
+      name: finalName,
+      flags: flags.length ? flags : ['Capitalized']
+    };
+  } catch (e) {
+    log('error', 'capitalizeName failed', { name, error: e.message, stack: e.stack });
+    return { name: '', flags: ['CapitalizeNameError'] };
+  }
+}
+
 /**
  * Expands initials in a name
  * @param {string} name - Name to expand
