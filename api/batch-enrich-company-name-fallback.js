@@ -469,6 +469,50 @@ class FallbackError extends Error {
 }
 
 /**
+ * Extracts tokens from a domain for fallback processing.
+ * @param {string} domain - The cleaned domain (e.g., "jimmybrittchevrolet").
+ * @returns {Object} - { tokens: string[], confidenceScore: number, flags: string[] }
+ */
+function extractTokens(domain) {
+  const flags = [];
+  let confidenceScore = 80; // Default for token extraction
+
+  if (!domain || typeof domain !== 'string') {
+    log('error', 'Invalid domain input in extractTokens', { domain });
+    return { tokens: [], confidenceScore: 0, flags: ['InvalidDomainInput'] };
+  }
+
+  // Split on separators and camelCase boundaries
+  let tokens = domain
+    .toLowerCase()
+    .replace(/([a-z])([A-Z])/g, '$1-$2') // Split camelCase (e.g., "JimmyBritt" → "Jimmy-Britt")
+    .split(/[-_]/) // Split on hyphens and underscores
+    .filter(token => token && /^[a-z0-9]+$/.test(token)); // Remove empty or invalid tokens
+
+  // Remove suffixes and spammy tokens
+  const SUFFIXES = new Set(['llc', 'inc', 'corp', 'co', 'ltd', 'motors', 'auto', 'group']);
+  tokens = tokens.filter(token => !SUFFIXES.has(token) && !SPAMMY_TOKENS.includes(token));
+
+  // Cap at 3 tokens for cold-email safety
+  if (tokens.length > 3) {
+    flags.push('TokenCountAdjusted');
+    confidenceScore = Math.min(confidenceScore, 95);
+    tokens = tokens.slice(0, 3);
+  }
+
+  // Log tokenization details
+  log('debug', 'Extracted tokens', {
+    domain,
+    tokens,
+    rawTokenCount: tokens.length,
+    confidenceScore,
+    flags,
+  });
+
+  return { tokens, confidenceScore, flags };
+}
+
+/**
  * Splits merged tokens using earlyCompoundSplit from humanize.js.
  * @param {string} name - The name to split.
  * @returns {string} - The split name.
