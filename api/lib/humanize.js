@@ -2126,7 +2126,7 @@ function tryBrandCityPattern(tokens) {
     const citiesMap = new Map([...KNOWN_CITIES_SET].map(c => [c.toLowerCase().replace(/\s+/g, ''), c]));
 
     // Define regex pattern for company name validation (e.g., "Ford Chicago")
-    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?) ([A-Z][a-z]+(?: [A-Z][a-z]+)?)$/; // Matches "Brand City"
+    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?) ([A-Z][a-z]+)$/; // Matches "Brand City"
 
     // Check for proper nouns to defer
     for (const token of tokens) {
@@ -2380,10 +2380,9 @@ function tryHumanNamePattern(tokens) {
 /**
  * Attempts to match a proper noun pattern in tokens
  * @param {Array<string>} tokens - Tokens to analyze
- * @param {Object} meta - Metadata
  * @returns {{companyName: string, confidenceScore: number, flags: Array<string>}} - Result with company name, confidence score, and flags
  */
-function tryProperNounPattern(tokens, meta) {
+function tryProperNounPattern(tokens) {
   const flags = new Set(['ProperNounPattern']);
   log('info', 'tryProperNounPattern started', { tokens });
 
