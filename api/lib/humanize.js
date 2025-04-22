@@ -1706,7 +1706,6 @@ function earlyCompoundSplit(text) {
           continue;
         }
 
-        const tokenLower = token.toLowerCase();
         // Match brands, cities, or proper nouns
         if (CAR_BRANDS.includes(capitalized)) {
           results.push(BRAND_MAPPING[capitalized.toLowerCase()] || capitalized);
@@ -2287,7 +2286,7 @@ function tryHumanNamePattern(tokens) {
 
     // Precompute maps for efficiency
     const firstNamesMap = new Map([...KNOWN_FIRST_NAMES].map(f => [f.toLowerCase(), f]));
-    const lastNamesMap = new Map([...KNOWN_LAST_NAMES].map(l => [f.toLowerCase(), l]));
+    const lastNamesMap = new Map([...KNOWN_LAST_NAMES].map(l => [l.toLowerCase(), l]));
     const properNounsMap = new Map([...KNOWN_PROPER_NOUNS].map(n => [n.toLowerCase(), n]));
     const citiesMap = new Map([...KNOWN_CITIES_SET].map(c => [c.toLowerCase().replace(/\s+/g, ''), c]));
     const carBrandsMap = new Map(CAR_BRANDS.map(b => [b.toLowerCase(), b]));
