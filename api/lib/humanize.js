@@ -3329,13 +3329,15 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
     if (hasBrand && hasGeneric) patterns.push(tryBrandGenericPattern);
     patterns.push(tryGenericPattern); // Always include as last resort
 
-let result;
+
+let result = null;
 let matchedPattern = null;
 
-for (const pattern of patterns) {
-  result = await pattern(extractedTokens, meta);
-  if (result.companyName) {
-    matchedPattern = pattern.name;
+for (const patternFn of patterns) {
+  const output = await patternFn(extractedTokens, meta);
+  if (output.companyName) {
+    result = output;
+    matchedPattern = patternFn.name;
 
     const words = result.companyName.split(' ').map(w => w.toLowerCase());
     if (new Set(words).size !== words.length) {
@@ -3353,14 +3355,16 @@ for (const pattern of patterns) {
 
     if (result.companyName.length > 12 && !/\s/.test(result.companyName)) {
       result.confidenceScore = Math.min(result.confidenceScore, 95);
-      result.flags.push('BlobLikeFallback', 'ManualReviewRecommended');
+      result.flags.push('BlobLikeFallback');
+      result.flags.push('ManualReviewRecommended');
     }
 
     const lowerName = result.companyName.toLowerCase();
     if (carBrandsSet.has(lowerName) || CAR_BRANDS.includes(lowerName)) {
       result.companyName = '';
       result.confidenceScore = 0;
-      result.flags.push('BrandOnlyBlocked', 'ManualReviewRecommended');
+      result.flags.push('BrandOnlyBlocked');
+      result.flags.push('ManualReviewRecommended');
     }
 
     break;
@@ -3374,58 +3378,6 @@ const finalResult = {
   tokens
 };
 
-
-let result = null;
-let matchedPattern = null;
-
-for (const pattern of patterns) {
-  result = await pattern(extractedTokens, meta);
-  if (result.companyName) {
-    matchedPattern = pattern.name;
-
-    const words = result.companyName.split(' ').map(w => w.toLowerCase());
-    if (new Set(words).size !== words.length) {
-      const dedupedName = [...new Set(words)].map(capitalizeName).map(t => t.name).join(' ');
-      result.companyName = dedupedName;
-      result.confidenceScore = Math.min(result.confidenceScore, 95);
-      result.flags.push('DuplicatesRemoved');
-    }
-
-    if (result.companyName.split(' ').length > 3) {
-      result.companyName = result.companyName.split(' ').slice(0, 3).join(' ');
-      result.confidenceScore = Math.min(result.confidenceScore, 95);
-      result.flags.push('TokenLimitExceeded');
-    }
-
-    if (result.companyName.length > 12 && !/\s/.test(result.companyName)) {
-      result.confidenceScore = Math.min(result.confidenceScore, 95);
-      result.flags.push('BlobLikeFallback', 'ManualReviewRecommended');
-    }
-
-    const lowerName = result.companyName.toLowerCase();
-    if (carBrandsSet.has(lowerName) || CAR_BRANDS.includes(lowerName)) {
-      result.companyName = '';
-      result.confidenceScore = 0;
-      result.flags.push('BrandOnlyBlocked', 'ManualReviewRecommended');
-    }
-
-    break;
-  }
-}
-
-const finalResult = {
-  companyName: result.companyName || '',
-  confidenceScore: result.companyName ? result.confidenceScore : 0,
-  flags: Array.from(new Set([matchedPattern || 'NoPatternMatch', ...result.flags, ...flags])),
-  tokens
-};
-
-let finalResult = {
-  companyName: result.companyName || '',
-  confidenceScore: result.companyName ? result.confidenceScore : 0,
-  flags: Array.from(new Set([matchedPattern || 'NoPatternMatch', ...result.flags, ...flags])), // ← FIXED
-  tokens
-};
 
     // Adaptive confidence threshold for fallback
     const confidenceThreshold = (hasBrand || hasCity || hasProper) ? 95 : 80;
