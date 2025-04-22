@@ -2316,7 +2316,6 @@ function tryHumanNamePattern(tokens) {
 
       // Check for multi-word names (e.g., "McLarty Daniel")
       for (let j = i; j < tokens.length; j++) {
-        const combinedTokens = tokens.slice(i, j + 1).join(' ').toLowerCase();
         const firstPart = tokens[i].toLowerCase();
         const lastPart = j > i ? tokens[j].toLowerCase() : null;
 
@@ -3360,12 +3359,57 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
       }
     }
 
-    let finalResult = {
-      companyName: result.companyName || '',
-      confidenceScore: result.companyName ? result.confidenceScore : 0,
-      flags: Array.from(new Set([result ? pattern.name : 'NoPatternMatch', ...result.flags, ...flags])),
-      tokens
-    };
+let result = null;
+let matchedPattern = null;
+
+for (const pattern of patterns) {
+  result = await pattern(extractedTokens, meta);
+  if (result.companyName) {
+    matchedPattern = pattern.name;
+
+    const words = result.companyName.split(' ').map(w => w.toLowerCase());
+    if (new Set(words).size !== words.length) {
+      const dedupedName = [...new Set(words)].map(capitalizeName).map(t => t.name).join(' ');
+      result.companyName = dedupedName;
+      result.confidenceScore = Math.min(result.confidenceScore, 95);
+      result.flags.push('DuplicatesRemoved');
+    }
+
+    if (result.companyName.split(' ').length > 3) {
+      result.companyName = result.companyName.split(' ').slice(0, 3).join(' ');
+      result.confidenceScore = Math.min(result.confidenceScore, 95);
+      result.flags.push('TokenLimitExceeded');
+    }
+
+    if (result.companyName.length > 12 && !/\s/.test(result.companyName)) {
+      result.confidenceScore = Math.min(result.confidenceScore, 95);
+      result.flags.push('BlobLikeFallback', 'ManualReviewRecommended');
+    }
+
+    const lowerName = result.companyName.toLowerCase();
+    if (carBrandsSet.has(lowerName) || CAR_BRANDS.includes(lowerName)) {
+      result.companyName = '';
+      result.confidenceScore = 0;
+      result.flags.push('BrandOnlyBlocked', 'ManualReviewRecommended');
+    }
+
+    break;
+  }
+}
+
+const finalResult = {
+  companyName: result.companyName || '',
+  confidenceScore: result.companyName ? result.confidenceScore : 0,
+  flags: Array.from(new Set([matchedPattern || 'NoPatternMatch', ...result.flags, ...flags])),
+  tokens
+};
+
+let finalResult = {
+  companyName: result.companyName || '',
+  confidenceScore: result.companyName ? result.confidenceScore : 0,
+  flags: Array.from(new Set([matchedPattern || 'NoPatternMatch', ...result.flags, ...flags])), // ← FIXED
+  tokens
+};
 
     // Adaptive confidence threshold for fallback
     const confidenceThreshold = (hasBrand || hasCity || hasProper) ? 95 : 80;
