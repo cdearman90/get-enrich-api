@@ -967,9 +967,9 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       flags.add("ManualReviewRecommended");
     }
 
-    // Optimize OpenAI usage: Skip OpenAI if prior steps yield a high-confidence result
-    if (companyName && confidenceScore >= 95 && !flags.has("ReviewNeeded")) {
-      log("info", "Skipping OpenAI fallback due to high-confidence result", { domain: normalizedDomain, companyName, confidenceScore });
+    // Optimize OpenAI usage: Skip OpenAI if the name is already well-formed
+    if (companyName && pattern.test(companyName) && companyName.split(" ").length >= 2 && !/\b[a-z]+[A-Z]/.test(companyName)) {
+      log("info", "Skipping OpenAI fallback due to well-formed name", { domain: normalizedDomain, companyName, confidenceScore });
       const finalResult = {
         companyName,
         confidenceScore,
@@ -1091,7 +1091,16 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       }
     }
 
-    // Final validation
+    // Final validation: Ensure the companyName is non-empty and meets quality standards
+    if (!companyName || companyName.length < 3) {
+      log("warn", "Final company name is empty or too short", { domain: normalizedDomain, companyName });
+      companyName = "";
+      confidenceScore = 0;
+      flags.add("InvalidFinalName");
+      flags.add("ManualReviewRecommended");
+    }
+
+    // Final validation: Check for brand-only output
     if (companyName && CAR_BRANDS.includes(companyName.toLowerCase())) {
       companyName = "";
       confidenceScore = 0;
