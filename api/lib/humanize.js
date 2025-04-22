@@ -1452,39 +1452,36 @@ function extractTokens(domain) {
     });
 
     // Abbreviation expansions (e.g., "mb" → "M.B.")
-    tokens = tokens.map(token => {
+   tokens = tokens.map(token => {
   let normalizedToken = token;
+  let wasExpanded = false;
+
   Object.keys(ABBREVIATION_EXPANSIONS).forEach(abbr => {
     const regex = new RegExp(`\\b${abbr}\\b`, "gi");
     if (regex.test(normalizedToken.toLowerCase())) {
       normalizedToken = normalizedToken.replace(regex, ABBREVIATION_EXPANSIONS[abbr]);
+      wasExpanded = true;
     }
   });
 
   if (!pattern.test(normalizedToken)) {
-    log("debug", 'Abbreviation expansion pattern validation failed', { token: normalizedToken });
+    if (wasExpanded) {
+      log("debug", "Abbreviation expansion pattern validation failed", { token: normalizedToken });
+    }
     return token;
-  } else {
+  }
+
+  if (wasExpanded) {
     log("debug", "Applied abbreviation expansion in extractTokens", {
       domain,
       token,
       normalizedToken
     });
     flags.add("AbbreviationExpanded");
-    return normalizedToken;
   }
-});
 
-          log("debug", "Applied abbreviation expansion in extractTokens", {
-            domain,
-            token,
-            normalizedToken
-          });
-          flags.add('AbbreviationExpanded');
-        }
-      });
-      return normalizedToken;
-    });
+  return normalizedToken;
+});
 
     // Blob fix for compacted words (e.g., "subaruofgwinnett")
     tokens = tokens.flatMap(t => {
@@ -1682,17 +1679,53 @@ function earlyCompoundSplit(text) {
       const remainingTokens = tokens.slice(i).join('').toLowerCase();
 
       // Check multi-word cities (optimized matching)
-      for (const city of sortedCities) {
-        const cityNoSpaces = city.toLowerCase().replace(/\s+/g, '');
-        if (remainingTokens.startsWith(cityNoSpaces)) {
-          results.push(city);
-          const tokenCount = cityNoSpaces.length / Math.max(...tokens.slice(i).map(t => t.length));
-          i += Math.ceil(tokenCount);
-          matched = true;
-          log('debug', 'Multi-word city matched', { text, city });
-          break;
-        }
-      }
+      let result = null;
+let matchedPattern = null;
+
+for (const fn of patterns) {
+  const candidate = await fn(extractedTokens, meta);
+  if (candidate.companyName) {
+    matchedPattern = fn.name;
+    result = candidate;
+
+    const words = result.companyName.split(" ").map(w => w.toLowerCase());
+
+    if (new Set(words).size !== words.length) {
+      const dedupedName = [...new Set(words)].map(capitalizeName).map(t => t.name).join(" ");
+      result.companyName = dedupedName;
+      result.confidenceScore = Math.min(result.confidenceScore, 95);
+      result.flags.push("DuplicatesRemoved");
+    }
+
+    if (result.companyName.split(" ").length > 3) {
+      result.companyName = result.companyName.split(" ").slice(0, 3).join(" ");
+      result.confidenceScore = Math.min(result.confidenceScore, 95);
+      result.flags.push("TokenLimitExceeded");
+    }
+
+    if (result.companyName.length > 12 && !/\s/.test(result.companyName)) {
+      result.confidenceScore = Math.min(result.confidenceScore, 95);
+      result.flags.push("BlobLikeFallback", "ManualReviewRecommended");
+    }
+
+    const lowerName = result.companyName.toLowerCase();
+    if (carBrandsSet.has(lowerName) || CAR_BRANDS.includes(lowerName)) {
+      result.companyName = '';
+      result.confidenceScore = 0;
+      result.flags.push("BrandOnlyBlocked", "ManualReviewRecommended");
+    }
+
+    break;
+  }
+}
+
+const finalResult = {
+  companyName: result?.companyName || '',
+  confidenceScore: result?.companyName ? result.confidenceScore : 0,
+  flags: Array.from(new Set([matchedPattern || "NoPatternMatch", ...(result?.flags || []), ...flags])),
+  tokens
+};
+
 
       if (!matched) {
         const token = tokens[i];
@@ -3370,13 +3403,6 @@ for (const patternFn of patterns) {
     break;
   }
 }
-
-const finalResult = {
-  companyName: result?.companyName || '',
-  confidenceScore: result?.companyName ? result.confidenceScore : 0,
-  flags: Array.from(new Set([matchedPattern || 'NoPatternMatch', ...(result?.flags || []), ...flags])),
-  tokens
-};
 
 
     // Adaptive confidence threshold for fallback
