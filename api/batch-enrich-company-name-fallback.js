@@ -1274,5 +1274,6 @@ async function handler(req, res) {
     });
   }
 }
+}
 
 export { fallbackName, clearOpenAICache, handler, validateFallbackName };
