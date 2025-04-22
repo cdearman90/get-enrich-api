@@ -767,7 +767,8 @@ async function handler(req, res) {
       partial: false,
       fromFallback: fallbackTriggers.length > 0
     });
-  } catch (error) {
+  } // ✅ Added this to close the try block properly
+  catch (error) {
     log("error", "Handler error", {
       error: error.message,
       stack: error.stack,
