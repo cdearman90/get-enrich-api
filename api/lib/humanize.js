@@ -1999,5 +1999,6 @@ export {
   earlyCompoundSplit,
   capitalizeName,
   expandInitials,
-  extractBrandOfCityFromDomain
+  extractBrandOfCityFromDomain,
+  KNOWN_CITIES_SET // Added: Export for use in company-name-fallback.js
 };
