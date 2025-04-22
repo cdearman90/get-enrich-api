@@ -2,6 +2,7 @@
 // Logger configuration with Vercel-safe transports only
 
 import winston from "winston";
+import { fallbackName, validateFallbackName } from '../company-name-fallback.js'; // Add validateFallbackName to the import
 
 const logger = winston.createLogger({
   level: "debug",
@@ -1384,11 +1385,6 @@ const TOKEN_FIXES = {
   victoryauto: "Victory Auto"
 };
 
-/**
- * Extracts tokens from a domain
- * @param {string} domain - The domain to tokenize
- * @returns {Array<string>} - Array of tokens
- */
 function extractTokens(domain) {
   log("info", "extractTokens started", { domain });
 
@@ -1492,6 +1488,25 @@ function extractTokens(domain) {
   } catch (e) {
     log("error", "extractTokens failed", { domain, error: e.message, stack: e.stack });
     return [];
+  }
+}
+
+/**
+ * Splits a blob-like token into components (e.g., "subaruofgwinnett" → ["Subaru", "Gwinnett"])
+ * @param {string} token - The token to split
+ * @returns {Array<string>} - Array of split tokens
+ */
+function blobSplit(token) {
+  try {
+    if (!token || typeof token !== 'string') {
+      return [token];
+    }
+    // Reuse earlyCompoundSplit for consistency
+    const splitTokens = earlyCompoundSplit(token);
+    return splitTokens.length > 0 ? splitTokens : [token];
+  } catch (e) {
+    log('error', 'blobSplit failed', { token, error: e.message, stack: e.stack });
+    return [token];
   }
 }
 
@@ -2682,6 +2697,8 @@ async function humanizeName(domain, originalDomain, useMeta = false) {
   let confidenceScore = 80;
   let flags = new Set();
   let tokens = 0;
+  let extractedTokens = []; // Define extractedTokens with a default value
+  const carBrandsSet = new Set(CAR_BRANDS.map(b => b.toLowerCase()));
   // In-memory cache for duplicate domains
   const enrichmentCache = new Map();
 
