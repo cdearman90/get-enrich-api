@@ -1,7 +1,8 @@
 // api/company-name-fallback.js
 // Fallback logic using OpenAI with caching
 
-import { humanizeName, getMetaTitleBrand, KNOWN_CITIES_SET, capitalizeName, earlyCompoundSplit, KNOWN_PROPER_NOUNS } from "./lib/humanize.js";
+import { humanizeName, KNOWN_CITIES_SET, capitalizeName, earlyCompoundSplit } from "./lib/humanize.js";
+
 import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
 
