@@ -324,25 +324,48 @@ export default async function handler(req, res) {
       finalResult.flags.push("ExtractBrandCityFailed");
     }
 
-    if (BRAND_ONLY_DOMAINS.includes(`${domainKey}.com`)) {
-      logger.debug("Brand-only domain skipped", { domain: domainKey });
+if (BRAND_ONLY_DOMAINS.includes(`${domainKey}.com`)) {
+  logger.debug("Brand-only domain skipped", { domain: domainKey });
+  finalResult = {
+    companyName: "",
+    confidenceScore: 0,
+    flags: ["BrandOnlyDomainSkipped"],
+    tokens: 0
+  };
+} else {
+  let humanizeError = null;
+  let initialResult = null;
+  for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+    try {
+      logger.debug(`Attempt ${attempt} to humanize domain`, { domain });
+      initialResult = await humanizeName(domain); // Fixed: Correct signature
+      logger.debug("humanizeName result", { domain, result: initialResult });
+
+      if (initialResult.companyName && !pattern.test(initialResult.companyName)) {
+        logger.warn("humanizeName result pattern validation failed", { domain, companyName: initialResult.companyName });
+        initialResult.companyName = "";
+        initialResult.flags.push("PatternValidationFailed");
+        initialResult.confidenceScore = 0;
+      }
+
       finalResult = {
-        companyName: "",
-        confidenceScore: 0,
-        flags: ["BrandOnlyDomainSkipped"],
-        tokens: 0
+        companyName: initialResult.companyName || "",
+        confidenceScore: initialResult.confidenceScore || 80,
+        flags: Array.from(new Set(initialResult.flags || [])),
+        tokens: initialResult.tokens || 0
       };
-    } else {
-      let humanizeError = null;
-      let initialResult = null;
-      for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+      tokensUsed = initialResult.tokens || 0;
+      humanizeError = null;
+      break;
+    } catch (error) {
+      if (error.message.includes("BrandOnlyError")) {
+        logger.info(`Retrying fallback for ${domain} due to ${error.message}`);
         try {
-          logger.debug(`Attempt ${attempt} to humanize domain`, { domain });
-          initialResult = await humanizeName(domain, domain, !!metaTitle);
-          logger.debug("humanizeName result", { domain, result: initialResult });
+          initialResult = await humanizeName(domain); // Fixed: Correct signature
+          initialResult.flags.push("FallbackTriggered");
 
           if (initialResult.companyName && !pattern.test(initialResult.companyName)) {
-            logger.warn("humanizeName result pattern validation failed", { domain, companyName: initialResult.companyName });
+            logger.warn("humanizeName retry result pattern validation failed", { domain, companyName: initialResult.companyName });
             initialResult.companyName = "";
             initialResult.flags.push("PatternValidationFailed");
             initialResult.confidenceScore = 0;
@@ -357,42 +380,19 @@ export default async function handler(req, res) {
           tokensUsed = initialResult.tokens || 0;
           humanizeError = null;
           break;
-        } catch (error) {
-          if (error.message.includes("BrandOnlyError")) {
-            logger.info(`Retrying fallback for ${domain} due to ${error.message}`);
-            try {
-              initialResult = await humanizeName(domain, domain, !!metaTitle);
-              initialResult.flags.push("FallbackTriggered");
-
-              if (initialResult.companyName && !pattern.test(initialResult.companyName)) {
-                logger.warn("humanizeName retry result pattern validation failed", { domain, companyName: initialResult.companyName });
-                initialResult.companyName = "";
-                initialResult.flags.push("PatternValidationFailed");
-                initialResult.confidenceScore = 0;
-              }
-
-              finalResult = {
-                companyName: initialResult.companyName || "",
-                confidenceScore: initialResult.confidenceScore || 80,
-                flags: Array.from(new Set(initialResult.flags || [])),
-                tokens: initialResult.tokens || 0
-              };
-              tokensUsed = initialResult.tokens || 0;
-              humanizeError = null;
-              break;
-            } catch (retryErr) {
-              logger.warn(`Fallback retry failed for ${domain}`, { error: retryErr.message, stack: retryErr.stack });
-              humanizeError = retryErr;
-            }
-          } else {
-            humanizeError = error;
-            logger.warn(`Humanize attempt ${attempt} failed`, { domain, error: error.message, stack: error.stack });
-          }
-          if (attempt < RETRY_ATTEMPTS) {
-            await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-          }
+        } catch (retryErr) {
+          logger.warn(`Fallback retry failed for ${domain}`, { error: retryErr.message, stack: retryErr.stack });
+          humanizeError = retryErr;
         }
+      } else {
+        humanizeError = error;
+        logger.warn(`Humanize attempt ${attempt} failed`, { domain, error: error.message, stack: error.stack });
       }
+      if (attempt < RETRY_ATTEMPTS) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+      }
+    }
+  }
 
       if (finalResult.flags.includes("BrandOnlyDomainSkipped")) {
         logger.debug("Skipping further fallback due to BrandOnlyDomainSkipped", { domain });
