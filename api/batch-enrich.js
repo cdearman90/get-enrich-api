@@ -482,7 +482,7 @@ if (finalResult.companyName && finalResult.companyName.split(" ").every(w => /^[
       tokens: tokensUsed,
       rowNum
     };
-  } catch (err) {  // Fixed: Removed extra semicolon before catch
+  } catch (err) { // Fixed: Removed extra semicolon
     logger.error("processLead failed", { domain, rowNum, error: err.message, stack: err.stack });
     return {
       domain,
