@@ -1305,10 +1305,7 @@ const KNOWN_CITIES_SET = new Set(SORTED_CITY_LIST.map(c => c.toLowerCase()));
       "young", "youngblood", "zimmerman", "kadlac", "clark", "caruso", "perillo", "stoops", "weaver"
     ]);
 
-const SUFFIXES_TO_REMOVE = {
-    "llc", "inc", "corp", "co", "ltd", "group", "auto", "motors"
-    // Subset of COMMON_WORDS for trailing removal
-};
+const SUFFIXES_TO_REMOVE = ["llc", "inc", "corp", "co", "ltd", "group", "auto", "motors"];
 
 const KNOWN_GENERIC_BLOBS = {
     "capitalbpg": "BPG Auto",
