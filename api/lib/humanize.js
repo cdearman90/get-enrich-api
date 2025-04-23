@@ -66,23 +66,48 @@ function cleanCompanyName(companyName) {
   return tokens.join(" ").trim();
 }
 
-// Capitalizes tokens for proper formatting
+// Capitalize name while preserving abbreviations
 function capitalizeName(name) {
-  if (!name || typeof name !== "string") return "";
+  try {
+    if (!name || typeof name !== "string") {
+      log("error", "Invalid name in capitalizeName", { name });
+      return { name: "", flags: ["InvalidInput"] };
+    }
 
-  // Insert spaces between camelCase fragments (e.g., "MikeShawToyota" → "Mike Shaw Toyota")
-  name = name.replace(/([a-z])([A-Z])/g, "$1 $2");
+    // Preserve abbreviations with dots (e.g., "M.B.")
+    let flags = [];
+    let result = name;
+    if (name.includes(".")) {
+      const parts = name.split(" ");
+      result = parts
+        .map(word => {
+          if (word.match(/^[A-Z]\.[A-Z]\.$/)) return word; // Preserve "M.B."
+          if (word.length <= 5 && word === word.toUpperCase()) return word; // Preserve all-caps (e.g., "CDJR")
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(" ");
+      flags.push("AbbreviationPreserved");
+    } else {
+      // Insert spaces between camelCase fragments
+      result = name.replace(/([a-z])([A-Z])/g, "$1 $2");
+      result = result
+        .split(" ")
+        .map(word => {
+          if (!word) return word;
+          if (word.length <= 5 && word === word.toUpperCase()) return word;
+          return word.charAt(0).toUpperijosCase() + word.slice(1).toLowerCase();
+        })
+        .join(" ");
+    }
 
-  return name
-    .split(" ")
-    .map(word => {
-      if (!word) return word;
-      // Preserve all-caps words (e.g., "CDJR", "USA") if length <= 5
-      if (word.length <= 5 && word === word.toUpperCase()) return word;
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-    })
-    .join(" ");
+    return { name: result, flags };
+  } catch (e) {
+    log("error", "capitalizeName failed", { name, error: e.message, stack: e.stack });
+    return { name: "", flags: ["CapitalizeNameError"] };
+  }
 }
+
+// ✅ Removed duplicate capitalizeName implementation that caused the error
 
 // Expands initials in tokens (e.g., 'J.B.' → 'J B')
 function expandInitials(token) {
@@ -117,7 +142,6 @@ function earlyCompoundSplit(domain) {
   // Process abbreviations with word boundaries (e.g., 'mb' → 'M.B.')
   for (const [abbr, expansion] of ABBREVIATION_EXPANSIONS) {
     const regex = new RegExp(`\\b${abbr}\\b`, "g");
-
     if (remaining.match(regex)) {
       remaining = remaining.replace(regex, expansion.toLowerCase());
     }
@@ -151,7 +175,6 @@ function earlyCompoundSplit(domain) {
     for (let len = 3; len >= 1; len--) {
       if (i + len > tokenParts.length) continue;
       const segment = tokenParts.slice(i, i + len).join("");
-
       if (KNOWN_PROPER_NOUNS.has(segment.toLowerCase())) {
         tokens.push(segment.toLowerCase());
         i += len - 1;
@@ -184,28 +207,42 @@ function earlyCompoundSplit(domain) {
 
 // Extracts brand and city from domain (for batch-enrich.js and tryBrandCityPattern)
 function extractBrandOfCityFromDomain(domain) {
-  const normalized = normalizeDomain(domain);
-  const tokens = earlyCompoundSplit(normalized);
-  let brand = "";
-  let city = "";
+  try {
+    const normalized = normalizeDomain(domain);
+    const tokens = earlyCompoundSplit(normalized);
+    let brand = "";
+    let city = "";
 
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i].toLowerCase();
-    if (CAR_BRANDS.has(token)) {
-      brand = BRAND_MAPPING.get(token) || token;
-      for (let j = i + 1; j < tokens.length; j++) {
-        const nextToken = tokens[j].toLowerCase();
-        if (KNOWN_CITIES_SET.has(nextToken)) {
-          city = nextToken;
-          break;
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i].toLowerCase();
+      if (CAR_BRANDS.has(token)) {
+        brand = BRAND_MAPPING.get(token) || token;
+        for (let j = i + 1; j < tokens.length; j++) {
+          const nextToken = tokens[j].toLowerCase();
+          if (KNOWN_CITIES_SET.has(nextToken)) {
+            city = nextToken;
+            break;
+          }
         }
+        if (city) break;
       }
-      if (city) break;
     }
-  }
 
-  if (!brand || !city) return { brand: "", city: "", connector: "" };
-  return { brand: capitalizeName(brand), city: capitalizeName(city), connector: "" };
+    if (!brand || !city) {
+      log("debug", "No brand or city found", { domain, tokens });
+      return { brand: "", city: "", connector: "" };
+    }
+
+    const brandResult = capitalizeName(brand);
+    const cityResult = capitalizeName(city);
+    brandResult.flags.forEach(flag => log("debug", "Brand capitalization flag", { flag }));
+    cityResult.flags.forEach(flag => log("debug", "City capitalization flag", { flag }));
+
+    return { brand: brandResult.name, city: cityResult.name, connector: "" };
+  } catch (err) {
+    log("error", "extractBrandOfCityFromDomain failed", { domain, error: err.message, stack: err.stack });
+    return { brand: "", city: "", connector: "" };
+  }
 }
 
 // Matches first/last name patterns (e.g., 'jimmybrittchevrolet' → 'Jimmy Britt Chevrolet')
@@ -219,7 +256,6 @@ function tryHumanNamePattern(tokens) {
   const flags = ["humanNamePattern"];
   const confidenceOrigin = "humanNamePattern";
 
-  // Look for first + last name
   for (let i = 0; i < tokens.length - 1; i++) {
     if (KNOWN_FIRST_NAMES.has(tokens[i].toLowerCase()) && KNOWN_LAST_NAMES.has(tokens[i + 1].toLowerCase())) {
       firstName = tokens[i];
@@ -230,7 +266,6 @@ function tryHumanNamePattern(tokens) {
 
   if (!firstName || !lastName) return null;
 
-  // Check for brand after name
   for (let i = tokens.indexOf(lastName) + 1; i < tokens.length; i++) {
     const token = tokens[i].toLowerCase();
     if (CAR_BRANDS.has(token)) {
@@ -241,27 +276,25 @@ function tryHumanNamePattern(tokens) {
     }
   }
 
-  // Construct company name
   const nameParts = [firstName, lastName];
   if (brand) nameParts.push(brand);
 
-  const companyName = capitalizeName(nameParts.join(" "));
+  const nameResult = capitalizeName(nameParts.join(" "));
+  const companyName = nameResult.name;
+  nameResult.flags.forEach(flag => flags.push(flag));
 
-  // Block brand-only or city-only results
   if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
     flags.push("brandOrCityOnlyBlocked");
     confidenceScore = 0;
     return null;
   }
 
-  // Check for duplicate tokens
   const wordList = companyName.split(" ").map(w => w.toLowerCase());
   if (new Set(wordList).size !== wordList.length) {
     flags.push("duplicateTokens");
     confidenceScore = Math.min(confidenceScore, 95);
   }
 
-  // Validate token count and pattern
   const nameTokens = companyName.split(" ").filter(Boolean);
   if (nameTokens.length > 3) {
     confidenceScore = Math.min(confidenceScore, 85);
@@ -271,7 +304,6 @@ function tryHumanNamePattern(tokens) {
   if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) {
     return null;
   }
-
 
   log("info", "Human name pattern matched", { companyName, tokens });
 
@@ -288,6 +320,11 @@ function tryHumanNamePattern(tokens) {
 function tryProperNounPattern(tokens) {
   if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
 
+  if (!(properNounsSet instanceof Set)) {
+    log("warn", "properNounsSet is not a Set, skipping proper noun pattern");
+    return null;
+  }
+
   let properNoun = "";
   let brand = "";
   let generic = "";
@@ -295,9 +332,8 @@ function tryProperNounPattern(tokens) {
   const flags = ["properNounPattern"];
   const confidenceOrigin = "properNounPattern";
 
-  // Look for proper noun
   for (const token of tokens) {
-    if (KNOWN_PROPER_NOUNS.has(token.toLowerCase())) {
+    if (properNounsSet.has(token.toLowerCase())) {
       properNoun = token;
       break;
     }
@@ -305,13 +341,11 @@ function tryProperNounPattern(tokens) {
 
   if (!properNoun) return null;
 
-  // Check for brand or generic after noun
   const nounIndex = tokens.indexOf(properNoun);
   for (let i = nounIndex + 1; i < tokens.length; i++) {
     const token = tokens[i].toLowerCase();
     if (CAR_BRANDS.has(token)) {
       brand = BRAND_MAPPING.get(token) || token;
-
       flags.push("brandIncluded");
       confidenceScore = 125;
       break;
@@ -323,35 +357,30 @@ function tryProperNounPattern(tokens) {
     }
   }
 
-  // Ensure not a city or brand alone
   if (KNOWN_CITIES_SET.has(properNoun.toLowerCase()) || CAR_BRANDS.has(properNoun.toLowerCase())) {
     return null;
   }
 
-  // Construct company name
   const nameParts = [properNoun];
   if (brand) nameParts.push(brand);
   else if (generic) nameParts.push(generic);
 
-  const companyName = capitalizeName(nameParts.join(" "));
+  const nameResult = capitalizeName(nameParts.join(" "));
+  const companyName = nameResult.name;
+  nameResult.flags.forEach(flag => flags.push(flag));
 
-  // Block brand-only or city-only results
   if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
     flags.push("brandOrCityOnlyBlocked");
     confidenceScore = 0;
     return null;
   }
 
-  // Check for duplicate tokens
-
   const wordList = companyName.split(" ").map(w => w.toLowerCase());
   if (new Set(wordList).size !== wordList.length) {
     flags.push("duplicateTokens");
-
     confidenceScore = Math.min(confidenceScore, 95);
   }
 
-  // Validate token count and pattern
   const nameTokens = companyName.split(" ").filter(Boolean);
   if (nameTokens.length > 3) {
     confidenceScore = Math.min(confidenceScore, 85);
@@ -376,37 +405,33 @@ function tryProperNounPattern(tokens) {
 function tryBrandCityPattern(tokens) {
   if (!tokens || !Array.isArray(tokens) || tokens.length < 2) return null;
 
-  // Reuse logic from extractBrandOfCityFromDomain
   const domain = tokens.join("");
-  const { brand, city } = extractBrandOfCityFromDomain(domain); // [Fix 3: Removed unused connector]
+  const { brand, city } = extractBrandOfCityFromDomain(domain);
   if (!brand || !city) return null;
 
   let confidenceScore = 100;
   const flags = ["brandCityPattern"];
   const confidenceOrigin = "brandCityPattern";
 
-  // Always use 'Brand City' format for consistency
   const nameParts = [brand, city];
-  const companyName = capitalizeName(nameParts.join(" "));
+  const nameResult = capitalizeName(nameParts.join(" "));
+  const companyName = nameResult.name;
+  nameResult.flags.forEach(flag => flags.push(flag));
 
-  // Adjust confidenceScore (no bonus for connector since format is overridden)
   confidenceScore = 100;
 
-  // Block brand-only or city-only results
   if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
     flags.push("brandOrCityOnlyBlocked");
     confidenceScore = 0;
     return null;
   }
 
-  // Check for duplicate tokens
   const wordList = companyName.split(" ").map(w => w.toLowerCase());
   if (new Set(wordList).size !== wordList.length) {
     flags.push("duplicateTokens");
     confidenceScore = Math.min(confidenceScore, 95);
   }
 
-  // Validate token count and pattern
   const nameTokens = companyName.split(" ").filter(Boolean);
   if (nameTokens.length > 3) {
     confidenceScore = Math.min(confidenceScore, 85);
@@ -429,74 +454,63 @@ function tryBrandCityPattern(tokens) {
 
 // Matches proper noun + brand patterns (e.g., 'curryacura' → 'Curry Acura')
 function tryBrandGenericPattern(tokens) {
-  // Input validation
   if (!Array.isArray(tokens) || tokens.length < 2) {
     return null;
   }
 
-  // Initialize variables
   let properNoun = "";
   let brand = "";
   let confidenceScore = 100;
   const flags = ["brandGenericPattern"];
   const confidenceOrigin = "brandGenericPattern";
 
-  // Find proper noun followed by brand in a single loop
   for (let i = 0; i < tokens.length - 1; i++) {
     const currentToken = tokens[i].toLowerCase();
     const nextToken = tokens[i + 1].toLowerCase();
 
-    // Check if current token is a proper noun or last name, and next token is a brand
     if ((KNOWN_PROPER_NOUNS.has(currentToken) || KNOWN_LAST_NAMES.has(currentToken)) && CAR_BRANDS.has(nextToken)) {
       properNoun = currentToken;
       brand = BRAND_MAPPING.get(nextToken) || nextToken;
-      confidenceScore = 125; // Bonus for brand match
+      confidenceScore = 125;
       flags.push("brandIncluded");
       break;
     }
   }
 
-  // Return null if no match found
   if (!properNoun || !brand) {
     return null;
   }
 
-  // Block if proper noun is a city or brand
   if (KNOWN_CITIES_SET.has(properNoun) || CAR_BRANDS.has(properNoun)) {
     return null;
   }
 
-  // Construct and clean company name
-  const companyName = cleanCompanyName(capitalizeName(`${properNoun} ${brand}`));
+  const nameResult = capitalizeName(`${properNoun} ${brand}`);
+  const companyName = cleanCompanyName(nameResult.name);
+  nameResult.flags.forEach(flag => flags.push(flag));
+
   const nameTokens = companyName.split(" ").filter(Boolean);
 
-  // Block brand-only or city-only results
   if (CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
     flags.push("brandOrCityOnlyBlocked");
     return null;
   }
 
-  // Check for duplicate tokens
   const uniqueTokens = new Set(nameTokens.map(t => t.toLowerCase()));
   if (uniqueTokens.size !== nameTokens.length) {
     flags.push("duplicateTokens");
-
     confidenceScore = Math.min(confidenceScore, 95);
   }
 
-  // Validate token count (1–3 tokens)
   if (nameTokens.length > 3) {
-
     flags.push("tokenLimitExceeded");
     confidenceScore = Math.min(confidenceScore, 85);
   }
 
-  // Validate capitalization pattern
   if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) {
     return null;
   }
 
-  // Log and return result
   log("info", "Brand generic pattern matched", { companyName, tokens });
   return {
     companyName,
@@ -506,6 +520,7 @@ function tryBrandGenericPattern(tokens) {
     tokens: nameTokens.map(t => t.toLowerCase()).slice(0, 3)
   };
 }
+
 // tryGenericPattern function
 function tryGenericPattern(tokens, properNounsSet) {
   if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
@@ -514,15 +529,13 @@ function tryGenericPattern(tokens, properNounsSet) {
   let properNoun = null;
   let generic = null;
 
-
-  // Find a proper noun and a generic term in a single pass
   for (const token of tokens) {
     const lowerToken = token.toLowerCase();
     if (!properNoun && properNounsSet.has(lowerToken) && !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken)) {
-      properNoun = capitalizeName(token);
+      properNoun = capitalizeName(token).name;
     }
     if (!generic && genericTerms.includes(lowerToken)) {
-      generic = capitalizeName(token);
+      generic = capitalizeName(token).name;
     }
     if (properNoun && generic) break;
   }
@@ -550,7 +563,6 @@ function humanizeName(domain) {
 
   const normalizedDomain = normalizeDomain(domain);
 
-  // Check for brand-only domains
   if (BRAND_ONLY_DOMAINS.has(normalizedDomain + ".com")) {
     log("info", `Brand-only domain detected: ${normalizedDomain}`);
     return {
@@ -563,11 +575,9 @@ function humanizeName(domain) {
     };
   }
 
-  // Tokenize the domain
   const tokens = earlyCompoundSplit(normalizedDomain);
   const rawTokenCount = tokens.length;
 
-  // Early exit if token set is too weak
   if (tokens.length < 2 || tokens.every(t => COMMON_WORDS.has(t.toLowerCase()))) {
     const result = {
       companyName: "",
@@ -582,10 +592,8 @@ function humanizeName(domain) {
     return result;
   }
 
-  // Apply pattern matching in order
-  let result = tryHumanNamePattern(tokens) || tryProperNounPattern(tokens) || tryBrandCityPattern(tokens) || tryBrandGenericPattern(tokens) || tryGenericPattern(tokens);
+  let result = tryHumanNamePattern(tokens) || tryProperNounPattern(tokens) || tryBrandCityPattern(tokens) || tryBrandGenericPattern(tokens) || tryGenericPattern(tokens, properNounsSet);
 
-  // If no match, return failure
   if (!result) {
     const result = {
       companyName: "",
@@ -600,18 +608,15 @@ function humanizeName(domain) {
     return result;
   }
 
-  // Inline cleaning of the company name
   if (result.companyName) {
-    result.companyName = result.companyName.trim().replace(/\s+/g, " "); // Remove extra spaces and trim
+    result.companyName = result.companyName.trim().replace(/\s+/g, " ");
   }
 
-  // Apply confidence tuning based on domain structure
   if (tokens.includes("auto") && tokens.includes("group")) {
     result.confidenceScore = Math.min(result.confidenceScore, 90);
     result.flags.push("genericStructurePenalty");
   }
 
-  // Add rawTokenCount to result
   result.rawTokenCount = rawTokenCount;
 
   log("info", `Processed domain: ${normalizedDomain}`, { result });
@@ -626,5 +631,6 @@ export {
   earlyCompoundSplit,
   capitalizeName,
   expandInitials,
+  normalizeDomain,
   extractBrandOfCityFromDomain
 };
