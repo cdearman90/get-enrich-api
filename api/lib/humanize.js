@@ -236,55 +236,63 @@ function earlyCompoundSplit(domain) {
   return uniqueTokens;
 }
 
-// Extracts brand and city from domain (for batch-enrich.js and tryBrandCityPattern)
+// Fallback logger to prevent crashes
+const log = globalThis.log || ((level, message, meta) => {
+  if (level === 'error') console.error(`[${new Date().toISOString()}] ERROR: ${message}`, meta);
+  else if (level === 'warn') console.warn(`[${new Date().toISOString()}] WARN: ${message}`, meta);
+  else console.log(`[${new Date().toISOString()}] INFO: ${message}`, meta);
+});
+
 function extractBrandOfCityFromDomain(domain) {
   try {
     // Validate input
-    if (!domain || typeof domain !== "string" || !domain.trim()) {
-      log("error", "Invalid domain in extractBrandOfCityFromDomain", { domain });
-      return { brand: "", city: "", connector: "" };
+    if (!domain || typeof domain !== 'string' || !domain.trim()) {
+      log('error', 'Invalid domain in extractBrandOfCityFromDomain', { domain });
+      return { brand: '', city: '', connector: '' };
     }
 
     // Normalize the domain
     const normalized = normalizeDomain(domain);
-    if (!normalized || typeof normalized !== "string") {
-      log("error", "normalizeDomain returned invalid result", { domain, normalized });
-      return { brand: "", city: "", connector: "" };
+    if (!normalized || typeof normalized !== 'string') {
+      log('error', 'normalizeDomain returned invalid result', { domain, normalized });
+      return { brand: '', city: '', connector: '' };
     }
 
     // Split into tokens
     let tokens = earlyCompoundSplit(normalized);
-    if (!Array.isArray(tokens) || !tokens.every(token => typeof token === "string")) {
-      log("error", "earlyCompoundSplit returned invalid tokens", { domain, tokens });
-      return { brand: "", city: "", connector: "" };
+    if (!Array.isArray(tokens) || !tokens.every(token => typeof token === 'string') || tokens.length === 0) {
+      log('warn', 'earlyCompoundSplit returned invalid or empty tokens', { domain, tokens });
+      return { brand: '', city: '', connector: '' };
     }
-
-    let brand = "";
-    let city = "";
 
     // Validate dependencies
-    if (!(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(BRAND_MAPPING instanceof Map)) {
-      log("error", "Invalid dependencies in extractBrandOfCityFromDomain", {
+    if (!(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
+      log('error', 'Invalid dependencies in extractBrandOfCityFromDomain', {
         CAR_BRANDS: CAR_BRANDS instanceof Set,
-        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set,
-        BRAND_MAPPING: BRAND_MAPPING instanceof Map
+        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set
       });
-      return { brand: "", city: "", connector: "" };
+      return { brand: '', city: '', connector: '' };
     }
+
+    let brand = '';
+    let city = '';
 
     // Extract brand and city
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i];
-      if (typeof token !== "string" || !token.trim()) continue; // Skip invalid tokens
+      if (typeof token !== 'string' || !token.trim()) continue;
       const lowerToken = token.toLowerCase();
       if (CAR_BRANDS.has(lowerToken)) {
-        brand = BRAND_MAPPING.get(lowerToken) || token;
+        // Fixed: Use object-safe access for BRAND_MAPPING
+        brand = Object.hasOwn(BRAND_MAPPING, lowerToken)
+          ? BRAND_MAPPING[lowerToken]
+          : capitalizeName(token)?.name || token;
         for (let j = i + 1; j < tokens.length; j++) {
           const nextToken = tokens[j];
-          if (typeof nextToken !== "string" || !nextToken.trim()) continue; // Skip invalid tokens
+          if (typeof nextToken !== 'string' || !nextToken.trim()) continue;
           const lowerNextToken = nextToken.toLowerCase();
           if (KNOWN_CITIES_SET.has(lowerNextToken)) {
-            city = nextToken;
+            city = capitalizeName(nextToken)?.name || nextToken;
             break;
           }
         }
@@ -293,18 +301,14 @@ function extractBrandOfCityFromDomain(domain) {
     }
 
     if (!brand || !city) {
-      log("debug", "No brand or city found", { domain, tokens });
-      return { brand: "", city: "", connector: "" };
+      log('debug', 'No brand or city found', { domain, tokens });
+      return { brand: '', city: '', connector: '' };
     }
 
-    // Capitalize brand and city
-    const brandResult = capitalizeName(brand) || { name: "" };
-    const cityResult = capitalizeName(city) || { name: "" };
-
-    return { brand: brandResult.name, city: cityResult.name, connector: "" };
+    return { brand, city, connector: '' };
   } catch (err) {
-    log("error", "extractBrandOfCityFromDomain failed", { domain, error: err.message, stack: err.stack });
-    return { brand: "", city: "", connector: "" };
+    log('error', 'extractBrandOfCityFromDomain failed', { domain, error: err.message, stack: err.stack });
+    return { brand: '', city: '', connector: '' };
   }
 }
 
