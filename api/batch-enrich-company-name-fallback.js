@@ -14,7 +14,7 @@ import {
   BRAND_MAPPING,
   SUFFIXES_TO_REMOVE,
   BLOCKLIST
-} from './lib/constants.js';
+} from "./lib/constants.js";
 
 import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
