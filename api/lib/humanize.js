@@ -409,27 +409,26 @@ function tryHumanNamePattern(tokens) {
 // Matches proper noun patterns (e.g., 'dorschford' → 'Dorsch Ford')
 function tryProperNounPattern(tokens) {
   try {
-    if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t => typeof t === "string")) {
-      log("error", "Invalid tokens in tryProperNounPattern", { tokens });
+    if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t => typeof t === 'string')) {
+      log('error', 'Invalid tokens in tryProperNounPattern', { tokens });
       return null;
     }
 
-    if (!(properNounsSet instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(BRAND_MAPPING instanceof Map)) {
-      log("error", "Invalid dependencies in tryProperNounPattern", {
+    if (!(properNounsSet instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
+      log('error', 'Invalid dependencies in tryProperNounPattern', {
         properNounsSet: properNounsSet instanceof Set,
         CAR_BRANDS: CAR_BRANDS instanceof Set,
-        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set,
-        BRAND_MAPPING: BRAND_MAPPING instanceof Map
+        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set
       });
       return null;
     }
 
-    let properNoun = "";
-    let brand = "";
-    let generic = "";
+    let properNoun = '';
+    let brand = '';
+    let generic = '';
     let confidenceScore = 100;
-    const flags = ["properNounPattern"];
-    const confidenceOrigin = "properNounPattern";
+    const flags = ['properNounPattern'];
+    const confidenceOrigin = 'properNounPattern';
 
     for (const token of tokens) {
       const lowerToken = token.toLowerCase();
@@ -445,13 +444,14 @@ function tryProperNounPattern(tokens) {
     for (let i = nounIndex + 1; i < tokens.length; i++) {
       const token = tokens[i].toLowerCase();
       if (CAR_BRANDS.has(token)) {
-        brand = BRAND_MAPPING.get(token) || token;
-        flags.push("brandIncluded");
+        // Fixed: Use object-safe access for BRAND_MAPPING
+        brand = Object.hasOwn(BRAND_MAPPING, token) ? BRAND_MAPPING[token] : capitalizeName(token)?.name || token;
+        flags.push('brandIncluded');
         confidenceScore = 125;
         break;
-      } else if (["motors", "auto", "dealership"].includes(token)) {
-        generic = token;
-        flags.push("genericIncluded");
+      } else if (['motors', 'auto', 'dealership'].includes(token)) {
+        generic = capitalizeName(token)?.name || token;
+        flags.push('genericIncluded');
         confidenceScore = 100;
         break;
       }
@@ -465,33 +465,33 @@ function tryProperNounPattern(tokens) {
     if (brand) nameParts.push(brand);
     else if (generic) nameParts.push(generic);
 
-    const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
+    const nameResult = capitalizeName(nameParts.join(' ')) || { name: '', flags: [] };
     const companyName = nameResult.name;
     nameResult.flags.forEach(flag => flags.push(flag));
 
     if (!companyName || CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
-      flags.push("brandOrCityOnlyBlocked");
+      flags.push('brandOrCityOnlyBlocked');
       confidenceScore = 0;
       return null;
     }
 
-    const wordList = companyName.split(" ").map(w => w.toLowerCase());
+    const wordList = companyName.split(' ').map(w => w.toLowerCase());
     if (new Set(wordList).size !== wordList.length) {
-      flags.push("duplicateTokens");
+      flags.push('duplicateTokens');
       confidenceScore = Math.min(confidenceScore, 95);
     }
 
-    const nameTokens = companyName.split(" ").filter(Boolean);
+    const nameTokens = companyName.split(' ').filter(Boolean);
     if (nameTokens.length > 3) {
       confidenceScore = Math.min(confidenceScore, 85);
-      flags.push("tokenLimitExceeded");
+      flags.push('tokenLimitExceeded');
     }
 
     if (!companyName.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) {
       return null;
     }
 
-    log("info", "Proper noun pattern matched", { companyName, tokens });
+    log('info', 'Proper noun pattern matched', { companyName, tokens });
     return {
       companyName,
       confidenceScore,
@@ -500,7 +500,7 @@ function tryProperNounPattern(tokens) {
       tokens: nameTokens.map(t => t.toLowerCase())
     };
   } catch (e) {
-    log("error", "tryProperNounPattern failed", { tokens, error: e.message, stack: e.stack });
+    log('error', 'tryProperNounPattern failed', { tokens, error: e.message, stack: e.stack });
     return null;
   }
 }
