@@ -130,7 +130,7 @@ const COMMON_WORDS = new Set([
   "to", "of", "and", "the", "for", "in", "on", "at", "inc", "llc", "corp", "co"
 ]);
 
-const TEST_CASE_OVERRIDES = typeof TEST_CASE_OVERRIDES === 'object' && TEST_CASE_OVERRIDES !== null ? TEST_CASE_OVERRIDES : {
+const TEST_CASE_OVERRIDES = {
     "athensford.com": "Athens Ford",
     "patmilliken.com": "Pat Milliken",
     "gusmachadoford.com": "Gus Machado",
@@ -419,7 +419,7 @@ const TEST_CASE_OVERRIDES = typeof TEST_CASE_OVERRIDES === 'object' && TEST_CASE
     "regalauto.com": "Regal Auto",
     "elwaydealers.net": "Elway",
     "chapmanchoice.com": "Chapman"
-  };
+};
 
 const BRAND_ONLY_DOMAINS = new Set([
     "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com",
@@ -1305,12 +1305,12 @@ const KNOWN_CITIES_SET = new Set(SORTED_CITY_LIST.map(c => c.toLowerCase()));
       "young", "youngblood", "zimmerman", "kadlac", "clark", "caruso", "perillo", "stoops", "weaver"
     ]);
 
-const SUFFIXES_TO_REMOVE = Array.isArray(SUFFIXES_TO_REMOVE) ? SUFFIXES_TO_REMOVE : [
+const SUFFIXES_TO_REMOVE = {
     "llc", "inc", "corp", "co", "ltd", "group", "auto", "motors"
     // Subset of COMMON_WORDS for trailing removal
-];
+};
 
-const KNOWN_GENERIC_BLOBS = typeof KNOWN_GENERIC_BLOBS === 'object' && KNOWN_GENERIC_BLOBS !== null ? KNOWN_GENERIC_BLOBS : {
+const KNOWN_GENERIC_BLOBS = {
     "capitalbpg": "BPG Auto",
     "hmtrs": "HMTR Auto",
     "czag": "CZAG Auto",
@@ -1321,7 +1321,7 @@ const KNOWN_GENERIC_BLOBS = typeof KNOWN_GENERIC_BLOBS === 'object' && KNOWN_GEN
 };
 
 // Overrides for specific domains
-const OVERRIDES = typeof OVERRIDES === 'object' && OVERRIDES !== null ? OVERRIDES : {
+const OVERRIDES = {
     "acdealergroup.com": "AC Dealer",
     "aldermansvt.com": "Aldermans VT",
     "allamericanford.net": "All American",
