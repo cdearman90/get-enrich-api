@@ -82,7 +82,7 @@ function capitalizeName(name) {
       .join(" ");
   }
 
-  // Insert spaces between camelCase fragments (e.g., "MikeShawToyota" → "Mike Shaw Toyota")
+  // Insert spaces between camelCase fragments
   name = name.replace(/([a-z])([A-Z])/g, "$1 $2");
 
   return name
