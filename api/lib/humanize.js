@@ -231,6 +231,11 @@ function earlyCompoundSplit(domain) {
   return uniqueTokens;
 }
 
+/**
+ * Extracts brand and city from a domain
+ * @param {string} domain - The domain to process
+ * @returns {Object} - { brand: string, city: string, connector: string }
+ */
 function extractBrandOfCityFromDomain(domain) {
   try {
     // Validate input
@@ -260,12 +265,15 @@ function extractBrandOfCityFromDomain(domain) {
     }
 
     // Validate dependencies
-    const carBrandsSet = new Set(CAR_BRANDS);
-    if (!(carBrandsSet instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(BRAND_MAPPING instanceof Map)) {
+    const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set(CAR_BRANDS || []);
+    const citiesSet = KNOWN_CITIES_SET instanceof Set ? KNOWN_CITIES_SET : new Set(KNOWN_CITIES_SET || []);
+    const isBrandMappingMap = BRAND_MAPPING instanceof Map;
+
+    if (!carBrandsSet.size || !citiesSet.size) {
       log('error', 'Invalid dependencies in extractBrandOfCityFromDomain', {
-        CAR_BRANDS: carBrandsSet instanceof Set,
-        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set,
-        BRAND_MAPPING: BRAND_MAPPING instanceof Map
+        CAR_BRANDS: carBrandsSet.size,
+        KNOWN_CITIES_SET: citiesSet.size,
+        BRAND_MAPPING: isBrandMappingMap
       });
       return { brand: '', city: '', connector: '' };
     }
@@ -279,12 +287,15 @@ function extractBrandOfCityFromDomain(domain) {
       if (typeof token !== 'string' || !token.trim()) continue;
       const lowerToken = token.toLowerCase();
       if (carBrandsSet.has(lowerToken)) {
-        brand = BRAND_MAPPING.get(lowerToken) || capitalizeName(token)?.name || token;
+        // Safe access to BRAND_MAPPING
+        brand = isBrandMappingMap
+          ? BRAND_MAPPING.get(lowerToken) || capitalizeName(token)?.name || token
+          : BRAND_MAPPING[lowerToken] || capitalizeName(token)?.name || token;
         for (let j = i + 1; j < tokens.length; j++) {
           const nextToken = tokens[j];
           if (typeof nextToken !== 'string' || !nextToken.trim()) continue;
           const lowerNextToken = nextToken.toLowerCase();
-          if (KNOWN_CITIES_SET.has(lowerNextToken)) {
+          if (citiesSet.has(lowerNextToken)) {
             city = capitalizeName(nextToken)?.name || nextToken;
             break;
           }
@@ -299,9 +310,11 @@ function extractBrandOfCityFromDomain(domain) {
         if (typeof token !== 'string' || !token.trim()) continue;
         const lowerToken = token.toLowerCase();
         if (!brand && carBrandsSet.has(lowerToken)) {
-          brand = BRAND_MAPPING.get(lowerToken) || capitalizeName(token)?.name || token;
+          brand = isBrandMappingMap
+            ? BRAND_MAPPING.get(lowerToken) || capitalizeName(token)?.name || token
+            : BRAND_MAPPING[lowerToken] || capitalizeName(token)?.name || token;
         }
-        if (!city && KNOWN_CITIES_SET.has(lowerToken)) {
+        if (!city && citiesSet.has(lowerToken)) {
           city = capitalizeName(token)?.name || token;
         }
       }
