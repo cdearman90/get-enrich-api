@@ -288,6 +288,12 @@ function tryHumanNamePattern(tokens) {
 function tryProperNounPattern(tokens) {
   if (!tokens || !Array.isArray(tokens) || tokens.length < 1) return null;
 
+  // Defensive check for properNounsSet
+  if (!(properNounsSet instanceof Set)) {
+    log("warn", "properNounsSet is not a Set, skipping proper noun pattern");
+    return null;
+  }
+
   let properNoun = "";
   let brand = "";
   let generic = "";
@@ -297,7 +303,7 @@ function tryProperNounPattern(tokens) {
 
   // Look for proper noun
   for (const token of tokens) {
-    if (KNOWN_PROPER_NOUNS.has(token.toLowerCase())) {
+    if (properNounsSet.has(token.toLowerCase())) {
       properNoun = token;
       break;
     }
@@ -311,7 +317,6 @@ function tryProperNounPattern(tokens) {
     const token = tokens[i].toLowerCase();
     if (CAR_BRANDS.has(token)) {
       brand = BRAND_MAPPING.get(token) || token;
-
       flags.push("brandIncluded");
       confidenceScore = 125;
       break;
@@ -343,11 +348,9 @@ function tryProperNounPattern(tokens) {
   }
 
   // Check for duplicate tokens
-
   const wordList = companyName.split(" ").map(w => w.toLowerCase());
   if (new Set(wordList).size !== wordList.length) {
     flags.push("duplicateTokens");
-
     confidenceScore = Math.min(confidenceScore, 95);
   }
 
