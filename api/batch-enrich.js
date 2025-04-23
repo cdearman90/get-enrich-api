@@ -10,7 +10,20 @@ import {
 } from "./lib/humanize.js";
 
 import { fallbackName, clearOpenAICache } from "./batch-enrich-company-name-fallback.js";
-import { BRAND_ONLY_DOMAINS } from "./lib/constants.js";
+
+import {
+  BRAND_ONLY_DOMAINS,
+  CAR_BRANDS,
+  KNOWN_CITIES_SET,
+  properNounsSet,
+  OVERRIDES,
+  SPAMMY_TOKENS,
+  KNOWN_GENERIC_BLOBS,
+  BRAND_MAPPING,
+  SUFFIXES_TO_REMOVE,
+  BLOCKLIST
+} from './lib/constants.js';
+
 import winston from "winston";
 import path from "path";
 import fs from "fs";
