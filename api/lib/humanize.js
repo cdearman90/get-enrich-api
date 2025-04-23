@@ -68,19 +68,44 @@ function cleanCompanyName(companyName) {
 
 // Replace the capitalizeName function in humanize.js (around line 60)
 function capitalizeName(name) {
-  if (!name || typeof name !== "string") return "";
+  try {
+    if (!name || typeof name !== "string") {
+      log("error", "Invalid name in capitalizeName", { name });
+      return { name: "", flags: ["InvalidInput"] };
+    }
 
-  // Preserve abbreviations with dots (e.g., "M.B.")
-  if (name.includes(".")) {
-    const parts = name.split(" ");
-    return parts
-      .map(word => {
-        if (word.match(/^[A-Z]\.[A-Z]\.$/)) return word; // Preserve "M.B."
-        if (word.length <= 5 && word === word.toUpperCase()) return word; // Preserve all-caps (e.g., "CDJR")
-        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-      })
-      .join(" ");
+    // Preserve abbreviations with dots (e.g., "M.B.")
+    let flags = [];
+    let result = name;
+    if (name.includes(".")) {
+      const parts = name.split(" ");
+      result = parts
+        .map(word => {
+          if (word.match(/^[A-Z]\.[A-Z]\.$/)) return word; // Preserve "M.B."
+          if (word.length <= 5 && word === word.toUpperCase()) return word; // Preserve all-caps (e.g., "CDJR")
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(" ");
+      flags.push("AbbreviationPreserved");
+    } else {
+      // Insert spaces between camelCase fragments
+      result = name.replace(/([a-z])([A-Z])/g, "$1 $2");
+      result = result
+        .split(" ")
+        .map(word => {
+          if (!word) return word;
+          if (word.length <= 5 && word === word.toUpperCase()) return word;
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(" ");
+    }
+
+    return { name: result, flags };
+  } catch (e) {
+    log("error", "capitalizeName failed", { name, error: e.message, stack: e.stack });
+    return { name: "", flags: ["CapitalizeNameError"] };
   }
+}
 
   // Insert spaces between camelCase fragments
   name = name.replace(/([a-z])([A-Z])/g, "$1 $2");
