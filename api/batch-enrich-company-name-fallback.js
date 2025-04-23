@@ -369,17 +369,15 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
 async function fallbackName(domain, originalDomain, meta = {}) {
   const normalizedDomain = domain?.toLowerCase().trim() || "";
   let companyName = "";
-  let confidenceScore = 0; // Default to 0 for consistency
+  let confidenceScore = 0;
   let flags = new Set(["FallbackName"]);
   let tokens = 0;
 
   try {
     log("info", "Starting fallback processing", { domain: normalizedDomain });
 
-    // Define regex pattern for company name validation (e.g., "Chicago Auto")
-    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/; // Matches "Name", "First Last", or "Name Generic"
+    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/;
 
-    // Check OVERRIDES first
     if (OVERRIDES[normalizedDomain]) {
       const overrideName = OVERRIDES[normalizedDomain];
       if (!pattern.test(overrideName)) {
@@ -405,14 +403,12 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       return { companyName, confidenceScore: 0, flags: Array.from(flags), tokens };
     }
 
-    // Try humanizeName first
     let initialResult;
     try {
       initialResult = await humanizeName(normalizedDomain);
       flags.add(...initialResult.flags);
       log("info", "humanizeName completed", { domain: normalizedDomain, result: initialResult });
 
-      // Simplified confidence threshold to 80 for all cases
       const confidenceThreshold = 80;
       if (initialResult.confidenceScore >= confidenceThreshold && !initialResult.flags.includes("ReviewNeeded")) {
         log("info", "Using humanizeName result", { domain: normalizedDomain, companyName: initialResult.companyName });
@@ -432,7 +428,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       initialResult = { companyName: "", confidenceScore: 0, flags: [], tokens: 0 };
     }
 
-    // Enhanced token rescue
     let cleanDomain;
     try {
       cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org|\.biz|\.ca|\.co\.uk)$/g, "");
@@ -447,12 +442,11 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         .map(t => t.toLowerCase())
         .filter(t => !SPAMMY_TOKENS.includes(t) && t !== "of");
 
-      // Priority 1: Retry humanizeName with proper noun sequence
       const properNounTokens = extractedTokens.filter(t => properNounsSet.has(t));
       if (properNounTokens.length >= 2) {
         const tempName = properNounTokens.map(t => capitalizeName(t)).join(" ");
         const retryResult = await humanizeName(tempName);
-        if (retryResult.confidenceScore >= 80) { // Adjusted threshold
+        if (retryResult.confidenceScore >= 80) {
           const validatedName = retryResult.companyName;
           if (!pattern.test(validatedName)) {
             log("warn", "Retry humanizeName result pattern validation failed", { domain: normalizedDomain, companyName: validatedName });
@@ -470,7 +464,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         }
       }
 
-      // Priority 2: Single proper noun with conditional brand append
       const singleProper = extractedTokens.find(t => properNounsSet.has(t) && !CAR_BRANDS.includes(t) && !KNOWN_CITIES_SET.has(t));
       if (singleProper) {
         companyName = capitalizeName(singleProper);
@@ -501,7 +494,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         }
       }
 
-      // Priority 3: City + Brand or Generic
       if (city) {
         if (domainBrand) {
           const formattedCity = capitalizeName(city);
@@ -541,14 +533,12 @@ async function fallbackName(domain, originalDomain, meta = {}) {
             } else {
               log("info", "City-only output", { domain: normalizedDomain, companyName });
               flags.add("CityOnlyFallback");
-              // Removed ManualReviewRecommended to allow population
               confidenceScore = 80;
             }
           }
         }
       }
 
-      // Priority 4: Generic Blob or Initials Fallback
       if (!companyName && extractedTokens.length === 1) {
         const token = extractedTokens[0];
         if (KNOWN_GENERIC_BLOBS[token]) {
@@ -577,7 +567,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         }
       }
 
-      // Priority 5: Brand + Generic
       if (domainBrand && !companyName) {
         const genericTerms = ["auto", "motors", "dealers", "group", "cares", "cars", "drive", "center", "world"];
         const generic = extractedTokens.find(t => genericTerms.includes(t));
@@ -597,7 +586,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         }
       }
 
-      // Skip OpenAI if the name is well-formed
       if (companyName && pattern.test(companyName) && companyName.split(" ").length >= 2 && !/\b[a-z]+[A-Z]/.test(companyName)) {
         log("info", "Skipping OpenAI fallback due to well-formed name", { domain: normalizedDomain, companyName, confidenceScore });
         const finalResult = {
@@ -611,7 +599,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         return finalResult;
       }
 
-      // OpenAI fallback for spacing/casing
       if (companyName && (companyName.split(" ").length < 2 || /\b[a-z]+[A-Z]/.test(companyName))) {
         const cacheKey = `${normalizedDomain}:${(meta.title || "").toLowerCase().trim()}`;
         if (openAICache.has(cacheKey)) {
@@ -690,7 +677,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         }
       }
 
-      // Final fallback
       if (!companyName) {
         companyName = capitalizeName(cleanDomain.split(/(?=[A-Z])/)[0]);
         if (!pattern.test(companyName)) {
@@ -699,12 +685,10 @@ async function fallbackName(domain, originalDomain, meta = {}) {
           flags.add("PatternValidationFailed");
         } else {
           flags.add("FinalFallback");
-          // Removed ManualReviewRecommended to allow population
           confidenceScore = 80;
         }
       }
 
-      // Deduplicate output
       if (companyName) {
         const words = companyName.toLowerCase().split(" ");
         const uniqueWords = [...new Set(words)];
@@ -721,7 +705,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         }
       }
 
-      // Final validation: Ensure the companyName is non-empty and meets quality standards
       if (!companyName || companyName.length < 3) {
         log("warn", "Final company name is empty or too short", { domain: normalizedDomain, companyName });
         companyName = "";
@@ -730,7 +713,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         flags.add("ManualReviewRecommended");
       }
 
-      // Final validation: Check for brand-only output
       if (companyName && CAR_BRANDS.includes(companyName.toLowerCase())) {
         companyName = "";
         confidenceScore = 0;
@@ -758,6 +740,9 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       flags.add("ManualReviewRecommended");
       return { companyName, confidenceScore: 0, flags: Array.from(flags), tokens };
     }
+  } finally {
+    // Ensure any cleanup if needed
+  }
 }
 
 /**
