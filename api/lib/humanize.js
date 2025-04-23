@@ -14,7 +14,6 @@ import {
   COMMON_WORDS,
   SUFFIXES_TO_REMOVE,
   ABBREVIATION_EXPANSIONS,
-  SORTED_CITY_LIST,
   TEST_CASE_OVERRIDES,
   properNounsSet
 } from "./constants.js";
