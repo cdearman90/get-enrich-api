@@ -631,5 +631,7 @@ export {
   earlyCompoundSplit,
   capitalizeName,
   expandInitials,
+  normalizeDomain,
   extractBrandOfCityFromDomain
+};
 };
