@@ -4,16 +4,17 @@
 import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, normalizeDomain, expandInitials } from "./lib/humanize.js";
 
 import {
-  CAR_BRANDS,
-  BRAND_MAPPING,
-  KNOWN_CITIES_SET,
   BRAND_ONLY_DOMAINS,
-  BLOCKLIST,
+  CAR_BRANDS,
+  KNOWN_CITIES_SET,
+  properNounsSet,
+  OVERRIDES,
   SPAMMY_TOKENS,
   KNOWN_GENERIC_BLOBS,
-  OVERRIDES,
-  properNounsSet
-} from "./lib/constants.js";
+  BRAND_MAPPING,
+  SUFFIXES_TO_REMOVE,
+  BLOCKLIST
+} from './constants.js';
 
 import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
@@ -30,27 +31,13 @@ const logger = winston.createLogger({
   transports: [new winston.transports.Console()]
 });
 
-/**
- * Logs messages with Winston
- * @param {string} level - Log level
- * @param {string} message - Log message
- * @param {Object} context - Additional context
- */
+
 function log(level, message, context = {}) {
   logger[level]({ message, domain: context.domain || null, ...context });
 }
 
 // Cache for OpenAI results
 const openAICache = new Map();
-
-// Custom error class for fallback failures
-class FallbackError extends Error {
-  constructor(message, details = {}) {
-    super(message);
-    this.name = "FallbackError";
-    this.details = details;
-  }
-}
 
 // Utility to clean company names
 function cleanCompanyName(name) {
@@ -68,18 +55,18 @@ function validateOverrideFormat(override) {
 // Helper: Handle override logic
 function handleOverride(normalizedDomain, override) {
   if (!validateOverrideFormat(override)) {
-    log("warn", "Invalid override format", { domain: normalizedDomain, override });
+    log('warn', 'Invalid override format', { domain: normalizedDomain, override });
     return {
-      companyName: "",
+      companyName: '',
       confidenceScore: 0,
-      flags: ["override", "invalidOverrideFormat"],
+      flags: ['override', 'invalidOverrideFormat'],
       tokens: [],
-      confidenceOrigin: "invalidOverrideFormat"
+      confidenceOrigin: 'invalidOverrideFormat'
     };
   }
 
   const companyName = cleanCompanyName(capitalizeName(override));
-  const nameTokens = companyName.split(" ").filter(Boolean);
+  const nameTokens = companyName.split(' ').filter(Boolean);
   const validation = validateFallbackName(
     { name: companyName, brand: null, flagged: false },
     normalizedDomain,
@@ -88,24 +75,24 @@ function handleOverride(normalizedDomain, override) {
   );
 
   if (!validation.validatedName) {
-    log("warn", "Override validation failed", { domain: normalizedDomain, override });
+    log('warn', 'Override validation failed', { domain: normalizedDomain, override });
     return {
-      companyName: "",
+      companyName: '',
       confidenceScore: 0,
-      flags: ["override", "patternValidationFailed"],
+      flags: ['override', 'patternValidationFailed'],
       tokens: [],
-      confidenceOrigin: "overrideValidationFailed",
+      confidenceOrigin: 'overrideValidationFailed',
       rawTokenCount: 0
     };
   }
 
-  log("info", "Override applied", { domain: normalizedDomain, companyName: validation.validatedName });
+  log('info', 'Override applied', { domain: normalizedDomain, companyName: validation.validatedName });
   return {
     companyName: validation.validatedName,
     confidenceScore: validation.confidenceScore,
-    flags: ["override", ...validation.flags],
+    flags: ['override', ...validation.flags],
     tokens: nameTokens.map(t => t.toLowerCase()),
-    confidenceOrigin: "override",
+    confidenceOrigin: 'override',
     rawTokenCount: nameTokens.length
   };
 }
