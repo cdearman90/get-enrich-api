@@ -258,6 +258,12 @@ function extractBrandOfCityFromDomain(domain) {
       return { brand: '', city: '', connector: '' };
     }
 
+    // Check brand-only domains
+    if (BRAND_ONLY_DOMAINS.has(`${normalized}.com`)) {
+      log('info', 'Skipping brand-only domain', { domain: normalized });
+      return { brand: '', city: '', connector: '' };
+    }
+
     // Split into tokens
     let tokens = earlyCompoundSplit(normalized);
     if (!Array.isArray(tokens) || !tokens.every(token => typeof token === 'string') || tokens.length === 0) {
@@ -266,10 +272,12 @@ function extractBrandOfCityFromDomain(domain) {
     }
 
     // Validate dependencies
-    if (!(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
+    const carBrandsSet = new Set(CAR_BRANDS); // Convert array to Set
+    if (!(carBrandsSet instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(BRAND_MAPPING instanceof Map)) {
       log('error', 'Invalid dependencies in extractBrandOfCityFromDomain', {
-        CAR_BRANDS: CAR_BRANDS instanceof Set,
-        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set
+        CAR_BRANDS: carBrandsSet instanceof Set,
+        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set,
+        BRAND_MAPPING: BRAND_MAPPING instanceof Map
       });
       return { brand: '', city: '', connector: '' };
     }
@@ -282,11 +290,8 @@ function extractBrandOfCityFromDomain(domain) {
       const token = tokens[i];
       if (typeof token !== 'string' || !token.trim()) continue;
       const lowerToken = token.toLowerCase();
-      if (CAR_BRANDS.has(lowerToken)) {
-        // Fixed: Use object-safe access for BRAND_MAPPING
-        brand = Object.hasOwn(BRAND_MAPPING, lowerToken)
-          ? BRAND_MAPPING[lowerToken]
-          : capitalizeName(token)?.name || token;
+      if (carBrandsSet.has(lowerToken)) {
+        brand = BRAND_MAPPING.get(lowerToken) || capitalizeName(token)?.name || token;
         for (let j = i + 1; j < tokens.length; j++) {
           const nextToken = tokens[j];
           if (typeof nextToken !== 'string' || !nextToken.trim()) continue;
@@ -300,7 +305,7 @@ function extractBrandOfCityFromDomain(domain) {
       }
     }
 
-    if (!brand || !city) {
+    if (!brand && !city) {
       log('debug', 'No brand or city found', { domain, tokens });
       return { brand: '', city: '', connector: '' };
     }
@@ -414,10 +419,11 @@ function tryProperNounPattern(tokens) {
       return null;
     }
 
-    if (!(properNounsSet instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
+    const carBrandsSet = new Set(CAR_BRANDS); // Convert array to Set
+    if (!(properNounsSet instanceof Set) || !(carBrandsSet instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
       log('error', 'Invalid dependencies in tryProperNounPattern', {
         properNounsSet: properNounsSet instanceof Set,
-        CAR_BRANDS: CAR_BRANDS instanceof Set,
+        CAR_BRANDS: carBrandsSet instanceof Set,
         KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set
       });
       return null;
@@ -443,9 +449,8 @@ function tryProperNounPattern(tokens) {
     const nounIndex = tokens.indexOf(properNoun);
     for (let i = nounIndex + 1; i < tokens.length; i++) {
       const token = tokens[i].toLowerCase();
-      if (CAR_BRANDS.has(token)) {
-        // Fixed: Use object-safe access for BRAND_MAPPING
-        brand = Object.hasOwn(BRAND_MAPPING, token) ? BRAND_MAPPING[token] : capitalizeName(token)?.name || token;
+      if (carBrandsSet.has(token)) {
+        brand = BRAND_MAPPING.get(token) || capitalizeName(token)?.name || token;
         flags.push('brandIncluded');
         confidenceScore = 125;
         break;
@@ -457,7 +462,7 @@ function tryProperNounPattern(tokens) {
       }
     }
 
-    if (KNOWN_CITIES_SET.has(properNoun.toLowerCase()) || CAR_BRANDS.has(properNoun.toLowerCase())) {
+    if (KNOWN_CITIES_SET.has(properNoun.toLowerCase()) || carBrandsSet.has(properNoun.toLowerCase())) {
       return null;
     }
 
@@ -469,7 +474,7 @@ function tryProperNounPattern(tokens) {
     const companyName = nameResult.name;
     nameResult.flags.forEach(flag => flags.push(flag));
 
-    if (!companyName || CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
+    if (!companyName || carBrandsSet.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
       flags.push('brandOrCityOnlyBlocked');
       confidenceScore = 0;
       return null;
