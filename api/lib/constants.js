@@ -15,23 +15,23 @@ const CAR_BRANDS = [
   ];
 
   // Mapping for standardized brand names
-const BRAND_MAPPING = {
-    "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
-    "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
-    "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevy",
-    "chevvy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
-    "dodge": "Dodge", "eagle": "Eagle", "ferrari": "Ferrari", "fiat": "Fiat", "ford": "Ford", "genesis": "Genesis",
-    "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
-    "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
-    "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
-    "lincoln": "Ford", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
-    "mb": "Mercedes", "merc": "Mercedes", "mercedes": "Mercedes", "mercedes-benz": "Mercedes", "mercedesbenz": "Mercedes",
-    "merk": "Mercedes", "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile",
-    "plymouth": "Plymouth", "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram",
-    "rivian": "Rivian", "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion",
-    "smart": "Smart", "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
-    "volkswagen": "VW", "volvo": "Volvo", "vw": "VW", "chevy": "Chevy", "jcd": "Jeep"
-  };
+const BRAND_MAPPING = new Map([
+  ["acura", "Acura"], ["alfa romeo", "Alfa Romeo"], ["amc", "AMC"], ["aston martin", "Aston Martin"], ["audi", "Audi"],
+  ["bentley", "Bentley"], ["bmw", "BMW"], ["bugatti", "Bugatti"], ["buick", "Buick"], ["cadillac", "Cadillac"],
+  ["carmax", "Carmax"], ["cdj", "Dodge"], ["cdjrf", "Dodge"], ["cdjr", "Dodge"], ["chev", "Chevy"],
+  ["chevvy", "Chevy"], ["chevrolet", "Chevy"], ["chrysler", "Chrysler"], ["cjd", "Dodge"], ["daewoo", "Daewoo"],
+  ["dodge", "Dodge"], ["eagle", "Eagle"], ["ferrari", "Ferrari"], ["fiat", "Fiat"], ["ford", "Ford"], ["genesis", "Genesis"],
+  ["gmc", "GMC"], ["honda", "Honda"], ["hummer", "Hummer"], ["hyundai", "Hyundai"], ["inf", "Infiniti"], ["infiniti", "Infiniti"],
+  ["isuzu", "Isuzu"], ["jaguar", "Jaguar"], ["jeep", "Jeep"], ["jlr", "Jaguar Land Rover"], ["kia", "Kia"],
+  ["lamborghini", "Lamborghini"], ["land rover", "Land Rover"], ["landrover", "Land Rover"], ["lexus", "Lexus"],
+  ["lincoln", "Ford"], ["lucid", "Lucid"], ["maserati", "Maserati"], ["maz", "Mazda"], ["mazda", "Mazda"],
+  ["mb", "Mercedes"], ["merc", "Mercedes"], ["mercedes", "Mercedes"], ["mercedes-benz", "Mercedes"], ["mercedesbenz", "Mercedes"],
+  ["merk", "Mercedes"], ["mini", "Mini"], ["mitsubishi", "Mitsubishi"], ["nissan", "Nissan"], ["oldsmobile", "Oldsmobile"],
+  ["plymouth", "Plymouth"], ["polestar", "Polestar"], ["pontiac", "Pontiac"], ["porsche", "Porsche"], ["ram", "Ram"],
+  ["rivian", "Rivian"], ["rolls-royce", "Rolls-Royce"], ["saab", "Saab"], ["saturn", "Saturn"], ["scion", "Scion"],
+  ["smart", "Smart"], ["subaru", "Subaru"], ["subie", "Subaru"], ["suzuki", "Suzuki"], ["tesla", "Tesla"], ["toyota", "Toyota"],
+  ["volkswagen", "VW"], ["volvo", "Volvo"], ["vw", "VW"], ["chevy", "Chevy"], ["jcd", "Jeep"]
+]);
 
   // Revised ABBREVIATION_EXPANSIONS in api/lib/humanize.js
 const ABBREVIATION_EXPANSIONS = {
@@ -121,8 +121,9 @@ const ABBREVIATION_EXPANSIONS = {
     "tea": "Stead"
   };
 
-  const COMMON_WORDS = ["to", "of", "and", "the", "for", "in", "on", "at", "inc", "llc", "corp", "co"
-  ];
+const COMMON_WORDS = new Set([
+  "to", "of", "and", "the", "for", "in", "on", "at", "inc", "llc", "corp", "co"
+]);
 
   const TEST_CASE_OVERRIDES = {
     "athensford.com": "Athens Ford",
@@ -415,7 +416,7 @@ const ABBREVIATION_EXPANSIONS = {
     "chapmanchoice.com": "Chapman"
   };
 
-  const BRAND_ONLY_DOMAINS = [
+const BRAND_ONLY_DOMAINS = new Set([
     "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com",
     "dodge.com", "ramtrucks.com", "jeep.com", "lincoln.com", "toyota.com", "honda.com",
     "nissanusa.com", "subaru.com", "mazdausa.com", "mitsubishicars.com", "acura.com",
@@ -423,7 +424,7 @@ const ABBREVIATION_EXPANSIONS = {
     "bmwusa.com", "mercedes-benz.com", "audiusa.com", "vw.com", "volkswagen.com",
     "porsche.com", "miniusa.com", "fiatusa.com", "alfa-romeo.com", "landroverusa.com",
     "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
-  ];
+  ]);
 
   const KNOWN_PROPER_NOUNS = new Set([
     "rt128", "abbots", "dealer", "ac", "airport", "all", "american", "anderson", "art", "moehn", "atamian", "fox", "avis", "barnett", "beaty", "beck", "masten",
