@@ -12,6 +12,8 @@ import {
   KNOWN_CITIES_SET_CACHE // Added
 } from "./batch-enrich-company-name-fallback.js";
 
+import { BRAND_ONLY_DOMAINS } from "./lib/constants.js";
+
 import winston from "winston";
 import path from "path";
 import fs from "fs";
@@ -168,22 +170,13 @@ function checkRateLimit(req) {
  * @param {Object} meta - Metadata (e.g., title, city, brand)
  * @returns {Promise<Object>} - Fallback result with companyName, confidenceScore, flags, tokens, openAIErrors
  */
-// batch-enrich-company-name-fallback.js
 async function callFallbackAPI(domain, rowNum, meta = {}) {
   logger.debug("callFallbackAPI started", { domain, rowNum, city: meta.city, brand: meta.brand });
 
   try {
-    // Use CAR_BRANDS_CACHE to check for brand-only domains
-    const domainPrefix = domain.toLowerCase().split(".")[0];
-    if (CAR_BRANDS_CACHE.has(domainPrefix)) {
-      logger.info("Brand-only domain skipped in callFallbackAPI", {
-        domain,
-        rowNum,
-        city: meta.city,
-        brand: meta.brand,
-        name: null,
-        rejectedReason: "Brand-only domain detected"
-      });
+    // Fixed: Use Set.has() for BRAND_ONLY_DOMAINS
+    if (BRAND_ONLY_DOMAINS.has(`${domain.toLowerCase()}.com`)) {
+      logger.info("Brand-only domain skipped in callFallbackAPI", { domain });
       return {
         domain,
         companyName: "",
@@ -323,6 +316,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
     });
 
     // Final fallback: derive basic name from domain prefix
+    const domainPrefix = domain.toLowerCase().split(".")[0];
     let companyName = domainPrefix.split(/[-.]/).filter(Boolean).map(token => {
       const lowerToken = token.toLowerCase();
       if (CAR_BRANDS_CACHE.has(lowerToken) && BRAND_MAPPING[lowerToken]) {
@@ -474,7 +468,7 @@ function validateLeads(leads) {
 export default async function handler(req, res) {
   let body;
   // Initialize variables to track state
-  let reviewNeededQueue = [];
+  let manualReviewQueue = [];
   let fallbackTriggers = [];
   let totalTokens = 0;
   let totalOpenAIErrors = 0;
@@ -813,7 +807,7 @@ export default async function handler(req, res) {
     rowNum: result.rowNum
   }));
 
-  reviewNeededQueue = sanitizedResults.filter(r => r.flags.includes("ManualReviewRecommended"));
+  manualReviewQueue = sanitizedResults.filter(r => r.flags.includes("ManualReviewRecommended"));
 
   // Calculate performance metrics
   const totalProcessingTime = Date.now() - startTime;
@@ -821,7 +815,7 @@ export default async function handler(req, res) {
 
   logger.info("Handler completed successfully", {
     successful: sanitizedResults.length,
-    reviewNeededQueue: reviewNeededQueue.length,
+    manualReviewQueue: manualReviewQueue.length,
     fallbackTriggers: fallbackTriggers.length,
     totalTokens,
     totalOpenAIErrors,
@@ -831,7 +825,7 @@ export default async function handler(req, res) {
 
   return res.status(200).json({
     successful: sanitizedResults,
-    reviewNeededQueue,
+    manualReviewQueue,
     fallbackTriggers,
     totalTokens,
     totalOpenAIErrors,

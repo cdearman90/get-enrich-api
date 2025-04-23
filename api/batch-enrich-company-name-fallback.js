@@ -1,4 +1,21 @@
 import { kv } from "@vercel/kv"; // Add KV import
+// api/batch-enrich-company-name-fallback.js
+// Fallback logic using OpenAI with caching
+
+import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, normalizeDomain, expandInitials } from "./lib/humanize.js";
+
+import {
+  BRAND_ONLY_DOMAINS,
+  CAR_BRANDS,
+  KNOWN_CITIES_SET,
+  properNounsSet,
+  OVERRIDES,
+  SPAMMY_TOKENS,
+  BRAND_MAPPING,
+  SUFFIXES_TO_REMOVE,
+  BLOCKLIST
+} from "./lib/constants.js";
+
 import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
 
@@ -643,6 +660,7 @@ const BRAND_MAPPING = {
   "toyotaknoxville": ["toyota", "knoxville"], // For row 3045
   "springfieldford": ["springfield", "ford"] // For rows 3025, 3027
   };
+
 
 const OVERRIDES = {
    "athensford.com": "Athens Ford", "patmilliken.com": "Pat Milliken", "gusmachadoford.com": "Gus Machado", "geraldauto.com": "Gerald Auto", "mbofbrooklyn.com": "M.B. Brooklyn", "karlchevroletstuart.com": "Karl Stuart",
