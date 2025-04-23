@@ -1,6 +1,12 @@
 // constants.js
 // Shared constant sets and mappings for domain enrichment
 
+const log = globalThis.log || ((level, message, meta) => {
+  if (level === 'error') console.error(`[${new Date().toISOString()}] ERROR: ${message}`, meta);
+  else if (level === 'warn') console.warn(`[${new Date().toISOString()}] WARN: ${message}`, meta);
+  else console.log(`[${new Date().toISOString()}] INFO: ${message}`, meta);
+});
+
 // Comprehensive list of car brands
 const CAR_BRANDS = [
     "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
