@@ -1615,7 +1615,35 @@ const properNounsSet = new Set(
   Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()) : []
 );
 
+// Precompute proper nouns set for performance
+const properNounsSet = new Set([
+  ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
+  ...(Array.isArray(KNOWN_LAST_NAMES) ? KNOWN_LAST_NAMES : []).map(n => n.toLowerCase()),
+  ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
+  ...(Array.isArray(COMMON_WORDS) ? COMMON_WORDS : []).map(w => w.toLowerCase())
+]);
 
+// Ensure other constants are defined with defaults
+const KNOWN_CITIES_SET = Array.isArray(SORTED_CITY_LIST) ? new Set(SORTED_CITY_LIST.map(c => c.toLowerCase())) : new Set();
+const OVERRIDES = typeof OVERRIDES === 'object' && OVERRIDES !== null ? OVERRIDES : {};
+const KNOWN_GENERIC_BLOBS = typeof KNOWN_GENERIC_BLOBS === 'object' && KNOWN_GENERIC_BLOBS !== null ? KNOWN_GENERIC_BLOBS : {};
+const SUFFIXES_TO_REMOVE = Array.isArray(SUFFIXES_TO_REMOVE) ? SUFFIXES_TO_REMOVE : ["motors", "auto", "group"];
+const ABBREVIATION_EXPANSIONS = typeof ABBREVIATION_EXPANSIONS === 'object' && ABBREVIATION_EXPANSIONS !== null ? ABBREVIATION_EXPANSIONS : { "audi": "Audi", "ba": "BA Auto" };
+const TEST_CASE_OVERRIDES = typeof TEST_CASE_OVERRIDES === 'object' && TEST_CASE_OVERRIDES !== null ? TEST_CASE_OVERRIDES : {};
+
+// Log warnings if critical constants are empty or undefined
+if (!KNOWN_CITIES_SET.size) {
+  log('warn', 'KNOWN_CITIES_SET is empty or undefined', {});
+}
+if (!properNounsSet.size) {
+  log('warn', 'properNounsSet is empty or undefined', {});
+}
+if (!Object.keys(OVERRIDES).length) {
+  log('warn', 'OVERRIDES is empty or undefined', {});
+}
+if (!Object.keys(KNOWN_GENERIC_BLOBS).length) {
+  log('warn', 'KNOWN_GENERIC_BLOBS is empty or undefined', {});
+}
 
 export {
     CAR_BRANDS,
