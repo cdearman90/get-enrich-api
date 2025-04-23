@@ -1610,11 +1610,6 @@ const OVERRIDES = {
   // Spammy tokens to filter out
   const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
 
-  // Precompute proper nouns set for performance
-const properNounsSet = new Set(
-  Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()) : []
-);
-
 // Precompute proper nouns set for performance
 const properNounsSet = new Set([
   ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
