@@ -6,7 +6,6 @@ import {
   extractBrandOfCityFromDomain,
   capitalizeName,
   expandInitials,
-  normalizeDomain,
   earlyCompoundSplit
 } from "./lib/humanize.js";
 
