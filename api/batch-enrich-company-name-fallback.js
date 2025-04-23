@@ -616,21 +616,21 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         }
       } else {
         const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cars', 'drive', 'center', 'world'];
-        const generic = extractedTokens.find(t => genericTerms.includes(t));
-        if (generic) {
-          const formattedGenericResult = capitalizeName(generic) || { name: '' };
-          const formattedGeneric = formattedGenericResult.name;
-          companyName = `${formattedCity} ${formattedGeneric}`;
-          if (!pattern.test(companyName)) {
-            log('warn', 'City + generic pattern validation failed', { domain: normalizedDomain, companyName });
-            companyName = formattedCity;
-            flags.add('PatternValidationFailed');
-          } else {
-            log('info', 'City and generic term applied', { domain: normalizedDomain, companyName });
-            flags.add('CityGenericPattern');
-            confidenceScore = 95;
-          }
-        } else {
+const generic = extractedTokens.find(t => genericTerms.includes(t));
+if (generic) {
+  const formattedGenericResult = capitalizeName(generic) || { name: '' };
+  const formattedGeneric = formattedGenericResult.name;
+  companyName = `${formattedCity} ${formattedGeneric}`;
+  if (!pattern.test(companyName)) {
+    log('warn', 'City + generic pattern validation failed', { domain: normalizedDomain, companyName });
+    companyName = formattedCity;
+    flags.add('PatternValidationFailed');
+  } else {
+    log('info', 'City and generic term applied', { domain: normalizedDomain, companyName });
+    flags.add('CityGenericPattern');
+    confidenceScore = 95;
+  }
+} else {
           companyName = formattedCity;
           if (!pattern.test(companyName)) {
             log('warn', 'City-only pattern validation failed', { domain: normalizedDomain, companyName });
