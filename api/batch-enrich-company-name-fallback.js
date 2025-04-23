@@ -14,7 +14,7 @@ import {
   BRAND_MAPPING,
   SUFFIXES_TO_REMOVE,
   BLOCKLIST
-} from './constants.js';
+} from './lib/constants.js';
 
 import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
@@ -684,7 +684,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
 
     // Validate final name
     if (companyName && pattern.test(companyName) && companyName.split(' ').length >= 2 && !/\b[a-z]+[A-Z]/.test(companyName)) {
-      log('info', 'Skipping OpenAI fallback due to well-formed name', { domain: normalizedDomain, companyName, confidenceScore });
+      log('info', 'Skipping further processing due to well-formed name', { domain: normalizedDomain, companyName, confidenceScore });
       const finalResult = {
         companyName,
         confidenceScore,
@@ -692,17 +692,17 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         tokens
       };
       openAICache.set(`${normalizedDomain}:${(meta.title || '').toLowerCase().trim()}`, finalResult);
-      log('info', 'Result cached without OpenAI', { domain: normalizedDomain, companyName });
+      log('info', 'Result cached', { domain: normalizedDomain, companyName });
       return finalResult;
     }
 
-    // OpenAI fallback (mock implementation)
+    // Rule-based spacing fallback
     if (companyName && (companyName.split(' ').length < 2 || /\b[a-z]+[A-Z]/.test(companyName))) {
       const cacheKey = `${normalizedDomain}:${(meta.title || '').toLowerCase().trim()}`;
       if (openAICache.has(cacheKey)) {
         const cached = openAICache.get(cacheKey);
         log('info', 'Cache hit', { domain: normalizedDomain, companyName: cached.companyName });
-        flags.add('OpenAICacheHit');
+        flags.add('CacheHit');
         return {
           companyName: cached.companyName,
           confidenceScore: cached.confidenceScore,
@@ -711,12 +711,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         };
       }
 
-      // Mock OpenAI call (replace with actual implementation)
-      log('warn', 'OpenAI call not implemented', { domain: normalizedDomain });
-      flags.add('OpenAINotImplemented');
-      flags.add('ManualReviewRecommended');
-
-      // Rule-based spacing fallback
       const spacedTokens = extractedTokens.map(token => {
         const tokenResult = capitalizeName(token) || { name: '' };
         return tokenResult.name || token;
@@ -783,7 +777,9 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       const words = companyName.toLowerCase().split(' ');
       const uniqueWords = [...new Set(words)];
       if (uniqueWords.length !== words.length) {
-        companyName = uniqueWords.map(t => (capitalizeName(t) || { name: '' }).name).join(' ');
+        companyName = uniqueWords
+          .map(t => (capitalizeName(t) || { name: '' }).name)
+          .join(' ');
         if (!pattern.test(companyName)) {
           log('warn', 'Deduplicated output pattern validation failed', { domain: normalizedDomain, companyName });
           companyName = '';
