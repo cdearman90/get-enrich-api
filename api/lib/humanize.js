@@ -231,13 +231,6 @@ function earlyCompoundSplit(domain) {
   return uniqueTokens;
 }
 
-// Fallback logger to prevent crashes
-const log = globalThis.log || ((level, message, meta) => {
-  if (level === 'error') console.error(`[${new Date().toISOString()}] ERROR: ${message}`, meta);
-  else if (level === 'warn') console.warn(`[${new Date().toISOString()}] WARN: ${message}`, meta);
-  else console.log(`[${new Date().toISOString()}] INFO: ${message}`, meta);
-});
-
 function extractBrandOfCityFromDomain(domain) {
   try {
     // Validate input
