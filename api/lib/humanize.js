@@ -267,7 +267,7 @@ function extractBrandOfCityFromDomain(domain) {
     }
 
     // Validate dependencies
-    const carBrandsSet = new Set(CAR_BRANDS); // Convert array to Set
+    const carBrandsSet = new Set(CAR_BRANDS);
     if (!(carBrandsSet instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(BRAND_MAPPING instanceof Map)) {
       log('error', 'Invalid dependencies in extractBrandOfCityFromDomain', {
         CAR_BRANDS: carBrandsSet instanceof Set,
@@ -280,7 +280,7 @@ function extractBrandOfCityFromDomain(domain) {
     let brand = '';
     let city = '';
 
-    // Extract brand and city
+    // First pass: Look for brand followed by city
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i];
       if (typeof token !== 'string' || !token.trim()) continue;
@@ -297,6 +297,20 @@ function extractBrandOfCityFromDomain(domain) {
           }
         }
         if (city) break;
+      }
+    }
+
+    // Second pass: Check all tokens if no match found
+    if (!brand || !city) {
+      for (const token of tokens) {
+        if (typeof token !== 'string' || !token.trim()) continue;
+        const lowerToken = token.toLowerCase();
+        if (!brand && carBrandsSet.has(lowerToken)) {
+          brand = BRAND_MAPPING.get(lowerToken) || capitalizeName(token)?.name || token;
+        }
+        if (!city && KNOWN_CITIES_SET.has(lowerToken)) {
+          city = capitalizeName(token)?.name || token;
+        }
       }
     }
 
