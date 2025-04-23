@@ -316,13 +316,11 @@ function tryHumanNamePattern(tokens) {
       return null;
     }
 
-    // Validate dependencies
-    if (!(KNOWN_FIRST_NAMES instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(BRAND_MAPPING instanceof Map) || !(KNOWN_CITIES_SET instanceof Set)) {
+    if (!(KNOWN_FIRST_NAMES instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
       log("error", "Invalid dependencies in tryHumanNamePattern", {
         KNOWN_FIRST_NAMES: KNOWN_FIRST_NAMES instanceof Set,
         KNOWN_LAST_NAMES: KNOWN_LAST_NAMES instanceof Set,
         CAR_BRANDS: CAR_BRANDS instanceof Set,
-        BRAND_MAPPING: BRAND_MAPPING instanceof Map,
         KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set
       });
       return null;
@@ -350,9 +348,12 @@ function tryHumanNamePattern(tokens) {
     for (let i = tokens.indexOf(lastName) + 1; i < tokens.length; i++) {
       const token = tokens[i].toLowerCase();
       if (CAR_BRANDS.has(token)) {
-        brand = BRAND_MAPPING.get(token) || token;
-        flags.push("brandIncluded");
-        confidenceScore = 125;
+        // Fixed: Use object-safe access for BRAND_MAPPING
+        if (lastName.toLowerCase().endsWith("s")) {
+          brand = Object.hasOwn(BRAND_MAPPING, token) ? BRAND_MAPPING[token] : token;
+          flags.push("brandIncluded");
+          confidenceScore = 125;
+        }
         break;
       }
     }
@@ -361,7 +362,7 @@ function tryHumanNamePattern(tokens) {
     if (brand) nameParts.push(brand);
 
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
-    const companyName = nameResult.name;
+    const companyName = nameResult.name || "";
     nameResult.flags.forEach(flag => flags.push(flag));
 
     if (!companyName || CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
@@ -508,25 +509,48 @@ function tryBrandCityPattern(tokens) {
       return null;
     }
 
-    if (!(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
+    if (!(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(COMMON_WORDS instanceof Set)) {
       log("error", "Invalid dependencies in tryBrandCityPattern", {
         CAR_BRANDS: CAR_BRANDS instanceof Set,
-        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set
+        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set,
+        COMMON_WORDS: COMMON_WORDS instanceof Set
       });
       return null;
     }
 
     const domain = tokens.join("");
-    const { brand, city } = extractBrandOfCityFromDomain(domain) || { brand: "", city: "" };
+    let brandCityResult = extractBrandOfCityFromDomain(domain) || { brand: "", city: "" };
+    let brand = brandCityResult.brand;
+    let city = brandCityResult.city;
+
+    if (!brand || !city) {
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i].toLowerCase();
+        if (CAR_BRANDS.has(token)) {
+          // Fixed: Use object-safe access for BRAND_MAPPING
+          brand = Object.hasOwn(BRAND_MAPPING, token) ? BRAND_MAPPING[token] : token;
+          for (let j = 0; j < tokens.length; j++) {
+            if (j === i) continue;
+            const otherToken = tokens[j].toLowerCase();
+            if (KNOWN_CITIES_SET.has(otherToken) && !CAR_BRANDS.has(otherToken) && !COMMON_WORDS.has(otherToken)) {
+              city = tokens[j];
+              break;
+            }
+          }
+          if (city) break;
+        }
+      }
+    }
+
     if (!brand || !city) return null;
 
     let confidenceScore = 100;
     const flags = ["brandCityPattern"];
     const confidenceOrigin = "brandCityPattern";
 
-    const nameParts = [brand, city];
+    const nameParts = city.toLowerCase().endsWith("s") ? [city, brand] : [city];
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
-    const companyName = nameResult.name;
+    let companyName = nameResult.name || "";
     nameResult.flags.forEach(flag => flags.push(flag));
 
     confidenceScore = 100;
@@ -575,13 +599,12 @@ function tryBrandGenericPattern(tokens) {
       return null;
     }
 
-    if (!(KNOWN_PROPER_NOUNS instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(BRAND_MAPPING instanceof Map) || !(COMMON_WORDS instanceof Set)) {
+    if (!(KNOWN_PROPER_NOUNS instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(COMMON_WORDS instanceof Set)) {
       log("error", "Invalid dependencies in tryBrandGenericPattern", {
         KNOWN_PROPER_NOUNS: KNOWN_PROPER_NOUNS instanceof Set,
         KNOWN_LAST_NAMES: KNOWN_LAST_NAMES instanceof Set,
         CAR_BRANDS: CAR_BRANDS instanceof Set,
         KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set,
-        BRAND_MAPPING: BRAND_MAPPING instanceof Map,
         COMMON_WORDS: COMMON_WORDS instanceof Set
       });
       return null;
@@ -598,7 +621,6 @@ function tryBrandGenericPattern(tokens) {
       const currentToken = tokens[i].toLowerCase();
       const nextToken = tokens[i + 1].toLowerCase();
 
-      // Check if the current token could be a proper noun
       if (!properNoun && !CAR_BRANDS.has(currentToken) && !KNOWN_CITIES_SET.has(currentToken) && !COMMON_WORDS.has(currentToken)) {
         if (KNOWN_PROPER_NOUNS.has(currentToken) || KNOWN_LAST_NAMES.has(currentToken)) {
           properNoun = tokens[i];
@@ -612,9 +634,12 @@ function tryBrandGenericPattern(tokens) {
       }
 
       if (properNoun && CAR_BRANDS.has(nextToken)) {
-        brand = BRAND_MAPPING.get(nextToken) || nextToken;
-        flags.push("brandIncluded");
-        confidenceScore = Math.max(confidenceScore, 125);
+        // Fixed: Use object-safe access for BRAND_MAPPING
+        if (properNoun.toLowerCase().endsWith("s")) {
+          brand = Object.hasOwn(BRAND_MAPPING, nextToken) ? BRAND_MAPPING[nextToken] : nextToken;
+          flags.push("brandIncluded");
+          confidenceScore = Math.max(confidenceScore, 125);
+        }
         break;
       } else if (properNoun && ["auto", "motors", "dealership"].includes(nextToken)) {
         generic = nextToken;
@@ -637,7 +662,7 @@ function tryBrandGenericPattern(tokens) {
     else if (generic) nameParts.push(generic);
 
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
-    const companyName = cleanCompanyName(nameResult.name) || "";
+    const companyName = cleanCompanyName(nameResult.name || "") || "";
     nameResult.flags.forEach(flag => flags.push(flag));
 
     if (!companyName || CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
@@ -791,8 +816,41 @@ function humanizeName(domain) {
       return result;
     }
 
-    // Try pattern matching
-    let result = tryHumanNamePattern(tokens) || tryProperNounPattern(tokens) || tryBrandCityPattern(tokens) || tryBrandGenericPattern(tokens) || tryGenericPattern(tokens, properNounsSet);
+    // Try pattern matching with error handling
+    let result = null;
+    try {
+      result = tryHumanNamePattern(tokens);
+    } catch (e) {
+      log("error", "tryHumanNamePattern failed", { domain, tokens, error: e.message, stack: e.stack });
+    }
+    if (!result) {
+      try {
+        result = tryProperNounPattern(tokens);
+      } catch (e) {
+        log("error", "tryProperNounPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+      }
+    }
+    if (!result) {
+      try {
+        result = tryBrandCityPattern(tokens);
+      } catch (e) {
+        log("error", "tryBrandCityPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+      }
+    }
+    if (!result) {
+      try {
+        result = tryBrandGenericPattern(tokens);
+      } catch (e) {
+        log("error", "tryBrandGenericPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+      }
+    }
+    if (!result) {
+      try {
+        result = tryGenericPattern(tokens, properNounsSet);
+      } catch (e) {
+        log("error", "tryGenericPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+      }
+    }
 
     if (!result) {
       result = {
@@ -843,3 +901,4 @@ export {
   normalizeDomain,
   extractBrandOfCityFromDomain
 };
+
