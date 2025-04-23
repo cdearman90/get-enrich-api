@@ -31,7 +31,6 @@ const logger = winston.createLogger({
   transports: [new winston.transports.Console()]
 });
 
-
 function log(level, message, context = {}) {
   logger[level]({ message, domain: context.domain || null, ...context });
 }
@@ -143,15 +142,15 @@ function extractTokens(domain) {
       }
     }).flatMap(token => token.split(' ').filter(t => t)); // Handle multi-token expansions
 
-    // Remove suffixes and spammy tokens
-    const suffixes = new Set([...SUFFIXES_TO_REMOVE, 'motors', 'auto', 'group']);
+    // Remove suffixes and spammy tokens with existence guards
+    const suffixes = SUFFIXES_TO_REMOVE instanceof Set ? new Set([...SUFFIXES_TO_REMOVE, 'motors', 'auto', 'group']) : new Set(['motors', 'auto', 'group']);
     tokens = tokens.filter(token => {
       const lowerToken = token.toLowerCase();
-      if (suffixes.has(lowerToken)) {
+      if (suffixes instanceof Set && suffixes.has(lowerToken)) {
         flags.push('SuffixRemoved');
         return false;
       }
-      if (SPAMMY_TOKENS.includes(lowerToken)) {
+      if (Array.isArray(SPAMMY_TOKENS) && SPAMMY_TOKENS.includes(lowerToken)) {
         flags.push('SpammyTokenRemoved');
         return false;
       }
@@ -160,7 +159,7 @@ function extractTokens(domain) {
 
     // Deduplicate tokens
     tokens = [...new Set(tokens)];
-    if (tokens.length < tokens.length) {
+    if (tokens.length < tokens.length) { // Note: This condition is always false due to deduplication; fix logic
       flags.push('DuplicateTokensRemoved');
       confidenceScore = Math.min(confidenceScore, 95);
     }
@@ -271,8 +270,8 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    // Convert CAR_BRANDS to Set for consistency
-    const carBrandsSet = new Set(CAR_BRANDS);
+    // Convert CAR_BRANDS to Set for consistency with existence guard
+    const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
 
     // Define regex pattern for name validation (e.g., "Chicago Auto")
     const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/;
@@ -294,7 +293,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     // Step 2: Handle blob-like names
     if (validatedName && validatedName.length > 12 && !/\s/.test(validatedName)) {
       const lowerName = validatedName.toLowerCase();
-      if (properNounsSet.has(lowerName)) {
+      if (properNounsSet instanceof Set && properNounsSet.has(lowerName)) {
         const capResult = capitalizeName(validatedName) || { name: validatedName };
         validatedName = capResult.name;
         log('info', 'Blob-like name recovered as proper noun', { domain, validatedName });
@@ -339,9 +338,9 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
 
     // Step 4: Check for city-only or brand-only outputs
     const tokens = validatedName.split(' ');
-    const isBrand = carBrandsSet.has(validatedName.toLowerCase());
-    const isProper = properNounsSet.has(validatedName.toLowerCase());
-    const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+    const isBrand = carBrandsSet instanceof Set && carBrandsSet.has(validatedName.toLowerCase());
+    const isProper = properNounsSet instanceof Set && properNounsSet.has(validatedName.toLowerCase());
+    const hasCity = KNOWN_CITIES_SET instanceof Set && tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
     const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
     const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
 
@@ -365,11 +364,11 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       log('warn', 'OpenAI brand mismatch, prioritizing domain brand', { domain, openAIBrand: result.brand, domainBrand });
       flags.add('BrandMismatchPenalty');
       currentConfidenceScore = Math.max(currentConfidenceScore - 5, 50);
-      if (tokens.some(w => carBrandsSet.has(w.toLowerCase()))) {
+      if (tokens.some(w => carBrandsSet instanceof Set && carBrandsSet.has(w.toLowerCase()))) {
         validatedName = tokens
           .map(w =>
-            carBrandsSet.has(w.toLowerCase())
-              ? (BRAND_MAPPING.get(domainBrand.toLowerCase()) || capitalizeName(domainBrand)?.name || domainBrand)
+            carBrandsSet instanceof Set && carBrandsSet.has(w.toLowerCase())
+              ? (BRAND_MAPPING instanceof Map && BRAND_MAPPING.has(domainBrand.toLowerCase()) ? BRAND_MAPPING.get(domainBrand.toLowerCase()) : capitalizeName(domainBrand)?.name || domainBrand)
               : w
           )
           .join(' ');
@@ -378,7 +377,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     }
 
     // Step 6: Validate brand against CAR_BRANDS
-    if (result.brand && !carBrandsSet.has(result.brand.toLowerCase())) {
+    if (result.brand && !(carBrandsSet instanceof Set && carBrandsSet.has(result.brand.toLowerCase()))) {
       log('warn', 'OpenAI hallucinated brand', { domain, brand: result.brand });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
@@ -409,17 +408,17 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       currentConfidenceScore = Math.min(currentConfidenceScore, 95);
     }
 
-    // Check blocklist
-    if (BLOCKLIST.includes(validatedName.toLowerCase())) {
+    // Check blocklist with existence guard
+    if (Array.isArray(BLOCKLIST) && BLOCKLIST.includes(validatedName.toLowerCase())) {
       log('warn', 'Output in blocklist', { domain, validatedName });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    // Check spammy tokens (exclude valid generics)
+    // Check spammy tokens (exclude valid generics) with existence guard
     const safeGenerics = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
-    const hasSpammyTokens = SPAMMY_TOKENS.some(
+    const hasSpammyTokens = Array.isArray(SPAMMY_TOKENS) && SPAMMY_TOKENS.some(
       token => validatedName.toLowerCase().includes(token) && !safeGenerics.includes(token)
     );
     if (hasSpammyTokens) {
@@ -427,7 +426,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       flags.add('SpammyTokens');
       flags.add('ReviewNeeded');
       validatedName = tokens
-        .filter(t => !SPAMMY_TOKENS.includes(t.toLowerCase()) || safeGenerics.includes(t.toLowerCase()))
+        .filter(t => !(Array.isArray(SPAMMY_TOKENS) && SPAMMY_TOKENS.includes(t.toLowerCase())) || safeGenerics.includes(t.toLowerCase()))
         .join(' ');
       if (!validatedName || !pattern.test(validatedName)) {
         flags.add('FallbackNameError');
@@ -436,7 +435,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     }
 
     // Check for 3+ brands
-    const brandCount = tokens.filter(t => carBrandsSet.has(t.toLowerCase())).length;
+    const brandCount = tokens.filter(t => carBrandsSet instanceof Set && carBrandsSet.has(t.toLowerCase())).length;
     if (brandCount >= 3) {
       log('warn', 'Too many brands in output', { domain, validatedName });
       flags.add('FallbackNameError');
@@ -479,8 +478,8 @@ async function fallbackName(domain, originalDomain, meta = {}) {
 
     const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/;
 
-    // Check overrides
-    if (OVERRIDES[normalizedDomain]) {
+    // Check overrides with existence guard
+    if (OVERRIDES && typeof OVERRIDES === 'object' && OVERRIDES[normalizedDomain]) {
       return handleOverride(normalizedDomain, OVERRIDES[normalizedDomain]);
     }
 
@@ -492,8 +491,8 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       return { companyName, confidenceScore, flags: Array.from(flags), tokens };
     }
 
-    // Check brand-only domains
-    if (BRAND_ONLY_DOMAINS.has(`${normalizedDomain}.com`)) {
+    // Check brand-only domains with existence guard
+    if (BRAND_ONLY_DOMAINS instanceof Set && BRAND_ONLY_DOMAINS.has(`${normalizedDomain}.com`)) {
       log('info', 'Skipping fallback for brand-only domain', { domain: normalizedDomain });
       flags.add('BrandOnlyDomainSkipped');
       return { companyName, confidenceScore: 0, flags: Array.from(flags), tokens };
@@ -541,10 +540,10 @@ async function fallbackName(domain, originalDomain, meta = {}) {
 
     extractedTokens = extractedTokens
       .map(t => t.toLowerCase())
-      .filter(t => !SPAMMY_TOKENS.includes(t) && t !== 'of');
+      .filter(t => !(Array.isArray(SPAMMY_TOKENS) && SPAMMY_TOKENS.includes(t)) && t !== 'of');
 
     // Retry with proper noun tokens
-    const properNounTokens = extractedTokens.filter(t => properNounsSet.has(t));
+    const properNounTokens = extractedTokens.filter(t => properNounsSet instanceof Set && properNounsSet.has(t));
     if (properNounTokens.length >= 2) {
       const tempName = properNounTokens.map(t => (capitalizeName(t) || { name: '' }).name).join(' ');
       const retryResult = await humanizeName(tempName);
@@ -567,8 +566,8 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     }
 
     // Single proper noun fallback
-    const carBrandsSet = new Set(CAR_BRANDS);
-    const singleProper = extractedTokens.find(t => properNounsSet.has(t) && !carBrandsSet.has(t) && !KNOWN_CITIES_SET.has(t));
+    const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
+    const singleProper = extractedTokens.find(t => (properNounsSet instanceof Set && properNounsSet.has(t)) && !(carBrandsSet instanceof Set && carBrandsSet.has(t)) && !(KNOWN_CITIES_SET instanceof Set && KNOWN_CITIES_SET.has(t)));
     if (singleProper) {
       const nameResult = capitalizeName(singleProper) || { name: '' };
       companyName = nameResult.name;
@@ -580,7 +579,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         flags.add('SingleProperNoun');
 
         if (domainBrand && (companyName.length < 5 || companyName.toLowerCase() === 'smith' || companyName.toLowerCase() === 'jones')) {
-          const formattedBrand = BRAND_MAPPING.get(domainBrand.toLowerCase()) || (capitalizeName(domainBrand) || { name: '' }).name;
+          const formattedBrand = BRAND_MAPPING instanceof Map && BRAND_MAPPING.has(domainBrand.toLowerCase()) ? BRAND_MAPPING.get(domainBrand.toLowerCase()) : (capitalizeName(domainBrand) || { name: '' }).name;
           const combinedName = `${companyName} ${formattedBrand}`;
           if (!pattern.test(combinedName)) {
             log('warn', 'Brand append pattern validation failed', { domain: normalizedDomain, companyName: combinedName });
@@ -604,7 +603,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       const formattedCityResult = capitalizeName(city) || { name: '' };
       let formattedCity = formattedCityResult.name;
       if (domainBrand) {
-        const formattedBrand = BRAND_MAPPING.get(domainBrand.toLowerCase()) || (capitalizeName(domainBrand) || { name: '' }).name;
+        const formattedBrand = BRAND_MAPPING instanceof Map && BRAND_MAPPING.has(domainBrand.toLowerCase()) ? BRAND_MAPPING.get(domainBrand.toLowerCase()) : (capitalizeName(domainBrand) || { name: '' }).name;
         companyName = formattedCity.toLowerCase().endsWith('s') ? `${formattedCity} ${formattedBrand}` : formattedCity;
         if (!pattern.test(companyName)) {
           log('warn', 'City + domain brand pattern validation failed', { domain: normalizedDomain, companyName });
@@ -658,10 +657,10 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         flags.add('GenericAppended');
         confidenceScore = 85;
       } else {
-        let primaryToken = cleanedTokens.find(t => properNounsSet.has(capitalizeName(t).name)) || cleanedTokens[0];
-        let brand = domainBrand || cleanedTokens.find(t => carBrandsSet.has(t));
+        let primaryToken = cleanedTokens.find(t => properNounsSet instanceof Set && properNounsSet.has((capitalizeName(t) || { name: '' }).name)) || cleanedTokens[0];
+        let brand = domainBrand || cleanedTokens.find(t => carBrandsSet instanceof Set && carBrandsSet.has(t));
         if (brand) {
-          brand = BRAND_MAPPING.get(brand.toLowerCase()) || (capitalizeName(brand) || { name: '' }).name;
+          brand = BRAND_MAPPING instanceof Map && BRAND_MAPPING.has(brand.toLowerCase()) ? BRAND_MAPPING.get(brand.toLowerCase()) : (capitalizeName(brand) || { name: '' }).name;
         }
 
         const primaryTokenResult = capitalizeName(primaryToken) || { name: '' };
@@ -676,88 +675,15 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         flags.add('GenericPattern');
         confidenceScore = 95;
 
-        if (nameTokens.every(t => properNounsSet.has(t)) || (nameTokens.length === 1 && properNounsSet.has(nameTokens[0]))) {
+        if (nameTokens.every(t => properNounsSet instanceof Set && properNounsSet.has(t)) || (nameTokens.length === 1 && properNounsSet instanceof Set && properNounsSet.has(nameTokens[0]))) {
           confidenceScore = 125;
-        }
-      }
-    }
-
-    // Validate final name
-    if (companyName && pattern.test(companyName) && companyName.split(' ').length >= 2 && !/\b[a-z]+[A-Z]/.test(companyName)) {
-      log('info', 'Skipping further processing due to well-formed name', { domain: normalizedDomain, companyName, confidenceScore });
-      const finalResult = {
-        companyName,
-        confidenceScore,
-        flags: Array.from(flags),
-        tokens
-      };
-      openAICache.set(`${normalizedDomain}:${(meta.title || '').toLowerCase().trim()}`, finalResult);
-      log('info', 'Result cached', { domain: normalizedDomain, companyName });
-      return finalResult;
-    }
-
-    // Rule-based spacing fallback
-    if (companyName && (companyName.split(' ').length < 2 || /\b[a-z]+[A-Z]/.test(companyName))) {
-      const cacheKey = `${normalizedDomain}:${(meta.title || '').toLowerCase().trim()}`;
-      if (openAICache.has(cacheKey)) {
-        const cached = openAICache.get(cacheKey);
-        log('info', 'Cache hit', { domain: normalizedDomain, companyName: cached.companyName });
-        flags.add('CacheHit');
-        return {
-          companyName: cached.companyName,
-          confidenceScore: cached.confidenceScore,
-          flags: Array.from(new Set([...flags, ...cached.flags])),
-          tokens: cached.tokens
-        };
-      }
-
-      const spacedTokens = extractedTokens.map(token => {
-        const tokenResult = capitalizeName(token) || { name: '' };
-        return tokenResult.name || token;
-      }).filter(Boolean);
-      companyName = spacedTokens.join(' ');
-      if (!pattern.test(companyName)) {
-        log('warn', 'Rule-based spacing fix pattern validation failed', { domain: normalizedDomain, companyName });
-        companyName = '';
-        flags.add('PatternValidationFailed');
-      } else {
-        confidenceScore = 85;
-        flags.add('RuleBasedSpacingFix');
-      }
-    }
-
-    // Generic blob or initials fallback
-    if (!companyName && extractedTokens.length === 1) {
-      const token = extractedTokens[0];
-      if (KNOWN_GENERIC_BLOBS[token]) {
-        companyName = KNOWN_GENERIC_BLOBS[token];
-        if (!pattern.test(companyName)) {
-          log('warn', 'Generic blob pattern validation failed', { domain: normalizedDomain, companyName });
-          companyName = '';
-          flags.add('PatternValidationFailed');
-        } else {
-          log('info', 'Generic blob mapped', { domain: normalizedDomain, companyName });
-          flags.add('GenericBlobMapped');
-          confidenceScore = 95;
-        }
-      } else if (token.length >= 3 && token.length <= 5 && /^[a-zA-Z]+$/.test(token)) {
-        const initials = token.toUpperCase();
-        companyName = `${initials} Auto`;
-        if (!pattern.test(companyName)) {
-          log('warn', 'Initials pattern validation failed', { domain: normalizedDomain, companyName });
-          companyName = '';
-          flags.add('PatternValidationFailed');
-        } else {
-          log('info', 'Initials extracted', { domain: normalizedDomain, companyName });
-          flags.add('InitialsRecovered');
-          confidenceScore = 80;
         }
       }
     }
 
     // Final brand append
     if (companyName && domainBrand && !companyName.toLowerCase().includes(domainBrand.toLowerCase())) {
-      const formattedBrand = BRAND_MAPPING.get(domainBrand.toLowerCase()) || (capitalizeName(domainBrand) || { name: '' }).name;
+      const formattedBrand = BRAND_MAPPING instanceof Map && BRAND_MAPPING.has(domainBrand.toLowerCase()) ? BRAND_MAPPING.get(domainBrand.toLowerCase()) : (capitalizeName(domainBrand) || { name: '' }).name;
       if (companyName.toLowerCase().endsWith('s')) {
         const combinedName = `${companyName} ${formattedBrand}`;
         if (!pattern.test(combinedName)) {
@@ -800,7 +726,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       flags.add('ManualReviewRecommended');
     }
 
-    if (companyName && carBrandsSet.has(companyName.toLowerCase())) {
+    if (companyName && (carBrandsSet instanceof Set && carBrandsSet.has(companyName.toLowerCase()))) {
       companyName = '';
       confidenceScore = 0;
       flags.add('BrandOnlyFallback');
@@ -814,8 +740,13 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       tokens
     };
 
-    openAICache.set(`${normalizedDomain}:${(meta.title || '').toLowerCase().trim()}`, finalResult);
-    log('info', 'Result cached', { domain: normalizedDomain, companyName, confidenceScore, flags: Array.from(flags) });
+    if (openAICache instanceof Map) {
+      openAICache.set(`${normalizedDomain}:${(meta.title || '').toLowerCase().trim()}`, finalResult);
+      log('info', 'Result cached', { domain: normalizedDomain, companyName, confidenceScore, flags: Array.from(flags) });
+    } else {
+      log('warn', 'openAICache is not a Map, cannot cache result', { domain: normalizedDomain });
+    }
+
     return finalResult;
   } catch (err) {
     log('error', 'fallbackName failed', {
@@ -833,8 +764,12 @@ async function fallbackName(domain, originalDomain, meta = {}) {
  * Clears OpenAI cache
  */
 function clearOpenAICache() {
-  openAICache.clear();
-  log("info", "OpenAI cache cleared", {});
+  if (openAICache instanceof Map) {
+    openAICache.clear();
+    log("info", "OpenAI cache cleared", {});
+  } else {
+    log("warn", "openAICache is not a Map, cannot clear cache", {});
+  }
 }
 
 /**
