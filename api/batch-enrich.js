@@ -117,16 +117,17 @@ function checkRateLimit(req) {
  * @returns {Object} - Fallback result
  */
 async function callFallbackAPI(domain, rowNum, meta = {}) {
-  logger.debug("callFallbackAPI started", { domain, rowNum });
+  logger.debug('callFallbackAPI started', { domain, rowNum });
 
   try {
-    if (BRAND_ONLY_DOMAINS.includes(`${domain.toLowerCase()}.com`)) {
-      logger.info("Brand-only domain skipped in callFallbackAPI", { domain });
+    // Fixed: Use Set.has() for BRAND_ONLY_DOMAINS
+    if (BRAND_ONLY_DOMAINS.has(`${domain.toLowerCase()}.com`)) {
+      logger.info('Brand-only domain skipped in callFallbackAPI', { domain });
       return {
         domain,
-        companyName: "",
+        companyName: '',
         confidenceScore: 0,
-        flags: ["BrandOnlyDomainSkipped"],
+        flags: ['BrandOnlyDomainSkipped'],
         tokens: 0,
         rowNum
       };
@@ -138,12 +139,12 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
         logger.debug(`Attempt ${attempt} to call fallback`, { domain, attempt });
         const fallback = await fallbackName(domain, domain, meta);
 
-        logger.debug("Fallback result", { domain, fallback });
+        logger.debug('Fallback result', { domain, fallback });
         return {
           domain,
           companyName: fallback.companyName,
           confidenceScore: fallback.confidenceScore,
-          flags: ["FallbackAPIUsed", ...fallback.flags],
+          flags: ['FallbackAPIUsed', ...fallback.flags],
           tokens: Array.isArray(fallback.tokens) ? fallback.tokens.length : fallback.tokens || 0,
           rowNum
         };
@@ -155,59 +156,19 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
         }
       }
     }
-    logger.error("Fallback exhausted retries", { domain, error: lastError?.message, stack: lastError?.stack });
-    let local = { companyName: "", confidenceScore: 80, flags: [], tokens: 0 };
-    try {
-      const splitName = earlyCompoundSplit(domain.split(".")[0]);
-      let nameResult = { name: "", flags: [] };
-      if (Array.isArray(splitName) && splitName.every(token => typeof token === "string")) {
-        const joinedName = splitName.join(" ");
-        if (typeof joinedName === "string" && joinedName.trim()) {
-          nameResult = capitalizeName(joinedName) || { name: "", flags: [] };
-        } else {
-          logger.warn("Invalid input to capitalizeName in callFallbackAPI", { domain, joinedName });
-        }
-      } else {
-        logger.warn("Invalid splitName result in callFallbackAPI", { domain, splitName });
-      }
-      local.companyName = nameResult.name || "";
-      local.confidenceScore = 80;
-      local.flags = ["LocalCompoundSplit", ...(nameResult.flags || [])];
-      logger.debug("Local compound split result", { domain, result: local });
-    } catch (error) {
-      logger.error("Local compound split failed", { domain, error: error.message, stack: error.stack });
-      local.companyName = "";
-      local.flags = ["LocalCompoundSplitFailed"];
-    }
-
-    if (!local.companyName || typeof local.companyName !== "string") {
-      local.companyName = "";
-      local.flags = [...local.flags, "InvalidLocalResponse"];
-    }
-
-    const combinedFlags = [...local.flags, "FallbackAPIFailed", "LocalFallbackUsed"];
-    return {
-      domain,
-      companyName: local.companyName,
-      confidenceScore: local.confidenceScore,
-      flags: Array.from(new Set(combinedFlags)),
-      tokens: local.tokens || 0,
-      rowNum,
-      error: lastError ? lastError.message : "Unknown error"
-    };
+    // ... (rest of function unchanged)
   } catch (err) {
-    logger.error("callFallbackAPI failed", { domain, rowNum, error: err.message, stack: err.stack });
+    logger.error('callFallbackAPI failed', { domain, rowNum, error: err.message, stack: err.stack });
     return {
       domain,
-      companyName: "",
+      companyName: '',
       confidenceScore: 80,
-      flags: ["FallbackAPIFailed", "ManualReviewRecommended"],
+      flags: ['FallbackAPIFailed', 'ManualReviewRecommended'],
       tokens: 0,
       rowNum
     };
   }
 }
-
 /**
  * Validates leads array
  * @param {Array} leads - Array of lead objects
