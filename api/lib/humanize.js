@@ -316,12 +316,11 @@ function tryHumanNamePattern(tokens) {
       return null;
     }
 
-    if (!(KNOWN_FIRST_NAMES instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(BRAND_MAPPING instanceof Map) || !(KNOWN_CITIES_SET instanceof Set)) {
+    if (!(KNOWN_FIRST_NAMES instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
       log("error", "Invalid dependencies in tryHumanNamePattern", {
         KNOWN_FIRST_NAMES: KNOWN_FIRST_NAMES instanceof Set,
         KNOWN_LAST_NAMES: KNOWN_LAST_NAMES instanceof Set,
         CAR_BRANDS: CAR_BRANDS instanceof Set,
-        BRAND_MAPPING: BRAND_MAPPING instanceof Map,
         KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set
       });
       return null;
@@ -349,9 +348,9 @@ function tryHumanNamePattern(tokens) {
     for (let i = tokens.indexOf(lastName) + 1; i < tokens.length; i++) {
       const token = tokens[i].toLowerCase();
       if (CAR_BRANDS.has(token)) {
-        // Only include the brand if the last name ends in 's' (e.g., "Avis" → "Avis Ford")
+        // Fixed: Use object-safe access for BRAND_MAPPING
         if (lastName.toLowerCase().endsWith("s")) {
-          brand = BRAND_MAPPING.get(token) || token;
+          brand = Object.hasOwn(BRAND_MAPPING, token) ? BRAND_MAPPING[token] : token;
           flags.push("brandIncluded");
           confidenceScore = 125;
         }
@@ -519,21 +518,19 @@ function tryBrandCityPattern(tokens) {
       return null;
     }
 
-    // Try extractBrandOfCityFromDomain first
     const domain = tokens.join("");
     let brandCityResult = extractBrandOfCityFromDomain(domain) || { brand: "", city: "" };
     let brand = brandCityResult.brand;
     let city = brandCityResult.city;
 
-    // Fallback: Manually check for brand + city if extractBrandOfCityFromDomain fails
     if (!brand || !city) {
       for (let i = 0; i < tokens.length; i++) {
         const token = tokens[i].toLowerCase();
         if (CAR_BRANDS.has(token)) {
-          brand = BRAND_MAPPING.get(token) || token;
-          // Look for city before or after the brand
+          // Fixed: Use object-safe access for BRAND_MAPPING
+          brand = Object.hasOwn(BRAND_MAPPING, token) ? BRAND_MAPPING[token] : token;
           for (let j = 0; j < tokens.length; j++) {
-            if (j === i) continue; // Skip the brand token
+            if (j === i) continue;
             const otherToken = tokens[j].toLowerCase();
             if (KNOWN_CITIES_SET.has(otherToken) && !CAR_BRANDS.has(otherToken) && !COMMON_WORDS.has(otherToken)) {
               city = tokens[j];
@@ -551,7 +548,6 @@ function tryBrandCityPattern(tokens) {
     const flags = ["brandCityPattern"];
     const confidenceOrigin = "brandCityPattern";
 
-    // Only include the brand if the city ends in 's' (e.g., "Avis" → "Avis Ford")
     const nameParts = city.toLowerCase().endsWith("s") ? [city, brand] : [city];
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
     let companyName = nameResult.name || "";
@@ -603,13 +599,12 @@ function tryBrandGenericPattern(tokens) {
       return null;
     }
 
-    if (!(KNOWN_PROPER_NOUNS instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(BRAND_MAPPING instanceof Map) || !(COMMON_WORDS instanceof Set)) {
+    if (!(KNOWN_PROPER_NOUNS instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(COMMON_WORDS instanceof Set)) {
       log("error", "Invalid dependencies in tryBrandGenericPattern", {
         KNOWN_PROPER_NOUNS: KNOWN_PROPER_NOUNS instanceof Set,
         KNOWN_LAST_NAMES: KNOWN_LAST_NAMES instanceof Set,
         CAR_BRANDS: CAR_BRANDS instanceof Set,
         KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set,
-        BRAND_MAPPING: BRAND_MAPPING instanceof Map,
         COMMON_WORDS: COMMON_WORDS instanceof Set
       });
       return null;
@@ -626,7 +621,6 @@ function tryBrandGenericPattern(tokens) {
       const currentToken = tokens[i].toLowerCase();
       const nextToken = tokens[i + 1].toLowerCase();
 
-      // Check if the current token could be a proper noun
       if (!properNoun && !CAR_BRANDS.has(currentToken) && !KNOWN_CITIES_SET.has(currentToken) && !COMMON_WORDS.has(currentToken)) {
         if (KNOWN_PROPER_NOUNS.has(currentToken) || KNOWN_LAST_NAMES.has(currentToken)) {
           properNoun = tokens[i];
@@ -640,9 +634,9 @@ function tryBrandGenericPattern(tokens) {
       }
 
       if (properNoun && CAR_BRANDS.has(nextToken)) {
-        // Only include the brand if the proper noun ends in 's'
+        // Fixed: Use object-safe access for BRAND_MAPPING
         if (properNoun.toLowerCase().endsWith("s")) {
-          brand = BRAND_MAPPING.get(nextToken) || nextToken;
+          brand = Object.hasOwn(BRAND_MAPPING, nextToken) ? BRAND_MAPPING[nextToken] : nextToken;
           flags.push("brandIncluded");
           confidenceScore = Math.max(confidenceScore, 125);
         }
