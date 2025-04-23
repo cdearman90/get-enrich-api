@@ -17,7 +17,7 @@ import {
   SORTED_CITY_LIST,
   TEST_CASE_OVERRIDES,
   properNounsSet
-} from "./constants.js";
+} from "./lib/constants.js";
 
 const logger = winston.createLogger({
   level: "debug",
