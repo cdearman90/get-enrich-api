@@ -1581,6 +1581,14 @@ function splitMergedTokens(name) {
   }
 }
 
+/**
+ * Validates OpenAI fallback name to ensure it meets cold-email-safe criteria.
+ * @param {Object} result - OpenAI result { name: string, brand: string | null, flagged: boolean }.
+ * @param {string} domain - The input domain (e.g., "chevyofcolumbuschevrolet.com").
+ * @param {string | null} domainBrand - Brand detected from domain (e.g., "Chevrolet").
+ * @param {number} confidenceScore - Initial confidence score.
+ * @returns {Object} - { validatedName: string | null, flags: string[], confidenceScore: number }.
+ */
 function validateFallbackName(result, domain, domainBrand, confidenceScore = 80) {
   const flags = new Set();
   let validatedName = result.name?.trim();
@@ -1589,22 +1597,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
   log('info', 'validateFallbackName started', { domain, result });
 
   try {
-    // Step 1: Initial validation and override check
-    const normalizedDomain = domain.endsWith('.com') ? domain : `${domain}.com`;
-    const isOverride = OVERRIDES[normalizedDomain];
-    if (isOverride) {
-      validatedName = OVERRIDES[normalizedDomain];
-      log('info', 'Override applied', { domain, validatedName });
-      flags.add('OverrideApplied');
-      currentConfidenceScore = 125;
-      const capResult = capitalizeName(validatedName) || { name: validatedName };
-      return {
-        validatedName: capResult.name,
-        flags: Array.from(flags),
-        confidenceScore: currentConfidenceScore
-      };
-    }
-
+    // Step 1: Initial validation
     if (!result || !validatedName || typeof validatedName !== "string") {
       log('warn', 'Invalid OpenAI result', { domain, result });
       flags.add('FallbackNameError');
@@ -1639,31 +1632,45 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
-    // Step 4: Capitalize name with domainBrand
-    const capResult = capitalizeName(validatedName, domainBrand, domain) || { name: validatedName };
+    // Step 4: Capitalize name
+    const capResult = capitalizeName(validatedName) || { name: validatedName };
     validatedName = capResult.name;
     tokens = validatedName.split(' ').filter(Boolean);
-    flags.add(...capResult.flags);
 
     // Step 5: Validate name length and pattern
     const pattern = /^(?:[A-Z]\.[A-Z]\.|(?:[A-Z][a-z]+|[A-Z]+)(?: (?:[A-Z][a-z]+|[A-Z]+))*)$/;
-    const isValidSingleToken = tokens.length === 1 && 
-      !CAR_BRANDS.has(validatedName.toLowerCase()) && 
-      !KNOWN_CITIES_SET.has(validatedName.toLowerCase());
-    if (!pattern.test(validatedName) || tokens.length > 4) {
-      log('warn', 'Uncapitalized, malformed, or excessive token count', { domain, validatedName, tokenCount: tokens.length });
-      flags.add('FallbackNameError');
-      flags.add('ReviewNeeded');
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+    const isOverride = OVERRIDES[domain.endsWith('.com') ? domain : `${domain}.com`];
+    if (!pattern.test(validatedName) || (tokens.length < 2 && !isOverride) || tokens.length > 4) {
+      if (isOverride && tokens.length === 1 && pattern.test(validatedName)) {
+        log('info', 'Single-token override allowed', { domain, validatedName });
+        flags.add('SingleTokenOverride');
+      } else {
+        log('warn', 'Uncapitalized, malformed, or invalid token count', { domain, validatedName, tokenCount: tokens.length });
+        flags.add('FallbackNameError');
+        flags.add('ReviewNeeded');
+        return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+      }
     }
 
-    // Step 6: Check for city-only or brand-only outputs
-    const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase())) || 
-                    KNOWN_CITIES_SET.has(validatedName.toLowerCase());
+    // Step 6: Check for overrides
+    const normalizedDomain = domain.endsWith('.com') ? domain : `${domain}.com`;
+    if (OVERRIDES[normalizedDomain]) {
+      const overrideName = OVERRIDES[normalizedDomain];
+      if (validatedName !== overrideName) {
+        log('warn', 'OpenAI name does not match override', { domain, validatedName, override: overrideName });
+        validatedName = overrideName;
+        currentConfidenceScore = 125;
+        flags.add('OverrideApplied');
+      }
+    }
+
+    // Step 7: Check for city-only or brand-only outputs
     const isBrand = CAR_BRANDS.has(validatedName.toLowerCase());
+    const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase())) || KNOWN_CITIES_SET.has(validatedName.toLowerCase());
     const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cars', 'drive', 'center', 'world'];
     const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
 
+    // Strict city-only check
     if (hasCity && !hasGeneric && tokens.length <= 2) {
       log('warn', 'City-only output detected', { domain, validatedName });
       flags.add('CityOnlyFallback');
@@ -1671,47 +1678,35 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       return { validatedName: null, flags: Array.from(flags), confidenceScore: 50 };
     }
 
-    if (isBrand && tokens.length === 1) {
+    if (isBrand && tokens.length === 1 && !isOverride) {
       log('warn', 'Brand-only output detected', { domain, validatedName });
       flags.add('BrandOnlyFallback');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: 50 };
     }
 
-    // Step 7: Handle brand mismatch
+    // Step 8: Handle brand mismatch
     if (result.brand && domainBrand && result.brand.toLowerCase() !== domainBrand.toLowerCase()) {
       log('warn', 'OpenAI brand mismatch, prioritizing domain brand', { domain, openAIBrand: result.brand, domainBrand });
       flags.add('BrandMismatchPenalty');
       currentConfidenceScore = Math.max(currentConfidenceScore - 5, 50);
-      const lowerDomainBrand = domainBrand.toLowerCase();
-      const hasBrandToken = tokens.some(w => w.toLowerCase() === lowerDomainBrand || CAR_BRANDS.has(w.toLowerCase()));
-      if (!hasBrandToken) {
-        tokens.push(domainBrand);
-        validatedName = tokens.join(' ');
+      if (tokens.some(w => CAR_BRANDS.has(w.toLowerCase()))) {
+        validatedName = tokens
+          .map(w => CAR_BRANDS.has(w.toLowerCase()) ? domainBrand : w)
+          .join(' ');
         flags.add('DomainBrandApplied');
       }
     }
 
-    // Step 8: Validate brand against CAR_BRANDS
+    // Step 9: Validate brand against CAR_BRANDS
     if (result.brand && !CAR_BRANDS.has(result.brand.toLowerCase())) {
-      log('warn', 'OpenAI hallucinated brand, using domain brand', { domain, brand: result.brand });
-      flags.add('BrandHallucination');
-      if (domainBrand && CAR_BRANDS.has(domainBrand.toLowerCase())) {
-        const lowerDomainBrand = domainBrand.toLowerCase();
-        const hasBrandToken = tokens.some(w => w.toLowerCase() === lowerDomainBrand || CAR_BRANDS.has(w.toLowerCase()));
-        if (!hasBrandToken) {
-          tokens.push(domainBrand);
-          validatedName = tokens.join(' ');
-          flags.add('DomainBrandApplied');
-        }
-      } else {
-        flags.add('FallbackNameError');
-        flags.add('ReviewNeeded');
-        return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
-      }
+      log('warn', 'OpenAI hallucinated brand', { domain, brand: result.brand });
+      flags.add('FallbackNameError');
+      flags.add('ReviewNeeded');
+      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    // Step 9: Remove suffixes and spammy tokens
+    // Step 10: Remove suffixes and spammy tokens
     tokens = validatedName.split(' ').filter(Boolean);
     const suffixesSet = new Set(SUFFIXES_TO_REMOVE.map(s => s.toLowerCase()));
     const filteredTokens = tokens.filter(token => {
@@ -1742,24 +1737,23 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    // Step 10: Check for duplicates
+    // Step 11: Check for duplicates
     tokens = validatedName.split(' ').filter(Boolean);
     const words = tokens.map(w => w.toLowerCase());
     const uniqueWords = [...new Set(words)];
     if (uniqueWords.length !== words.length) {
-      log('info', 'Duplicate tokens removed', { domain, validatedName });
+      log('warn', 'Duplicate tokens in output', { domain, validatedName });
       validatedName = uniqueWords
-        .map(t => tokens[words.indexOf(t)]) // Preserve original case
+        .map(t => capitalizeName(t)?.name || t)
         .join(' ');
       flags.add('DuplicatesRemoved');
       currentConfidenceScore = Math.min(currentConfidenceScore, 95);
     }
 
-    // Step 11: Final city-only/brand-only check
+    // Step 12: Final city-only/brand-only check after filtering
     tokens = validatedName.split(' ').filter(Boolean);
     const isFinalBrand = CAR_BRANDS.has(validatedName.toLowerCase());
-    const hasFinalCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase())) || 
-                         KNOWN_CITIES_SET.has(validatedName.toLowerCase());
+    const hasFinalCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase())) || KNOWN_CITIES_SET.has(validatedName.toLowerCase());
     const hasFinalGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
 
     if (hasFinalCity && !hasFinalGeneric && tokens.length <= 2) {
@@ -1769,17 +1763,16 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       return { validatedName: null, flags: Array.from(flags), confidenceScore: 50 };
     }
 
-    if (isFinalBrand && tokens.length === 1) {
+    if (isFinalBrand && tokens.length === 1 && !isOverride) {
       log('warn', 'Brand-only output after filtering', { domain, validatedName });
       flags.add('BrandOnlyFallback');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: 50 };
     }
 
-    // Step 12: Adjust confidence based on token count
-    if (tokens.length === 1) {
+    // Step 13: Adjust confidence based on token count
+    if (tokens.length === 1 && !isOverride) {
       currentConfidenceScore = Math.min(currentConfidenceScore, 95);
-      flags.add('SingleTokenWarning');
     } else if (tokens.length >= 2) {
       currentConfidenceScore = Math.max(currentConfidenceScore, 125);
     }
@@ -1799,6 +1792,14 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
   }
 }
 
+/**
+ * Fallback logic for low-confidence or failed humanize results
+ * @param {string} domain - Domain to enrich
+ * @param {string} originalDomain - Original domain for override lookup
+ * @param {Object} meta - Meta data
+ * @returns {{companyName: string, confidenceScore: number, flags: string[], tokens: number}} - Enriched result
+ */
+// Location: /api/batch-enrich-company-name-fallback.js, replace fallbackName function
 async function fallbackName(domain, originalDomain, meta = {}) {
   const normalizedDomain = normalizeDomain(domain);
   let companyName = '';
@@ -2348,4 +2349,4 @@ async function handler(req, res) {
   }
 }
 
-export { fallbackName, clearOpenAICache, BRAND_ONLY_DOMAINS, handler, validateFallbackName, cleanCompanyName, validateOverrideFormat, handleOverride, fetchMetaData, getMetaTitleBrand };
+export { fallbackName, clearOpenAICache, handler, validateFallbackName, cleanCompanyName, validateOverrideFormat, handleOverride, fetchMetaData, getMetaTitleBrand };

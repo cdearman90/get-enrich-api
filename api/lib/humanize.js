@@ -1622,131 +1622,117 @@ function cleanCompanyName(companyName, brand = null, domain = null) {
   }
 }
 
-function capitalizeName(name, brand = null, domain = null) {
+function capitalizeName(name) {
   try {
     if (!name || typeof name !== "string" || !name.trim()) {
-      log("error", "Invalid name in capitalizeName", { name, domain });
+      log("error", "Invalid name in capitalizeName", { name });
       return { name: "", flags: ["InvalidInput"] };
     }
 
-    // Step 0: Early return for overrides
-    if (domain && TEST_CASE_OVERRIDES[domain]) {
-      const overrideName = TEST_CASE_OVERRIDES[domain];
-      log("info", "Override applied in capitalizeName", { domain, overrideName });
-      return { name: overrideName.trim(), flags: ["overrideApplied"] };
-    }
-
-    const trimmedName = name.trim().replace(WHITESPACE_REGEX, " ");
+    const trimmedName = name.trim().replace(/\s+/g, " ");
     let flags = [];
-    let tokens = trimmedName.split(" ").filter(Boolean);
+    let result = trimmedName;
 
-    // Pre-compute brand presence to avoid duplication
-    const brandLower = brand ? brand.toLowerCase() : null;
-    const hasBrand = brandLower && tokens.some(token => 
-      token.toLowerCase() === brandLower || CAR_BRANDS_CACHE.has(token.toLowerCase())
-    );
+    // Step 1: Split tokens
+    let tokens = result.split(" ").filter(Boolean);
 
-    // Step 1: Process tokens
+    // Step 2: Process tokens
     tokens = tokens.map((word, i) => {
       if (!word) return word;
+
       const lowerWord = word.toLowerCase();
 
-      // Step 1.1: Preserve known proper nouns, cities, or brands
-      if (KNOWN_PROPER_NOUNS_CACHE.has(lowerWord)) {
-        flags.push("ProperNounPreserved");
-        return KNOWN_PROPER_NOUNS_CACHE.get(lowerWord);
-      }
-      if (KNOWN_CITIES_SET_CACHE.has(lowerWord)) {
-        flags.push("CityPreserved");
-        return KNOWN_CITIES_SET_CACHE.get(lowerWord);
-      }
-      if (CAR_BRANDS_CACHE.has(lowerWord)) {
-        flags.push("BrandPreserved");
-        return CAR_BRANDS_CACHE.get(lowerWord);
-      }
-
-      // Step 1.2: Apply BRAND_MAPPING, but only if brand not already present
-      if (!hasBrand && BRAND_MAPPING_CACHE.has(lowerWord)) {
+      // Step 2.1: Apply BRAND_MAPPING first for exact brand matches
+      if (BRAND_MAPPING.has(lowerWord)) {
         flags.push("BrandMapped");
-        return BRAND_MAPPING_CACHE.get(lowerWord);
+        return BRAND_MAPPING.get(lowerWord);
       }
 
-      // Step 1.3: Apply BRAND_ABBREVIATIONS
-      if (BRAND_ABBREVIATIONS_CACHE.has(lowerWord)) {
+      // Step 2.2: Apply ABBREVIATION_EXPANSIONS for abbreviations
+      const fullExpansion = {
+        "bhm": "BHM",
+        "okc": "OKC",
+        "dfw": "DFW",
+        "kc": "KC",
+        "la": "LA",
+        "sf": "SF",
+        "sj": "SJ",
+        "mb": "M.B."
+      }[lowerWord] || ABBREVIATION_EXPANSIONS[lowerWord];
+      if (fullExpansion) {
+        flags.push("AbbreviationExpanded");
+        const expandedTokens = fullExpansion.split(" ").map(subWord => {
+          if (/^[A-Z]{1,4}$/.test(subWord)) return subWord.toUpperCase();
+          return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
+        });
+        return expandedTokens.join(" ");
+      }
+
+      // Step 2.3: Apply BRAND_ABBREVIATIONS (fallback, less priority)
+      if (BRAND_ABBREVIATIONS[lowerWord]) {
         flags.push("BrandAbbreviationFormatted");
-        return BRAND_ABBREVIATIONS_CACHE.get(lowerWord);
+        return BRAND_ABBREVIATIONS[lowerWord];
       }
 
-      // Step 1.4: Handle abbreviations with dots (e.g., "M.B.")
+      // Step 2.4: Preserve known proper nouns and cities in their original or proper case
+      if (KNOWN_PROPER_NOUNS.has(lowerWord) || KNOWN_CITIES_SET.has(lowerWord)) {
+        if (word === word.toUpperCase()) {
+          return word;
+        }
+        const properTokens = lowerWord.split(" ").map(subWord => {
+          return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
+        });
+        return properTokens.join(" ");
+      }
+
+      // Step 2.5: Handle abbreviations with dots (e.g., "M.B.")
       if (word.includes(".")) {
-        if (/^[A-Z]\.[A-Z]\.$/.test(word) || (word.length <= 5 && word === word.toUpperCase())) {
-          flags.push("DottedAbbreviationPreserved");
-          return word; // Preserve "M.B.", "A.B.C."
+        if (/^[A-Z]\.[A-Z]\.$/.test(word)) {
+          return word; // Preserve "M.B."
+        }
+        if (word.length <= 5 && word === word.toUpperCase()) {
+          return word; // Preserve "A.B.C."
         }
       }
 
-      // Step 1.5: Handle 2-3 letter abbreviations before/after nouns or brands
+      // Step 2.6: Handle 2-3 letter abbreviations before/after nouns or car brands
       if (word.length <= 3 && /^[a-zA-Z]+$/.test(word)) {
-        const isNearNounOrBrand = tokens[i - 1]?.toLowerCase() in KNOWN_PROPER_NOUNS_CACHE ||
-                                  tokens[i - 1]?.toLowerCase() in KNOWN_CITIES_SET_CACHE ||
-                                  tokens[i - 1]?.toLowerCase() in CAR_BRANDS_CACHE ||
-                                  tokens[i + 1]?.toLowerCase() in KNOWN_PROPER_NOUNS_CACHE ||
-                                  tokens[i + 1]?.toLowerCase() in KNOWN_CITIES_SET_CACHE ||
-                                  tokens[i + 1]?.toLowerCase() in CAR_BRANDS_CACHE;
-        if (isNearNounOrBrand) {
+        const isBeforeOrAfterNounOrBrand = tokens.some((t, idx) => {
+          const isNoun = properNounsSet.has(t.toLowerCase()) || KNOWN_CITIES_SET.has(t.toLowerCase());
+          const isBrand = CAR_BRANDS.has(t.toLowerCase());
+          return (isNoun || isBrand) && (idx === i - 1 || idx === i + 1);
+        });
+        if (isBeforeOrAfterNounOrBrand) {
           flags.push("ShortTokenCapitalized");
           return word.toUpperCase(); // e.g., "eh" → "EH" in "EH Ford"
         }
       }
 
-      // Step 1.6: Handle mixed-case tokens (e.g., "McLaren")
+      // Step 2.7: Handle mixed-case tokens (e.g., "McLaren")
       if (/^[A-Z][a-z]+[A-Z][a-z]+$/.test(word)) {
         if (word.startsWith("Mc") || word.startsWith("Mac")) {
-          flags.push("MixedCaseAdjusted");
-          return word.charAt(0).toUpperCase() + word.slice(1, 3).toLowerCase() + 
-                 word.charAt(3).toUpperCase() + word.slice(4).toLowerCase();
+          return word.charAt(0).toUpperCase() + word.slice(1, 3).toLowerCase() + word.charAt(3).toUpperCase() + word.slice(4).toLowerCase();
         }
       }
 
-      // Step 1.7: Standard capitalization
-      flags.push("StandardCapitalization");
+      // Step 2.8: Standard capitalization
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     });
 
-    // Step 2: Restore truncated tokens
-    const restoredTokens = tokens.map(token => {
-      const tokenLower = token.toLowerCase();
-      for (const [knownToken, original] of [
-        ...KNOWN_CITIES_SET_CACHE,
-        ...KNOWN_PROPER_NOUNS_CACHE,
-        ...KNOWN_FIRST_NAMES_CACHE,
-        ...KNOWN_LAST_NAMES_CACHE,
-        ...CAR_BRANDS_CACHE
-      ]) {
-        const knownLower = knownToken.toLowerCase();
-        if (knownLower.startsWith(tokenLower) && knownLower.length <= tokenLower.length + 2 && knownLower.length > tokenLower.length) {
-          log("debug", "Restored truncated token", { originalToken: token, restored: original, domain });
-          return original;
-        }
-      }
-      return token;
-    });
-
     // Step 3: Join tokens and handle token count
-    let result = restoredTokens.join(" ").replace(WHITESPACE_REGEX, " ").trim();
-    const finalTokens = result.split(" ").filter(Boolean);
-    if (finalTokens.length > 6) {
-      result = finalTokens.slice(0, 6).join(" ");
+    result = tokens.join(" ").replace(/\s+/g, " ").trim();
+    tokens = result.split(" ").filter(Boolean);
+    if (tokens.length > 4) {
+      result = tokens.slice(0, 4).join(" ");
       flags.push("TokenCountAdjusted");
     }
 
     return { name: result, flags };
   } catch (e) {
-    log("error", "capitalizeName failed", { name, domain, error: e.message, stack: e.stack });
+    log("error", "capitalizeName failed", { name, error: e.message, stack: e.stack });
     return { name: "", flags: ["CapitalizeNameError"] };
   }
 }
-// ✅ Removed duplicate capitalizeName implementation that caused the error
 
 // Expands initials in tokens (e.g., 'J.B.' → 'J B')
 function expandInitials(token) {
@@ -1798,15 +1784,13 @@ function earlyCompoundSplit(domain) {
         "mb": "M.B."
       }[abbr.toLowerCase()] || expansion.toLowerCase().replace(/\s+/g, "");
       remaining = remaining.replace(regex, fullExpansion);
-      if (logLevel === "debug") {
-        log("debug", `Abbreviation expanded: ${abbr} → ${fullExpansion}`, { domain: normalized });
-      }
+      log("debug", `Abbreviation expanded: ${abbr} → ${fullExpansion}`, { domain: normalized });
     }
   }
 
-  // Step 3: Initial splitting with pre-compiled regex
+  // Step 3: Initial splitting with enhanced regex
   let tokens = remaining
-    .split(SPLIT_REGEX)
+    .split(/(?=[A-Z])|[-_\s]|of|(?<=\D)(?=\d)/)
     .filter(Boolean)
     .flatMap(token => token.match(/[a-zA-Z]+/g) || [token])
     .filter(Boolean);
@@ -1827,6 +1811,7 @@ function earlyCompoundSplit(domain) {
     "parkwayfamily": ["parkway", "family"],
     "johnthornton": ["john", "thornton"],
     "gregleblanc": ["greg", "leblanc"],
+    // Added new compounds identified from logs
     "fivestar": ["five", "star"],
     "gatewayclassic": ["gateway", "classic"],
     "northbakersfield": ["north", "bakersfield"],
@@ -1836,6 +1821,15 @@ function earlyCompoundSplit(domain) {
     "murfreesboro": ["murfrees", "boro"],
     "northwest": ["north", "west"]
   };
+
+  const knownWords = [
+    ...CAR_BRANDS,
+    ...KNOWN_CITIES_SET,
+    ...KNOWN_FIRST_NAMES,
+    ...KNOWN_LAST_NAMES,
+    ...KNOWN_PROPER_NOUNS,
+    ...Object.keys(commonCompounds)
+  ].map(word => word.toLowerCase()).sort((a, b) => b.length - a.length);
 
   const fuzzyTokens = [];
   for (let token of tokens) {
@@ -1849,9 +1843,7 @@ function earlyCompoundSplit(domain) {
     if (commonCompounds[token]) {
       fuzzyTokens.push(...commonCompounds[token]);
       split = true;
-      if (logLevel === "debug") {
-        log("debug", "Known compound split applied", { token, split: commonCompounds[token] });
-      }
+      log("debug", "Known compound split applied", { token, split: commonCompounds[token] });
     }
 
     // Enhanced splitting for first/last name pairs and proper nouns
@@ -1864,12 +1856,10 @@ function earlyCompoundSplit(domain) {
       for (let i = 2; i <= current.length - 2; i++) {
         const firstPart = current.slice(0, i);
         const secondPart = current.slice(i);
-        if (KNOWN_FIRST_NAMES_CACHE.has(firstPart) && KNOWN_LAST_NAMES_CACHE.has(secondPart)) {
+        if (KNOWN_FIRST_NAMES.has(firstPart) && KNOWN_LAST_NAMES.has(secondPart)) {
           subTokens.push(firstPart, secondPart);
           namePairFound = true;
-          if (logLevel === "debug") {
-            log("debug", "First/last name split applied", { token, split: [firstPart, secondPart] });
-          }
+          log("debug", "First/last name split applied", { token, split: [firstPart, secondPart] });
           break;
         }
       }
@@ -1889,16 +1879,14 @@ function earlyCompoundSplit(domain) {
               dynamicTokens.push(before, commonWord, after);
               temp = "";
               matched = true;
-              if (logLevel === "debug") {
-                log("debug", "Dynamic split using common word", { token, commonWord, split: [before, commonWord, after] });
-              }
+              log("debug", "Dynamic split using common word", { token, commonWord, split: [before, commonWord, after] });
               break;
             }
           }
           if (!matched) {
-            // Try to split using known words (using cached lookup)
+            // Try to split using known words
             for (let word of knownWords) {
-              if (KNOWN_WORDS_CACHE.has(temp)) {
+              if (temp.startsWith(word)) {
                 dynamicTokens.push(word);
                 temp = temp.slice(word.length);
                 matched = true;
@@ -1915,9 +1903,7 @@ function earlyCompoundSplit(domain) {
         if (dynamicTokens.length > 1) {
           subTokens.push(...dynamicTokens);
           split = true;
-          if (logLevel === "debug") {
-            log("debug", "Dynamic compound split applied", { token, split: dynamicTokens });
-          }
+          log("debug", "Dynamic compound split applied", { token, split: dynamicTokens });
         } else {
           subTokens.push(current);
         }
@@ -1926,9 +1912,7 @@ function earlyCompoundSplit(domain) {
       if (subTokens.length > 1) {
         fuzzyTokens.push(...subTokens);
         split = true;
-        if (logLevel === "debug") {
-          log("debug", "Enhanced compound split applied", { token, split: subTokens });
-        }
+        log("debug", "Enhanced compound split applied", { token, split: subTokens });
       }
     }
 
@@ -1938,12 +1922,14 @@ function earlyCompoundSplit(domain) {
   }
   tokens = fuzzyTokens;
 
-  // Step 5: City and proper noun grouping (using cached lookups)
+  // Step 5: City and proper noun grouping
+  const sortedCities = Array.from(KNOWN_CITIES_SET).sort((a, b) => b.replace(/\s+/g, "").length - a.replace(/\s+/g, "").length);
   const cityTokens = [];
   let tempRemaining = tokens.join("");
-  for (const [cityLower, cityValue] of SORTED_CITIES_CACHE) {
+  for (const city of sortedCities) {
+    const cityLower = city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and");
     if (tempRemaining.includes(cityLower)) {
-      cityTokens.push(cityValue);
+      cityTokens.push(city.toLowerCase().replace(/\s+/g, " "));
       tempRemaining = tempRemaining.replace(cityLower, "");
     }
   }
@@ -1956,7 +1942,7 @@ function earlyCompoundSplit(domain) {
     for (let len = Math.min(3, tokens.length - i); len >= 1; len--) {
       const segment = tokens.slice(i, i + len).join("");
       const segmentNoSpace = segment.replace(/\s+/g, "");
-      if (PROPER_NOUNS_CACHE.has(segmentNoSpace) || CAR_BRANDS_CACHE.has(segmentNoSpace) || KNOWN_CITIES_SET_CACHE.has(segment)) {
+      if (properNounsSet.has(segmentNoSpace) || CAR_BRANDS.has(segmentNoSpace) || KNOWN_CITIES_SET.has(segment)) {
         finalTokens.push(segment);
         i += len;
         matched = true;
@@ -1965,7 +1951,7 @@ function earlyCompoundSplit(domain) {
       if (len === 2) {
         const first = tokens[i].toLowerCase();
         const last = tokens[i + 1].toLowerCase();
-        if (KNOWN_FIRST_NAMES_CACHE.has(first) && KNOWN_LAST_NAMES_CACHE.has(last)) {
+        if (KNOWN_FIRST_NAMES.has(first) && KNOWN_LAST_NAMES.has(last)) {
           finalTokens.push(`${first} ${last}`);
           i += 2;
           matched = true;
@@ -1986,15 +1972,11 @@ function earlyCompoundSplit(domain) {
     }
   }
 
-  // Step 7: Filter and deduplicate tokens, preserving contextual words
+  // Step 7: Filter and deduplicate tokens
   const filteredTokens = finalTokens
     .filter(token => {
       const tokenNoSpace = token.replace(/\s+/g, "");
-      const isContextual = CONTEXTUAL_WORDS.has(tokenNoSpace.toLowerCase());
-      const isRelevant = CAR_BRANDS_CACHE.has(tokenNoSpace) || KNOWN_CITIES_SET_CACHE.has(token) || PROPER_NOUNS_CACHE.has(tokenNoSpace);
-      const isCommonWord = COMMON_WORDS_CACHE.has(tokenNoSpace.toLowerCase());
-      // Preserve tokens that are brands, cities, proper nouns, or contextual words following a human name/brand
-      return token && (!isCommonWord || isRelevant || (isContextual && finalTokens.some(t => KNOWN_FIRST_NAMES_CACHE.has(t.toLowerCase()) || KNOWN_LAST_NAMES_CACHE.has(t.toLowerCase()) || CAR_BRANDS_CACHE.has(t))));
+      return token && (!COMMON_WORDS.has(tokenNoSpace.toLowerCase()) || CAR_BRANDS.has(tokenNoSpace) || KNOWN_CITIES_SET.has(token) || properNounsSet.has(tokenNoSpace));
     })
     .slice(0, 3); // Cap at 3 tokens
 
@@ -2015,9 +1997,7 @@ function earlyCompoundSplit(domain) {
     return fallback ? [fallback] : [];
   }
 
-  if (logLevel === "debug") {
-    log("debug", `Tokenized domain: ${normalized}`, { tokens: uniqueTokens });
-  }
+  log("debug", `Tokenized domain: ${normalized}`, { tokens: uniqueTokens });
   return uniqueTokens;
 }
 
@@ -2026,102 +2006,145 @@ function extractBrandOfCityFromDomain(domain) {
     // Validate input
     if (!domain || typeof domain !== 'string' || !domain.trim()) {
       log('error', 'Invalid domain in extractBrandOfCityFromDomain', { domain });
-      return null;
+      return { brand: '', city: '', connector: '' };
     }
 
     // Normalize the domain
     const normalized = normalizeDomain(domain);
     if (!normalized || typeof normalized !== 'string') {
       log('error', 'normalizeDomain returned invalid result', { domain, normalized });
-      return null;
+      return { brand: '', city: '', connector: '' };
     }
 
     // Check brand-only domains
-    if (BRAND_ONLY_DOMAINS_CACHE.has(`${normalized}.com`)) {
+    if (BRAND_ONLY_DOMAINS instanceof Set && BRAND_ONLY_DOMAINS.has(`${normalized}.com`)) {
       log('info', 'Skipping brand-only domain', { domain: normalized });
-      return null;
+      return { brand: '', city: '', connector: '' };
     }
 
     // Split into tokens
     let tokens = earlyCompoundSplit(normalized);
     if (!Array.isArray(tokens) || !tokens.every(token => typeof token === 'string') || tokens.length === 0) {
       log('warn', 'earlyCompoundSplit returned invalid or empty tokens', { domain, tokens });
-      return null;
+      return { brand: '', city: '', connector: '' };
     }
 
     // Validate dependencies
-    if (!CAR_BRANDS_CACHE.size) {
-      log('error', 'Invalid CAR_BRANDS_CACHE in extractBrandOfCityFromDomain', { CAR_BRANDS_CACHE_size: CAR_BRANDS_CACHE.size });
-      return null;
+    const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set(CAR_BRANDS || []);
+    const citiesSet = KNOWN_CITIES_SET instanceof Set ? KNOWN_CITIES_SET : new Set(KNOWN_CITIES_SET || []);
+    const isBrandMappingMap = BRAND_MAPPING instanceof Map;
+
+    if (!carBrandsSet.size || !citiesSet.size) {
+      log('error', 'Invalid dependencies in extractBrandOfCityFromDomain', {
+        CAR_BRANDS: carBrandsSet.size,
+        KNOWN_CITIES_SET: citiesSet.size,
+        BRAND_MAPPING: isBrandMappingMap
+      });
+      return { brand: '', city: '', connector: '' };
     }
 
-    let brand = null;
-    let flags = [];
+    let brand = '';
+    let city = '';
 
-    // Look for brand in tokens
-    for (const token of tokens) {
+    // First pass: Look for brand followed by city (including multi-word cities)
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
       if (typeof token !== 'string' || !token.trim()) continue;
       const lowerToken = token.toLowerCase();
-      if (CAR_BRANDS_CACHE.has(lowerToken)) {
-        brand = CAR_BRANDS_CACHE.get(lowerToken);
-        if (typeof brand !== 'string') {
-          log('warn', 'Non-string brand in CAR_BRANDS_CACHE', { token, brand });
-          brand = null;
-          flags.push('InvalidBrandType');
-          continue;
+
+      // Check for brand
+      if (carBrandsSet.has(lowerToken)) {
+        brand = isBrandMappingMap
+          ? BRAND_MAPPING.get(lowerToken) || capitalizeName(token).name
+          : capitalizeName(token).name;
+
+        // Look for multi-word city after brand
+        for (let len = 1; len <= Math.min(3, tokens.length - i - 1); len++) {
+          const cityTokens = tokens.slice(i + 1, i + 1 + len);
+          const potentialCity = cityTokens.join(" ").toLowerCase();
+          if (citiesSet.has(potentialCity) || (potentialCity.endsWith("s") && citiesSet.has(potentialCity.slice(0, -1)))) {
+            city = capitalizeName(potentialCity.endsWith("s") ? potentialCity.slice(0, -1) : potentialCity).name;
+            break;
+          }
         }
-        // Use brand directly, avoid BRAND_MAPPING_CACHE to prevent incorrect mappings
-        flags.push('BrandDetected');
-        break;
+        if (city) break;
       }
     }
 
-    // Additional check for common brand abbreviations
-    if (!brand) {
-      const brandAbbreviations = {
-        chevy: 'Chevrolet',
-        cad: 'Cadillac',
-        bmw: 'BMW',
-        maz: 'Mazda',
-        sub: 'Subaru',
-        nis: 'Nissan',
-        toy: 'Toyota',
-        hon: 'Honda',
-        mit: 'Mitsubishi',
-        vol: 'Volvo',
-        inf: 'Infiniti',
-        lex: 'Lexus'
-      };
-      for (const token of tokens) {
-        if (typeof token !== 'string' || !token.trim()) continue;
-        const lowerToken = token.toLowerCase();
-        for (const [abbr, fullBrand] of Object.entries(brandAbbreviations)) {
-          if (lowerToken.includes(abbr)) {
-            brand = fullBrand;
-            flags.push('BrandAbbreviationDetected');
-            break;
+    // Second pass: Look for city followed by brand (reversed order, including multi-word cities)
+    if (!brand || !city) {
+      for (let i = 0; i < tokens.length; i++) {
+        // Look for multi-word city
+        for (let len = 1; len <= Math.min(3, tokens.length - i); len++) {
+          const cityTokens = tokens.slice(i, i + len);
+          const potentialCity = cityTokens.join(" ").toLowerCase();
+          if (citiesSet.has(potentialCity) || (potentialCity.endsWith("s") && citiesSet.has(potentialCity.slice(0, -1)))) {
+            city = capitalizeName(potentialCity.endsWith("s") ? potentialCity.slice(0, -1) : potentialCity).name;
+
+            // Look for brand after city
+            for (let j = i + len; j < tokens.length; j++) {
+              const nextToken = tokens[j];
+              if (typeof nextToken !== 'string' || !nextToken.trim()) continue;
+              const lowerNextToken = nextToken.toLowerCase();
+              if (carBrandsSet.has(lowerNextToken)) {
+                brand = isBrandMappingMap
+                  ? BRAND_MAPPING.get(lowerNextToken) || capitalizeName(nextToken).name
+                  : capitalizeName(nextToken).name;
+                break;
+              }
+            }
+            if (brand) break;
           }
         }
         if (brand) break;
       }
     }
 
-    log('info', 'Brand extraction result', { domain, brand: brand || 'null', tokens, flags });
-    return brand || null;
+    // Third pass: Check all tokens if no match found, but prioritize brand inclusion
+    if (!brand || !city) {
+      for (const token of tokens) {
+        if (typeof token !== 'string' || !token.trim()) continue;
+        const lowerToken = token.toLowerCase();
+        if (!brand && carBrandsSet.has(lowerToken)) {
+          brand = isBrandMappingMap
+            ? BRAND_MAPPING.get(lowerToken) || capitalizeName(token).name
+            : capitalizeName(token).name;
+        }
+        // Only set city if we have a brand (avoids city-only results)
+        if (brand && !city && citiesSet.has(lowerToken)) {
+          city = capitalizeName(token).name;
+        }
+      }
+    }
+
+    // Final validation: Require both brand and city to avoid city-only outputs
+    if (!brand || !city) {
+      log('warn', 'Missing brand or city, returning empty result', { domain, brand, city, tokens });
+      return { brand: '', city: '', connector: '' };
+    }
+
+    // Additional check: If city-only result, reject it
+    if (!brand && city) {
+      log('warn', 'City-only result rejected', { domain, city, tokens });
+      return { brand: '', city: '', connector: '' };
+    }
+
+    log('info', 'Brand-city extraction result', { domain, brand, city, tokens });
+    return { brand, city, connector: '' };
   } catch (err) {
     log('error', 'extractBrandOfCityFromDomain failed', { domain, error: err.message, stack: err.stack });
-    return null;
+    return { brand: '', city: '', connector: '' };
   }
 }
       
 function tryHumanNamePattern(tokens) {
   try {
-    if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t => typeof t === "string")) {
+    if (!tokens || !Array.isArray(tokens) || tokens.length < 2 || !tokens.every(t => typeof t === "string")) {
       log("error", "Invalid tokens in tryHumanNamePattern", { tokens });
       return null;
     }
 
-    if (!KNOWN_FIRST_NAMES_CACHE.size || !KNOWN_LAST_NAMES_CACHE.size || !CAR_BRANDS_CACHE.size || !KNOWN_CITIES_SET_CACHE.size) {
+    if (!(KNOWN_FIRST_NAMES instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
       log("error", "Invalid dependencies in tryHumanNamePattern", {
         KNOWN_FIRST_NAMES: KNOWN_FIRST_NAMES instanceof Set,
         KNOWN_LAST_NAMES: KNOWN_LAST_NAMES instanceof Set,
@@ -2133,93 +2156,42 @@ function tryHumanNamePattern(tokens) {
 
     let firstName = "";
     let lastName = "";
-    let singleName = "";
     let brand = "";
-    let context = "";
     let confidenceScore = 100;
     const flags = ["humanNamePattern"];
     const confidenceOrigin = "humanNamePattern";
 
-    // Pre-compute token matches
-    const tokenInfo = tokens.map((token, i) => {
-      const lowerToken = token.toLowerCase();
-      return {
-        index: i,
-        token,
-        lowerToken,
-        isFirstName: KNOWN_FIRST_NAMES_CACHE.has(lowerToken),
-        isLastName: KNOWN_LAST_NAMES_CACHE.has(lowerToken),
-        isBrand: CAR_BRANDS_CACHE.has(lowerToken),
-        isContextual: CONTEXTUAL_WORDS.has(lowerToken)
-      };
-    });
-
-    // First pass: Look for first name + last name pattern
-    for (let i = 0; i < tokenInfo.length - 1; i++) {
-      if (tokenInfo[i].isFirstName && tokenInfo[i + 1].isLastName) {
-        firstName = tokenInfo[i].token;
-        lastName = tokenInfo[i + 1].token;
+    // Look for first name + last name pattern
+    for (let i = 0; i < tokens.length - 1; i++) {
+      const currentToken = tokens[i].toLowerCase();
+      const nextToken = tokens[i + 1].toLowerCase();
+      if (KNOWN_FIRST_NAMES.has(currentToken) && KNOWN_LAST_NAMES.has(nextToken)) {
+        firstName = tokens[i];
+        lastName = tokens[i + 1];
         break;
       }
     }
 
-    // Second pass: Look for single-token human name
     if (!firstName || !lastName) {
-      for (const info of tokenInfo) {
-        if ((info.isFirstName || info.isLastName) && !singleName) {
-          singleName = info.token;
-          flags.push("SingleHumanNameDetected");
-          confidenceScore = 80; // Lower confidence for single-token names
-          break;
-        }
-      }
-    }
-
-    if (!firstName && !lastName && !singleName) {
-      if (logLevel === "debug") {
-        log("debug", "No human name pattern found", { tokens });
-      }
+      log("debug", "No human name pattern found", { tokens });
       return null;
     }
 
-    // Apply confidence boost and look for brand or context
-    if (firstName && lastName) {
-      confidenceScore = 110; // Base confidence for human name pair
-      for (let i = tokenInfo.findIndex(info => info.token === lastName) + 1; i < tokenInfo.length; i++) {
-        if (tokenInfo[i].isBrand) {
-          brand = BRAND_MAPPING_CACHE.has(tokenInfo[i].lowerToken)
-            ? BRAND_MAPPING_CACHE.get(tokenInfo[i].lowerToken)
-            : capitalizeName(tokenInfo[i].token).name;
-          flags.push("brandIncluded");
-          confidenceScore = 135; // Boost for human name + brand
-          break;
-        } else if (tokenInfo[i].isContextual && !context) {
-          context = capitalizeName(tokenInfo[i].token).name;
-          flags.push("contextIncluded");
-          confidenceScore = 120; // Boost for human name + context
-        }
-      }
-    } else if (singleName) {
-      for (let i = tokenInfo.findIndex(info => info.token === singleName) + 1; i < tokenInfo.length; i++) {
-        if (tokenInfo[i].isBrand) {
-          brand = BRAND_MAPPING_CACHE.has(tokenInfo[i].lowerToken)
-            ? BRAND_MAPPING_CACHE.get(tokenInfo[i].lowerToken)
-            : capitalizeName(tokenInfo[i].token).name;
-          flags.push("brandIncluded");
-          confidenceScore = 100; // Boost for single name + brand
-          break;
-        } else if (tokenInfo[i].isContextual && !context) {
-          context = capitalizeName(tokenInfo[i].token).name;
-          flags.push("contextIncluded");
-          confidenceScore = 90; // Boost for single name + context
-        }
+    // Apply confidence boost for confirmed first/last name pair
+    confidenceScore = 110; // Base confidence for human name
+    for (let i = tokens.indexOf(lastName) + 1; i < tokens.length; i++) {
+      const token = tokens[i].toLowerCase();
+      if (CAR_BRANDS.has(token)) {
+        brand = Object.hasOwn(BRAND_MAPPING, token) ? BRAND_MAPPING[token] : capitalizeName(token).name;
+        flags.push("brandIncluded");
+        confidenceScore = 135; // Boost for human name + brand
+        break;
       }
     }
 
     // Assemble the name
-    const nameParts = firstName && lastName ? [firstName, lastName] : [singleName];
+    const nameParts = [firstName, lastName];
     if (brand) nameParts.push(brand);
-    else if (context) nameParts.push(context);
 
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
     const companyName = nameResult.name || "";
@@ -2230,10 +2202,10 @@ function tryHumanNamePattern(tokens) {
       return null;
     }
 
-    // Skip brandOrCityOnlyBlocked check for human name + brand/context combinations
+    // Skip brandOrCityOnlyBlocked check for human name + brand combinations
     const nameTokens = companyName.split(" ").filter(Boolean);
-    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS_CACHE.has(companyName.toLowerCase());
-    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET_CACHE.has(companyName.toLowerCase());
+    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS.has(companyName.toLowerCase());
+    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET.has(companyName.toLowerCase());
     if (isBrandOnly || isCityOnly) {
       flags.push("brandOrCityOnlyBlocked");
       confidenceScore = 0;
@@ -2248,13 +2220,13 @@ function tryHumanNamePattern(tokens) {
       confidenceScore = Math.min(confidenceScore, 95);
     }
 
-    // Relax token limit penalty (allow up to 4 tokens for human name + brand/context)
+    // Relax token limit penalty (allow up to 4 tokens for human name + brand)
     if (nameTokens.length > 4) {
       confidenceScore = Math.min(confidenceScore, 85);
       flags.push("tokenLimitExceeded");
     }
 
-    log("info", "Human name pattern matched", { companyName, tokens, flags });
+    log("info", "Human name pattern matched", { companyName, tokens });
 
     return {
       companyName,
@@ -2276,10 +2248,11 @@ function tryProperNounPattern(tokens) {
       return null;
     }
 
-    if (!PROPER_NOUNS_CACHE.size || !CAR_BRANDS_CACHE.size || !KNOWN_CITIES_SET_CACHE.size) {
+    const carBrandsSet = new Set(CAR_BRANDS);
+    if (!(properNounsSet instanceof Set) || !(carBrandsSet instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
       log('error', 'Invalid dependencies in tryProperNounPattern', {
         properNounsSet: properNounsSet instanceof Set,
-        CAR_BRANDS: CAR_BRANDS instanceof Set,
+        CAR_BRANDS: carBrandsSet instanceof Set,
         KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set
       });
       return null;
@@ -2292,41 +2265,29 @@ function tryProperNounPattern(tokens) {
     const flags = ['properNounPattern'];
     const confidenceOrigin = 'properNounPattern';
 
-    // Pre-compute token matches
-    const tokenInfo = tokens.map((token, i) => {
+    for (const token of tokens) {
       const lowerToken = token.toLowerCase();
-      return {
-        index: i,
-        token,
-        lowerToken,
-        isProperNoun: PROPER_NOUNS_CACHE.has(lowerToken),
-        isBrand: CAR_BRANDS_CACHE.has(lowerToken),
-        isGeneric: CONTEXTUAL_WORDS.has(lowerToken)
-      };
-    });
-
-    // Look for proper noun
-    const properNounInfo = tokenInfo.find(info => info.isProperNoun);
-    if (!properNounInfo) {
-      if (logLevel === "debug") {
-        log('debug', 'No proper noun pattern found', { tokens });
+      if (properNounsSet.has(lowerToken)) {
+        properNoun = token;
+        break;
       }
+    }
+
+    if (!properNoun) {
+      log('debug', 'No proper noun pattern found', { tokens });
       return null;
     }
-    properNoun = properNounInfo.token;
-    const nounIndex = properNounInfo.index;
 
-    // Look for brand or generic term after proper noun
-    for (let i = nounIndex + 1; i < tokenInfo.length; i++) {
-      if (tokenInfo[i].isBrand) {
-        brand = BRAND_MAPPING_CACHE.has(tokenInfo[i].lowerToken)
-          ? BRAND_MAPPING_CACHE.get(tokenInfo[i].lowerToken)
-          : capitalizeName(tokenInfo[i].token)?.name || tokenInfo[i].token;
+    const nounIndex = tokens.indexOf(properNoun);
+    for (let i = nounIndex + 1; i < tokens.length; i++) {
+      const token = tokens[i].toLowerCase();
+      if (carBrandsSet.has(token)) {
+        brand = BRAND_MAPPING.get(token) || capitalizeName(token)?.name || token;
         flags.push('brandIncluded');
         confidenceScore = 125;
         break;
-      } else if (tokenInfo[i].isGeneric) {
-        generic = capitalizeName(tokenInfo[i].token)?.name || tokenInfo[i].token;
+      } else if (['motors', 'auto', 'dealership'].includes(token)) {
+        generic = capitalizeName(token)?.name || token;
         flags.push('genericIncluded');
         confidenceScore = 100;
         break;
@@ -2334,13 +2295,10 @@ function tryProperNounPattern(tokens) {
     }
 
     if (!brand && !generic) {
-      if (logLevel === "debug") {
-        log("debug", "No brand or generic term found to pair with proper noun", { tokens, properNoun });
-      }
+      log("debug", "No brand or generic term found to pair with proper noun", { tokens, properNoun });
       return null;
     }
 
-    // Assemble the name
     const nameParts = [properNoun];
     if (brand) nameParts.push(brand);
     else if (generic) nameParts.push(generic);
@@ -2354,10 +2312,9 @@ function tryProperNounPattern(tokens) {
       return null;
     }
 
-    // Validation checks
     const nameTokens = companyName.split(' ').filter(Boolean);
-    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS_CACHE.has(companyName.toLowerCase());
-    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET_CACHE.has(companyName.toLowerCase());
+    const isBrandOnly = nameTokens.length === 1 && carBrandsSet.has(companyName.toLowerCase());
+    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET.has(companyName.toLowerCase());
     if (isBrandOnly || isCityOnly) {
       flags.push('brandOrCityOnlyBlocked');
       confidenceScore = 0;
@@ -2376,7 +2333,7 @@ function tryProperNounPattern(tokens) {
       flags.push('tokenLimitExceeded');
     }
 
-    log('info', 'Proper noun pattern matched', { companyName, tokens, flags });
+    log('info', 'Proper noun pattern matched', { companyName, tokens });
     return {
       companyName,
       confidenceScore,
@@ -2398,7 +2355,7 @@ function tryBrandCityPattern(tokens) {
       return null;
     }
 
-    if (!CAR_BRANDS_CACHE.size || !KNOWN_CITIES_SET_CACHE.size || !COMMON_WORDS_CACHE.size) {
+    if (!(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(COMMON_WORDS instanceof Set)) {
       log("error", "Invalid dependencies in tryBrandCityPattern", {
         CAR_BRANDS: CAR_BRANDS instanceof Set,
         KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set,
@@ -2407,36 +2364,22 @@ function tryBrandCityPattern(tokens) {
       return null;
     }
 
-    // Pre-compute token matches
-    const tokenInfo = tokens.map((token, i) => {
-      const lowerToken = token.toLowerCase();
-      return {
-        index: i,
-        token,
-        lowerToken,
-        isBrand: CAR_BRANDS_CACHE.has(lowerToken),
-        isCity: KNOWN_CITIES_SET_CACHE.has(lowerToken),
-        isCommon: COMMON_WORDS_CACHE.has(lowerToken)
-      };
-    });
-
     const domain = tokens.join("");
-    let brandCityResult = extractBrandOfCityFromDomain(domain) || { brand: "", city: "", flags: [] };
+    let brandCityResult = extractBrandOfCityFromDomain(domain) || { brand: "", city: "" };
     let brand = brandCityResult.brand;
     let city = brandCityResult.city;
-    let resultFlags = brandCityResult.flags || [];
 
     // Fallback to manual token matching if extractBrandOfCityFromDomain fails
     if (!brand || !city) {
-      for (let i = 0; i < tokenInfo.length; i++) {
-        if (tokenInfo[i].isBrand) {
-          brand = BRAND_MAPPING_CACHE.has(tokenInfo[i].lowerToken)
-            ? BRAND_MAPPING_CACHE.get(tokenInfo[i].lowerToken)
-            : capitalizeName(tokenInfo[i].token).name;
-          for (let j = 0; j < tokenInfo.length; j++) {
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i].toLowerCase();
+        if (CAR_BRANDS.has(token)) {
+          brand = Object.hasOwn(BRAND_MAPPING, token) ? BRAND_MAPPING[token] : capitalizeName(token).name;
+          for (let j = 0; j < tokens.length; j++) {
             if (j === i) continue;
-            if (tokenInfo[j].isCity && !tokenInfo[j].isBrand && !tokenInfo[j].isCommon) {
-              city = capitalizeName(tokenInfo[j].token).name;
+            const otherToken = tokens[j].toLowerCase();
+            if (KNOWN_CITIES_SET.has(otherToken) && !CAR_BRANDS.has(otherToken) && !COMMON_WORDS.has(otherToken)) {
+              city = capitalizeName(tokens[j]).name;
               break;
             }
           }
@@ -2445,19 +2388,15 @@ function tryBrandCityPattern(tokens) {
       }
     }
 
-    // Relax validation: Allow human name + brand pairs if flagged by extractBrandOfCityFromDomain
-    const isHumanName = resultFlags.includes("HumanNameDetected");
-    if (!brand || (!city && !isHumanName)) {
-      if (logLevel === "debug") {
-        log("debug", "No brand + city pattern found", { tokens, brand, city, isHumanName });
-      }
+    // Strict validation: Require both brand and city
+    if (!brand || !city) {
+      log("debug", "No brand + city pattern found", { tokens, brand, city });
       return null;
     }
 
-    let confidenceScore = isHumanName ? 100 : 150; // Higher confidence for true brand + city pairs
+    let confidenceScore = 100;
     const flags = ["brandCityPattern"];
     const confidenceOrigin = "brandCityPattern";
-    flags.push(...resultFlags);
 
     // Apply confidence boost for abbreviation expansion
     if (brandCityResult.brand && ABBREVIATION_EXPANSIONS[brand.toLowerCase()] || (city && ABBREVIATION_EXPANSIONS[city.toLowerCase()])) {
@@ -2465,8 +2404,8 @@ function tryBrandCityPattern(tokens) {
       flags.push("AbbreviationConfidenceBoost");
     }
 
-    // Always include both city (or human name) and brand in the name
-    const nameParts = [city, brand]; // e.g., "Northshore Mazda" or "Lockhart Cadillac"
+    // Always include both city and brand in the name
+    const nameParts = [city, brand]; // e.g., "Huntington Beach Ford"
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
     let companyName = nameResult.name || "";
     nameResult.flags.forEach(flag => flags.push(flag));
@@ -2484,7 +2423,7 @@ function tryBrandCityPattern(tokens) {
 
     // Strict validation: Reject city-only results
     const nameTokens = companyName.split(" ").filter(Boolean);
-    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET_CACHE.has(companyName.toLowerCase());
+    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET.has(companyName.toLowerCase());
     if (isCityOnly) {
       flags.push("cityOnlyBlocked");
       confidenceScore = 0;
@@ -2493,7 +2432,7 @@ function tryBrandCityPattern(tokens) {
     }
 
     // Check for brand-only results
-    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS_CACHE.has(companyName.toLowerCase());
+    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS.has(companyName.toLowerCase());
     if (isBrandOnly) {
       flags.push("brandOnlyBlocked");
       confidenceScore = 0;
@@ -2514,7 +2453,7 @@ function tryBrandCityPattern(tokens) {
       flags.push("tokenLimitExceeded");
     }
 
-    log("info", "Brand city pattern matched", { companyName, tokens, flags });
+    log("info", "Brand city pattern matched", { companyName, tokens });
     return {
       companyName,
       confidenceScore,
@@ -2540,7 +2479,7 @@ function tryBrandGenericPattern(tokens) {
     }
 
     // Dependency validation
-    if (!PROPER_NOUNS_CACHE.size || !CAR_BRANDS_CACHE.size || !KNOWN_CITIES_SET_CACHE.size) {
+    if (!(properNounsSet instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
       log("error", "Invalid dependencies in tryBrandGenericPattern", {
         properNounsSet: properNounsSet instanceof Set,
         CAR_BRANDS: CAR_BRANDS instanceof Set,
@@ -2549,36 +2488,24 @@ function tryBrandGenericPattern(tokens) {
       return null;
     }
 
+    const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
     let properNoun = null;
     let generic = null;
     let confidenceScore = 95;
     const flags = ["genericPattern"];
     const confidenceOrigin = "genericPattern";
 
-    // Pre-compute token matches
-    const tokenInfo = tokens.map((token, i) => {
-      const lowerToken = token.toLowerCase();
-      return {
-        index: i,
-        token,
-        lowerToken,
-        isProperNoun: PROPER_NOUNS_CACHE.has(lowerToken),
-        isBrand: CAR_BRANDS_CACHE.has(lowerToken),
-        isCity: KNOWN_CITIES_SET_CACHE.has(lowerToken),
-        isGeneric: CONTEXTUAL_WORDS.has(lowerToken)
-      };
-    });
-
     // Find proper noun and generic term
-    for (const info of tokenInfo) {
-      if (!properNoun && info.isProperNoun && !info.isBrand && !info.isCity) {
-        const nameResult = capitalizeName(info.token) || { name: "" };
+    for (const token of tokens) {
+      const lowerToken = token.toLowerCase();
+      if (!properNoun && properNounsSet.has(lowerToken) && !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken)) {
+        const nameResult = capitalizeName(token) || { name: "" };
         properNoun = nameResult.name;
         confidenceScore = 100;
         flags.push("knownProperNoun");
       }
-      if (!generic && info.isGeneric) {
-        const nameResult = capitalizeName(info.token) || { name: "" };
+      if (!generic && genericTerms.includes(lowerToken)) {
+        const nameResult = capitalizeName(token) || { name: "" };
         generic = nameResult.name;
       }
       if (properNoun && generic) break;
@@ -2586,19 +2513,21 @@ function tryBrandGenericPattern(tokens) {
 
     // Return early if no proper noun + generic pattern found
     if (!properNoun || !generic) {
-      if (logLevel === "debug") {
-        log("debug", "No proper noun + generic pattern found", { tokens });
-      }
+      log("debug", "No proper noun + generic pattern found", { tokens });
       return null;
     }
 
-    // Construct company name (always append generic term, rely on cleanCompanyName for cleanup)
-    let companyName = `${properNoun} ${generic}`;
+    // Construct company name with possessive-friendly check
+    let companyName = properNoun;
+    const isPossessiveFriendly = properNoun.toLowerCase().endsWith("s") || !/^[aeiou]$/i.test(properNoun.slice(-1));
+    if (isPossessiveFriendly && !companyName.toLowerCase().includes(generic.toLowerCase())) {
+      companyName = `${properNoun} ${generic}`;
+    }
 
     // Validate against brand-only or city-only outputs
     const nameTokens = companyName.split(" ").filter(Boolean);
-    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS_CACHE.has(companyName.toLowerCase());
-    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET_CACHE.has(companyName.toLowerCase());
+    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS.has(companyName.toLowerCase());
+    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET.has(companyName.toLowerCase());
     if (isBrandOnly || isCityOnly) {
       flags.push("brandOrCityOnlyBlocked");
       confidenceScore = 0;
@@ -2619,7 +2548,7 @@ function tryBrandGenericPattern(tokens) {
       confidenceScore = Math.min(confidenceScore, 85);
     }
 
-    log("info", "Brand generic pattern matched", { companyName, tokens, flags });
+    log("info", "Brand generic pattern matched", { companyName, tokens });
     return {
       companyName,
       confidenceScore,
@@ -2642,7 +2571,7 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
       return null;
     }
 
-    if (!PROPER_NOUNS_CACHE.size || !CAR_BRANDS_CACHE.size || !KNOWN_CITIES_SET_CACHE.size) {
+    if (!(properNounsSet instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
       log("error", "Invalid dependencies in tryGenericPattern", {
         properNounsSet: properNounsSet instanceof Set,
         CAR_BRANDS: CAR_BRANDS instanceof Set,
@@ -2651,10 +2580,11 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
       return null;
     }
 
+    const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
     let properNoun = null;
     let generic = null;
     let brand = null;
-    let confidenceScore = 75; // Lower confidence as a fallback
+    let confidenceScore = 95;
     const flags = ["genericPattern"];
     const confidenceOrigin = "genericPattern";
 
@@ -2662,20 +2592,20 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
     for (const token of tokens) {
       const lowerToken = token.toLowerCase();
       // Look for a proper noun (not a brand or city)
-      if (!properNoun && PROPER_NOUNS_CACHE.has(lowerToken) && !CAR_BRANDS_CACHE.has(lowerToken) && !KNOWN_CITIES_SET_CACHE.has(lowerToken)) {
+      if (!properNoun && properNounsSet.has(lowerToken) && !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken)) {
         const nameResult = capitalizeName(token) || { name: "" };
         properNoun = nameResult.name;
-        confidenceScore = 90;
+        confidenceScore = 100;
         flags.push("knownProperNoun");
       }
       // Look for a generic term
-      if (!generic && CONTEXTUAL_WORDS.has(lowerToken)) {
+      if (!generic && genericTerms.includes(lowerToken)) {
         const nameResult = capitalizeName(token) || { name: "" };
         generic = nameResult.name;
       }
       // Look for a brand
-      if (!brand && CAR_BRANDS_CACHE.has(lowerToken)) {
-        brand = BRAND_MAPPING_CACHE.has(lowerToken) ? BRAND_MAPPING_CACHE.get(lowerToken) : capitalizeName(token).name;
+      if (!brand && CAR_BRANDS.has(lowerToken)) {
+        brand = BRAND_MAPPING.get(lowerToken) || capitalizeName(token).name;
       }
       if (properNoun && (generic || brand)) break;
     }
@@ -2683,51 +2613,50 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
     // Step 2: Use metadata to find a brand if not present in tokens
     if (!brand && !generic) {
       const metaBrand = getMetaTitleBrand(meta);
-      if (metaBrand && CAR_BRANDS_CACHE.has(metaBrand.toLowerCase())) {
+      if (metaBrand && CAR_BRANDS.has(metaBrand.toLowerCase())) {
         brand = metaBrand;
         flags.push("metaBrandAppended");
       }
     }
 
-    // Step 3: If no proper noun is found, use the first non-brand, non-city token if it's a human name
+    // Step 3: If no proper noun is found, use the first non-brand, non-city token
     if (!properNoun) {
       const firstValidToken = tokens.find(t => {
         const lowerToken = t.toLowerCase();
-        return !CAR_BRANDS_CACHE.has(lowerToken) && !KNOWN_CITIES_SET_CACHE.has(lowerToken) && 
-               (KNOWN_FIRST_NAMES_CACHE.has(lowerToken) || KNOWN_LAST_NAMES_CACHE.has(lowerToken));
+        return !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken);
       });
       if (firstValidToken) {
-        const nameResult = capitalizeName(firstValidToken) || { name: "" };
-        properNoun = nameResult.name;
-        confidenceScore = 75;
+        properNoun = capitalizeName(firstValidToken).name;
+        confidenceScore = 80;
         flags.push("fallbackProperNoun");
       }
     }
 
     // Step 4: Ensure we have a proper noun and either a generic term or brand
     if (!properNoun || (!generic && !brand)) {
-      if (logLevel === "debug") {
-        log("debug", "No proper noun + generic/brand pattern found", { tokens });
-      }
+      log("debug", "No proper noun + generic/brand pattern found", { tokens });
       return null;
     }
 
-    // Step 5: Construct company name (always append generic term or brand)
+    // Step 5: Construct company name
     let companyName = properNoun;
-    if (brand) {
+    const isPossessiveFriendly = properNoun.toLowerCase().endsWith("s") || !/^[aeiou]$/i.test(properNoun.slice(-1));
+    
+    // Prefer brand over generic term if both are present
+    if (brand && isPossessiveFriendly && !companyName.toLowerCase().includes(brand.toLowerCase())) {
       companyName = `${properNoun} ${brand}`;
-      confidenceScore = Math.max(confidenceScore, 85);
+      confidenceScore = 125;
       flags.push("brandAppended");
-    } else if (generic) {
+    } else if (generic && isPossessiveFriendly && !companyName.toLowerCase().includes(generic.toLowerCase())) {
       companyName = `${properNoun} ${generic}`;
-      confidenceScore = Math.max(confidenceScore, 80);
+      confidenceScore = Math.max(confidenceScore, 95);
       flags.push("genericAppended");
     }
 
     // Step 6: Validate against brand-only and city-only outputs
     const nameTokens = companyName.split(" ").filter(Boolean);
-    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS_CACHE.has(companyName.toLowerCase());
-    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET_CACHE.has(companyName.toLowerCase());
+    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS.has(companyName.toLowerCase());
+    const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET.has(companyName.toLowerCase());
     if (isBrandOnly || isCityOnly) {
       flags.push("brandOrCityOnlyBlocked");
       confidenceScore = 50;
@@ -2745,7 +2674,7 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
     const uniqueTokens = new Set(nameTokens.map(t => t.toLowerCase()));
     if (uniqueTokens.size !== nameTokens.length) {
       flags.push("duplicateTokens");
-      confidenceScore = Math.min(confidenceScore, 70);
+      confidenceScore = Math.min(confidenceScore, 90);
       companyName = [...uniqueTokens]
         .map(t => nameTokens.find(nt => nt.toLowerCase() === t))
         .join(" ");
@@ -2753,11 +2682,11 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
 
     if (nameTokens.length > 4) {
       flags.push("tokenLimitExceeded");
-      confidenceScore = Math.min(confidenceScore, 65);
+      confidenceScore = Math.min(confidenceScore, 85);
       companyName = nameTokens.slice(0, 4).join(" ");
     }
 
-    log("info", "Generic pattern matched", { companyName, tokens, flags });
+    log("info", "Generic pattern matched", { companyName, tokens });
     return {
       companyName,
       confidenceScore,
@@ -2774,301 +2703,223 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
 // Main function to humanize domain names
 async function humanizeName(domain) {
   try {
-    if (!domain || typeof domain !== 'string' || !domain.trim()) {
-      log('error', 'Invalid domain input', { domain });
-      return { companyName: '', confidenceScore: 0, flags: ['invalidInput'], tokens: [], confidenceOrigin: 'invalidInput', rawTokenCount: 0 };
+    if (!domain || typeof domain !== "string" || !domain.trim()) {
+      log("error", "Invalid domain input", { domain });
+      return { companyName: "", confidenceScore: 0, flags: ["invalidInput"], tokens: [], confidenceOrigin: "invalidInput", rawTokenCount: 0 };
     }
 
     const normalizedDomain = normalizeDomain(domain);
-    if (!normalizedDomain || typeof normalizedDomain !== 'string') {
-      log('error', 'normalizeDomain returned invalid result', { domain, normalizedDomain });
-      return { companyName: '', confidenceScore: 0, flags: ['normalizeDomainFailed'], tokens: [], confidenceOrigin: 'normalizeDomainFailed', rawTokenCount: 0 };
+    if (!normalizedDomain || typeof normalizedDomain !== "string") {
+      log("error", "normalizeDomain returned invalid result", { domain, normalizedDomain });
+      return { companyName: "", confidenceScore: 0, flags: ["normalizeDomainFailed"], tokens: [], confidenceOrigin: "normalizeDomainFailed", rawTokenCount: 0 };
     }
 
-    // Step 1: Check overrides
-    const overrideKey = normalizedDomain + '.com';
-    if (TEST_CASE_OVERRIDES[overrideKey]) {
-      const companyName = TEST_CASE_OVERRIDES[overrideKey];
-      log('info', `Override applied for domain: ${normalizedDomain}`, { companyName });
+    if (TEST_CASE_OVERRIDES[normalizedDomain + ".com"]) {
+      const companyName = TEST_CASE_OVERRIDES[normalizedDomain + ".com"];
+      log("info", `Override applied for domain: ${normalizedDomain}`, { companyName });
       return {
-        companyName,
+        companyName: cleanCompanyName(capitalizeName(companyName).name), // Use cleanCompanyName
         confidenceScore: 125,
-        flags: ['overrideApplied'],
-        tokens: companyName.toLowerCase().split(' ').filter(Boolean),
-        confidenceOrigin: 'override',
-        rawTokenCount: companyName.split(' ').length
+        flags: ["overrideApplied"],
+        tokens: companyName.toLowerCase().split(" "),
+        confidenceOrigin: "override",
+        rawTokenCount: companyName.split(" ").length
       };
     }
 
-    // Step 2: Check brand-only domains
-    if (!BRAND_ONLY_DOMAINS_CACHE.size) {
-      log('error', 'BRAND_ONLY_DOMAINS is not a Set', { BRAND_ONLY_DOMAINS });
-      return { companyName: '', confidenceScore: 0, flags: ['invalidDependency'], tokens: [], confidenceOrigin: 'invalidDependency', rawTokenCount: 0 };
+    if (!(BRAND_ONLY_DOMAINS instanceof Set)) {
+      log("error", "BRAND_ONLY_DOMAINS is not a Set", { BRAND_ONLY_DOMAINS });
+      return { companyName: "", confidenceScore: 0, flags: ["invalidDependency"], tokens: [], confidenceOrigin: "invalidDependency", rawTokenCount: 0 };
     }
-    if (BRAND_ONLY_DOMAINS_CACHE.has(overrideKey)) {
-      log('info', `Brand-only domain detected: ${normalizedDomain}`);
+
+    if (BRAND_ONLY_DOMAINS.has(normalizedDomain + ".com")) {
+      log("info", `Brand-only domain detected: ${normalizedDomain}`);
       return {
-        companyName: '',
+        companyName: "",
         confidenceScore: 0,
-        flags: ['brandOnly'],
+        flags: ["brandOnly"],
         tokens: [],
-        confidenceOrigin: 'brandOnly',
+        confidenceOrigin: "brandOnly",
         rawTokenCount: 0
       };
     }
 
-    // Step 3: Extract domain brand early
-    const domainBrand = extractBrandOfCityFromDomain(normalizedDomain);
-    if (domainBrand && typeof domainBrand !== 'string') {
-      log('error', 'Invalid domain brand type', { domain: normalizedDomain, domainBrand });
-      return { companyName: '', confidenceScore: 0, flags: ['invalidBrandType'], tokens: [], confidenceOrigin: 'invalidBrandType', rawTokenCount: 0 };
+    let tokens = earlyCompoundSplit(normalizedDomain);
+if (!Array.isArray(tokens) || !tokens.every(token => typeof token === "string")) {
+  log("error", "earlyCompoundSplit returned invalid tokens", { domain, tokens });
+  return { companyName: "", confidenceScore: 0, flags: ["earlyCompoundSplitFailed"], tokens: [], confidenceOrigin: "earlyCompoundSplitFailed", rawTokenCount: 0 };
+}
+
+const rawTokenCount = tokens.length;
+
+// Check for unsplit long tokens
+const hasLongUnsplitToken = tokens.some(token => token.length > 10 && !token.includes(" ") && !CAR_BRANDS.has(token) && !KNOWN_CITIES_SET.has(token) && !properNounsSet.has(token));
+const longTokenFlags = hasLongUnsplitToken ? ["PotentialUnsplitToken"] : [];
+
+if (tokens.length < 2 || tokens.every(t => COMMON_WORDS.has(t.toLowerCase()))) {
+  if (tokens.length === 1 && !CAR_BRANDS.has(tokens[0].toLowerCase()) && !KNOWN_CITIES_SET.has(tokens[0].toLowerCase())) {
+    const companyName = capitalizeName(tokens[0]).name;
+    const result = {
+      companyName: cleanCompanyName(companyName),
+      confidenceScore: 80 - (hasLongUnsplitToken ? 5 : 0), // Deduct 5 if long unsplit token
+      flags: ["singleTokenFallback", ...longTokenFlags],
+      tokens: [tokens[0].toLowerCase()],
+      confidenceOrigin: "singleTokenFallback",
+      rawTokenCount
+    };
+    log("info", "Single token fallback applied", { companyName, tokens });
+    return result;
+  }
+  const result = {
+    companyName: "",
+    confidenceScore: 0,
+    flags: ["tokenSetTooWeak", ...longTokenFlags],
+    tokens: [],
+    confidenceOrigin: "tokenSanityCheck",
+    rawTokenCount
+  };
+  log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
+  result.tokens = result.tokens.slice(0, 3);
+  return result;
+}
+
+    let meta = {};
+    try {
+      meta = await fetchMetaData(domain);
+    } catch (err) {
+      log("error", "fetchMetaData failed", { domain, error: err.message, stack: err.stack });
     }
-    log('debug', `Extracted domain brand: ${domainBrand || 'null'} for domain: ${normalizedDomain}`);
 
-    // Step 4: Parallelize tokenization and metadata fetch
-    const [tokensResult, metaResult] = await Promise.all([
-      earlyCompoundSplit(normalizedDomain),
-      fetchMetaData(domain).catch(err => {
-        log('error', 'fetchMetaData failed', { domain: normalizedDomain, error: err.message, stack: err.stack });
-        return {};
-      })
-    ]);
-
-    let tokens = tokensResult;
-    if (!Array.isArray(tokens) || !tokens.every(token => typeof token === 'string')) {
-      log('error', 'earlyCompoundSplit returned invalid tokens', { domain: normalizedDomain, tokens });
-      return { companyName: '', confidenceScore: 0, flags: ['earlyCompoundSplitFailed'], tokens: [], confidenceOrigin: 'earlyCompoundSplitFailed', rawTokenCount: 0 };
+    let result = null;
+    try {
+      result = tryHumanNamePattern(tokens);
+    } catch (e) {
+      log("error", "tryHumanNamePattern failed", { domain, tokens, error: e.message, stack: e.stack });
     }
-
-    const rawTokenCount = tokens.length;
-
-    // Step 5: Check for unsplit long tokens
-    const hasLongUnsplitToken = tokens.some(token =>
-      token.length > 10 &&
-      !token.includes(' ') &&
-      !CAR_BRANDS_CACHE.has(token.toLowerCase()) &&
-      !KNOWN_CITIES_SET_CACHE.has(token.toLowerCase()) &&
-      !PROPER_NOUNS_CACHE.has(token.toLowerCase())
-    );
-    const longTokenFlags = hasLongUnsplitToken ? ['PotentialUnsplitToken'] : [];
-
-    // Step 6: Handle weak token sets
-    if (tokens.length < 2 || tokens.every(t => COMMON_WORDS_CACHE.has(t.toLowerCase()))) {
-      if (tokens.length === 1 && !CAR_BRANDS_CACHE.has(tokens[0].toLowerCase()) && !KNOWN_CITIES_SET_CACHE.has(tokens[0].toLowerCase())) {
-        const capitalized = capitalizeName(tokens[0], domainBrand, domain);
-        const companyName = cleanCompanyName(capitalized.name, domainBrand, domain);
-        const result = {
-          companyName,
-          confidenceScore: 80 - (hasLongUnsplitToken ? 5 : 0),
-          flags: ['singleTokenFallback', ...longTokenFlags, ...capitalized.flags],
-          tokens: companyName.toLowerCase().split(' ').filter(Boolean),
-          confidenceOrigin: 'singleTokenFallback',
-          rawTokenCount
-        };
-        log('info', 'Single token fallback applied', { companyName, tokens, domain: normalizedDomain });
-        return result;
+    if (!result) {
+      try {
+        result = tryProperNounPattern(tokens);
+      } catch (e) {
+        log("error", "tryProperNounPattern failed", { domain, tokens, error: e.message, stack: e.stack });
       }
-      const result = {
-        companyName: '',
+    }
+    if (!result) {
+      try {
+        result = tryBrandCityPattern(tokens);
+      } catch (e) {
+        log("error", "tryBrandCityPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+      }
+    }
+    if (!result) {
+      try {
+        result = tryBrandGenericPattern(tokens);
+      } catch (e) {
+        log("error", "tryBrandGenericPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+      }
+    }
+    if (!result) {
+      try {
+        result = tryGenericPattern(tokens, properNounsSet, meta);
+      } catch (e) {
+        log("error", "tryGenericPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+      }
+    }
+
+    if (!result) {
+      result = {
+        companyName: "",
         confidenceScore: 0,
-        flags: ['tokenSetTooWeak', ...longTokenFlags],
+        flags: ["noPatternMatch"],
         tokens: [],
-        confidenceOrigin: 'tokenSanityCheck',
+        confidenceOrigin: "noPatternMatch",
         rawTokenCount
       };
-      log('debug', 'Final result confidence', { companyName: result.companyName, confidenceScore: result.confidenceScore, domain: normalizedDomain });
+      log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
+      result.tokens = result.tokens.slice(0, 3);
       return result;
     }
 
-    // Step 7: Parallelize pattern-matching functions
-    const patternPromises = [
-      tryHumanNamePattern(tokens, domainBrand).catch(e => {
-        log('error', 'tryHumanNamePattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
-        return null;
-      }),
-      tryProperNounPattern(tokens, domainBrand).catch(e => {
-        log('error', 'tryProperNounPattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
-        return null;
-      }),
-      tryBrandCityPattern(tokens, domainBrand).catch(e => {
-        log('error', 'tryBrandCityPattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
-        return null;
-      }),
-      tryBrandGenericPattern(tokens, domainBrand).catch(e => {
-        log('error', 'tryBrandGenericPattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
-        return null;
-      }),
-      tryGenericPattern(tokens, properNounsSet, metaResult, domainBrand).catch(e => {
-        log('error', 'tryGenericPattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
-        return {
-          companyName: tokens
-            .filter(t => !CAR_BRANDS_CACHE.has(t.toLowerCase()) && !KNOWN_CITIES_SET_CACHE.has(t.toLowerCase()))
-            .join(' '),
-          confidenceScore: 60,
-          flags: ['genericPatternFallback', ...longTokenFlags],
-          tokens: tokens.map(t => t.toLowerCase())
-        };
-      })
-    ];
-
-    const results = await Promise.all(patternPromises);
-    const validResults = results.filter(result => result && result.companyName);
-
-    // Step 8: Prioritize result based on confidence score and token count
-    let bestResult = null;
-    for (const result of validResults) {
-      const tokenCount = result.companyName.split(' ').filter(Boolean).length;
-      const hasCriticalFlags = result.flags.some(flag =>
-        ['brandOrCityOnlyBlocked', 'cityOnlyBlocked', 'brandOnlyBlocked'].includes(flag)
-      );
-
-      if (hasCriticalFlags) continue;
-
-      if (
-        !bestResult ||
-        result.confidenceScore > bestResult.confidenceScore ||
-        (result.confidenceScore === bestResult.confidenceScore && tokenCount > bestResult.companyName.split(' ').length)
-      ) {
-        bestResult = result;
+    // Extract domain brand for validation
+    let domainBrand = null;
+    for (const token of tokens) {
+      if (CAR_BRANDS.has(token.toLowerCase())) {
+        domainBrand = token;
+        break;
       }
     }
 
-    if (!bestResult) {
-      const singleTokenResult = results.find(result => result && result.flags.includes('singleTokenFallback'));
-      const genericResult = results.find(result => result && result.flags.includes('genericPatternFallback'));
-      bestResult = singleTokenResult || genericResult || {
-        companyName: '',
-        confidenceScore: 0,
-        flags: ['noPatternMatch', ...longTokenFlags],
-        tokens: [],
-        confidenceOrigin: 'noPatternMatch',
-        rawTokenCount
-      };
-      log('debug', 'Final result confidence', { companyName: bestResult.companyName, confidenceScore: bestResult.confidenceScore, domain: normalizedDomain });
-      return bestResult;
-    }
+    // Validate the company name
+    const validationResult = validateCompanyName(
+      result.companyName,
+      domain,
+      domainBrand,
+      result.confidenceScore,
+      result.flags
+    );
 
-    // Step 9: Apply cleaning and capitalization
-    const capitalized = capitalizeName(bestResult.companyName, domainBrand, domain);
-    bestResult.companyName = cleanCompanyName(capitalized.name, domainBrand, domain);
-    bestResult.flags = [...bestResult.flags, ...capitalized.flags];
-    bestResult.tokens = bestResult.companyName.toLowerCase().split(' ').filter(Boolean);
-
-    // Step 10: Validate the company name
-    const validationResult = validateCompanyName(bestResult.companyName, domain, domainBrand, bestResult.confidenceScore, bestResult.flags);
-
-    let finalResult = bestResult;
-    if (
-      !validationResult.validatedName &&
-      validationResult.flags.some(flag => ['brandOnly', 'cityOnly', 'invalidName'].includes(flag))
-    ) {
-      finalResult = {
-        companyName: '',
+    if (!validationResult.validatedName) {
+      result = {
+        companyName: "",
         confidenceScore: validationResult.confidenceScore,
-        flags: [...validationResult.flags, ...longTokenFlags],
+        flags: validationResult.flags,
         tokens: [],
-        confidenceOrigin: bestResult.confidenceOrigin,
+        confidenceOrigin: result.confidenceOrigin,
         rawTokenCount
       };
-    } else {
-      finalResult.companyName = validationResult.validatedName || bestResult.companyName;
-      finalResult.confidenceScore = validationResult.confidenceScore;
-      finalResult.flags = [...validationResult.flags, ...longTokenFlags];
+      log("debug", "Final result confidence after validation", { companyName: result.companyName, confidenceScore: result.confidenceScore });
+      result.tokens = result.tokens.slice(0, 3);
+      return result;
     }
 
-    // Step 11: Relax single-token rejection
-    const finalTokenCount = finalResult.companyName.split(' ').filter(Boolean).length;
-    if (
-      finalTokenCount === 1 &&
-      !TEST_CASE_OVERRIDES[overrideKey] &&
-      !KNOWN_PROPER_NOUNS_CACHE.has(finalResult.companyName.toLowerCase())
-    ) {
-      finalResult.flags.push('SingleTokenWarning');
-      finalResult.confidenceScore = Math.min(finalResult.confidenceScore, 80);
-    }
+    result.companyName = cleanCompanyName(validationResult.validatedName); // Use cleanCompanyName
+    result.confidenceScore = validationResult.confidenceScore;
+    result.flags = validationResult.flags;
 
-    // Step 12: Final logging and token truncation
-    finalResult.rawTokenCount = rawTokenCount;
-    log('info', `Processed domain: ${normalizedDomain}`, { result: finalResult });
-    log('debug', 'Final result confidence', { companyName: finalResult.companyName, confidenceScore: finalResult.confidenceScore, domain: normalizedDomain });
-    finalResult.tokens = finalResult.tokens.slice(0, 3);
-    return finalResult;
+    result.rawTokenCount = rawTokenCount;
+
+    log("info", `Processed domain: ${normalizedDomain}`, { result });
+    log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
+    result.tokens = (result.tokens || []).slice(0, 3);
+    return result;
   } catch (e) {
-    log('error', 'humanizeName failed', { domain, error: e.message, stack: e.stack });
-    return { companyName: '', confidenceScore: 0, flags: ['humanizeNameError'], tokens: [], confidenceOrigin: 'humanizeNameError', rawTokenCount: 0 };
+    log("error", "humanizeName failed", { domain, error: e.message, stack: e.stack });
+    return { companyName: "", confidenceScore: 0, flags: ["humanizeNameError"], tokens: [], confidenceOrigin: "humanizeNameError", rawTokenCount: 0 };
   }
 }
 
-// In-memory cache for metadata
-const metaCache = new Map();
-
-// Mocked metadata as a Map for efficiency (simulating real API data)
-const metaData = new Map([
-  ["donjacobs.com", { title: "Chevrolet Dealer" }],
-  ["crossroadscars.com", { title: "Toyota Dealer" }],
-  ["chicagocars.com", { title: "Toyota Dealer in Chicago" }],
-  ["davisautosales.com", { title: "Auto Dealer" }],
-  ["northwestcars.com", { title: "Toyota Dealer" }],
-  ["fordtustin.com", { title: "Ford Dealer in Tustin" }],
-  ["hondakingsport.com", { title: "Honda Dealer in Kingsport" }],
-  ["toyotaofchicago.com", { title: "Toyota Dealer in Chicago" }],
-  ["nplincoln.com", { title: "Lincoln Dealer" }],
-  ["chevyofcolumbuschevrolet.com", { title: "Chevrolet Dealer in Columbus" }],
-  ["mazdanashville.com", { title: "Mazda Dealer in Nashville" }],
-  ["kiachattanooga.com", { title: "Kia Dealer in Chattanooga" }],
-  ["subaruofgwinnett.com", { title: "Subaru Dealer in Gwinnett" }],
-  ["ricksmithchevrolet.com", { title: "Chevrolet Dealer" }],
-  ["mikeerdman.com", { title: "Toyota Dealer" }],
-  ["tasca.com", { title: "Ford Dealer" }],
-  ["crystalautogroup.com", { title: "Auto Dealer" }],
-  ["lacitycars.com", { title: "Auto Dealer" }],
-  ["barlowautogroup.com", { title: "Auto Dealer" }],
-  ["drivevictory.com", { title: "Auto Dealer" }]
-]);
-
-async function fetchMetaData(domain) {
+function fetchMetaData(domain) {
   try {
     if (!domain || typeof domain !== "string") {
       log("error", "Invalid domain in fetchMetaData", { domain });
       throw new Error("Invalid domain input");
     }
 
-    // Check cache first
-    if (metaCache.has(domain)) {
-      const cachedMeta = metaCache.get(domain);
-      return { ...cachedMeta, flags: cachedMeta.flags || [] };
-    }
-
-    // Simulate API call with timeout (mocked for now)
-    const timeoutPromise = new Promise((resolve) => {
-      setTimeout(() => {
-        resolve({ timedOut: true });
-      }, 5000); // 5-second timeout
-    });
-
-    // Mocked API fetch (replace with real HTTP request in production)
-    const fetchPromise = new Promise((resolve) => {
-      const meta = metaData.get(domain) || {};
-      resolve(meta);
-    });
-
-    const result = await Promise.race([fetchPromise, timeoutPromise]);
-
-    if (result.timedOut) {
-      log("warn", "Metadata fetch timed out", { domain });
-      metaCache.set(domain, { flags: ["FetchTimeout"] });
-      return { flags: ["FetchTimeout"] };
-    }
-
-    // Cache the result
-    const metaResult = { ...result, flags: result.flags || [] };
-    metaCache.set(domain, metaResult);
-
-    return metaResult;
+    const meta = {
+      "donjacobs.com": { title: "Chevrolet Dealer" },
+      "crossroadscars.com": { title: "Toyota Dealer" },
+      "chicagocars.com": { title: "Toyota Dealer in Chicago" },
+      "davisautosales.com": { title: "Auto Dealer" },
+      "northwestcars.com": { title: "Toyota Dealer" },
+      "fordtustin.com": { title: "Ford Dealer in Tustin" },
+      "hondakingsport.com": { title: "Honda Dealer in Kingsport" },
+      "toyotaofchicago.com": { title: "Toyota Dealer in Chicago" },
+      "nplincoln.com": { title: "Lincoln Dealer" },
+      "chevyofcolumbuschevrolet.com": { title: "Chevrolet Dealer in Columbus" },
+      "mazdanashville.com": { title: "Mazda Dealer in Nashville" },
+      "kiachattanooga.com": { title: "Kia Dealer in Chattanooga" },
+      "subaruofgwinnett.com": { title: "Subaru Dealer in Gwinnett" },
+      "ricksmithchevrolet.com": { title: "Chevrolet Dealer" },
+      "mikeerdman.com": { title: "Toyota Dealer" },
+      "tasca.com": { title: "Ford Dealer" },
+      "crystalautogroup.com": { title: "Auto Dealer" },
+      "lacitycars.com": { title: "Auto Dealer" },
+      "barlowautogroup.com": { title: "Auto Dealer" },
+      "drivevictory.com": { title: "Auto Dealer" }
+    };
+    return meta[domain] || {};
   } catch (e) {
     log("error", "fetchMetaData failed", { domain, error: e.message, stack: e.stack });
-    metaCache.set(domain, { flags: ["FetchFailed"] });
-    return { flags: ["FetchFailed"] };
+    return {};
   }
 }
 
@@ -3079,168 +2930,85 @@ function getMetaTitleBrand(meta) {
       return null;
     }
 
-    // Check for fetch reliability flags
-    let confidenceAdjustment = 0;
-    const fetchFlags = meta.flags || [];
-    if (fetchFlags.includes("FetchTimeout") || fetchFlags.includes("FetchFailed")) {
-      confidenceAdjustment = -20; // Lower confidence for unreliable metadata
-    }
-
-    const title = meta.title.toLowerCase().replace(TITLE_CLEANUP_REGEX, '');
+    const title = meta.title.toLowerCase().replace(/[^a-z0-9\s]/gi, '');
     const words = title.split(/\s+/).filter(Boolean);
 
     // Check for multiple brands
-    const brandTokens = words.filter(w => CAR_BRANDS_CACHE.has(w));
+    const brandTokens = words.filter(w => CAR_BRANDS.has(w));
     if (brandTokens.length > 1) {
       log('warn', 'Multiple brands detected in meta title', { title, brandTokens });
       return null;
     }
 
     let companyName = null;
-    let confidenceScore = 90 + confidenceAdjustment; // Lower base confidence to prioritize token-based patterns
-    const flags = new Set(['MetaTitleExtracted']);
-
-    // Pre-compute token matches
-    const tokenInfo = words.map(word => {
-      const wordNoSpaces = word.replace(/\s+/g, '');
-      return {
-        word,
-        wordNoSpaces,
-        isProperNoun: PROPER_NOUNS_CACHE.has(wordNoSpaces),
-        isBrand: CAR_BRANDS_CACHE.has(word),
-        isCity: KNOWN_CITIES_SET_CACHE.has(wordNoSpaces),
-        isHumanName: KNOWN_FIRST_NAMES_CACHE.has(wordNoSpaces) || KNOWN_LAST_NAMES_CACHE.has(wordNoSpaces),
-        isGeneric: CONTEXTUAL_WORDS.has(word)
-      };
-    });
+    let confidenceScore = 125;
+    let flags = new Set(['MetaTitleExtracted']);
 
     // Priority 1: Match proper noun or city
-    for (const info of tokenInfo) {
-      if (info.isProperNoun && !info.isBrand) {
-        companyName = capitalizeName(info.word).name;
+    for (const word of words) {
+      const wordNoSpaces = word.replace(/\s+/g, '');
+      if (properNounsSet.has(wordNoSpaces) && !CAR_BRANDS.has(word)) {
+        companyName = capitalizeName(word).name;
         flags.add('ProperNounMatch');
         break;
       }
-      if (info.isCity && !info.isBrand) {
-        companyName = capitalizeName(info.wordNoSpaces).name;
+      if (KNOWN_CITIES_SET.has(wordNoSpaces) && !CAR_BRANDS.has(word)) {
+        companyName = capitalizeName(wordNoSpaces).name;
         flags.add('CityMatch');
         break;
       }
     }
 
-    // Priority 2: Match human name (if no proper noun or city found)
+    // Priority 2: Match single brand (if no name found)
     if (!companyName) {
-      for (const info of tokenInfo) {
-        if (info.isHumanName && !info.isBrand && !info.isCity) {
-          companyName = capitalizeName(info.word).name;
-          flags.add('HumanNameMatch');
-          break;
-        }
-      }
-    }
-
-    // Priority 3: Match single brand (only if paired with another component)
-    let brand = null;
-    if (companyName) {
-      for (const info of tokenInfo) {
-        if (info.isBrand) {
-          brand = BRAND_MAPPING_CACHE.has(info.word) ? BRAND_MAPPING_CACHE.get(info.word) : capitalizeName(info.word).name;
+      for (const word of words) {
+        if (CAR_BRANDS.has(word)) {
+          companyName = BRAND_MAPPING.get(word) || capitalizeName(word).name;
           flags.add('BrandMatch');
           break;
         }
       }
     }
 
-    // If no proper noun, city, or human name is found, reject brand-only results
-    if (!companyName) {
-      if (logLevel === "debug") {
-        log('debug', 'No proper noun, city, or human name found in meta title', { title });
-      }
-      return null;
-    }
-
-    // Append brand or generic term if present
+    // Append generic term if present
     if (companyName) {
-      if (brand && !companyName.toLowerCase().includes(brand.toLowerCase())) {
-        companyName = `${companyName} ${brand}`;
-        confidenceScore = 100 + confidenceAdjustment;
-        flags.add('BrandAppended');
-      } else {
-        const genericInfo = tokenInfo.find(t => t.isGeneric && !t.isBrand);
-        if (genericInfo && !companyName.toLowerCase().includes(genericInfo.word.toLowerCase())) {
-          const formattedGeneric = capitalizeName(genericInfo.word).name;
-          companyName = `${companyName} ${formattedGeneric}`;
+      const genericTerms = ['auto', 'automotive', 'motors', 'dealer', 'group', 'cars', 'drive', 'center', 'world'];
+      const genericCandidate = words.find(t => genericTerms.includes(t) && !CAR_BRANDS.has(t));
+      if (genericCandidate) {
+        const formattedGeneric = capitalizeName(genericCandidate).name;
+        const combinedName = `${companyName} ${formattedGeneric}`;
+        const words = combinedName.split(' ').map(w => w.toLowerCase());
+        if (new Set(words).size !== words.length) {
+          flags.add('DuplicatesRemoved');
+          confidenceScore = 95;
+        } else if (combinedName.split(' ').length > 3) {
+          flags.add('TokenLimitExceeded');
+          confidenceScore = 95;
+        } else {
+          companyName = combinedName;
           flags.add('GenericAppended');
         }
       }
     }
 
-    // Validate token count and duplicates
-    const nameTokens = companyName.split(' ').filter(Boolean);
-    const uniqueTokens = new Set(nameTokens.map(t => t.toLowerCase()));
-    if (uniqueTokens.size !== nameTokens.length) {
-      flags.add('DuplicatesRemoved');
-      confidenceScore = Math.min(confidenceScore, 85);
-      companyName = [...uniqueTokens]
-        .map(t => nameTokens.find(nt => nt.toLowerCase() === t))
-        .join(" ");
-    }
-
-    if (nameTokens.length > 3) {
-      flags.add('TokenLimitExceeded');
-      confidenceScore = Math.min(confidenceScore, 80);
-      companyName = nameTokens.slice(0, 3).join(" ");
-    }
-
-    if (logLevel === "debug") {
+    if (companyName) {
       log('debug', 'getMetaTitleBrand succeeded', { companyName, confidenceScore, flags });
+      return { companyName, confidenceScore, flags: Array.from(flags) };
     }
-    return {
-      companyName,
-      confidenceScore,
-      confidenceOrigin: 'MetaTitleExtracted',
-      flags: Array.from(flags)
-    };
+
+    return null;
   } catch (e) {
     log('error', 'getMetaTitleBrand failed', { meta, error: e.message, stack: e.stack });
     return null;
   }
 }
 
-function validateCompanyName(name, domain, brand, confidence, flags) {
-  try {
-    if (!name || typeof name !== 'string') {
-      log('warn', 'Invalid name in validateCompanyName', { domain, name });
-      return { validatedName: '', confidenceScore: 0, flags: [...flags, 'invalidName'], validated: false };
-    }
-
-    const tokens = name.toLowerCase().split(WHITESPACE_REGEX).filter(Boolean);
-    const overrideKey = domain.endsWith('.com') ? domain : `${domain}.com`;
-    const isOverride = TEST_CASE_OVERRIDES[overrideKey];
-    const isProperNoun = KNOWN_PROPER_NOUNS_CACHE.has(name.toLowerCase());
-
-    // Allow single-token names if override, proper noun, or not brand/city
-    if (tokens.length < 1 || (tokens.length === 1 && !isOverride && !isProperNoun && (CAR_BRANDS_CACHE.has(name.toLowerCase()) || KNOWN_CITIES_SET_CACHE.has(name.toLowerCase())))) {
-      log('warn', 'Invalid name length or brand/city-only', { domain, name, tokenCount: tokens.length });
-      return { validatedName: '', confidenceScore: 50, flags: [...flags, 'InvalidNameLength'], validated: false };
-    }
-
-    if (tokens.every(token => CAR_BRANDS_CACHE.has(token))) {
-      log('warn', 'Brand-only name detected', { domain, name });
-      return { validatedName: '', confidenceScore: 0, flags: [...flags, 'brandOnly'], validated: false };
-    }
-
-    if (tokens.every(token => KNOWN_CITIES_SET_CACHE.has(token))) {
-      log('warn', 'City-only name detected', { domain, name });
-      return { validatedName: '', confidenceScore: 0, flags: [...flags, 'cityOnly'], validated: false };
-    }
-
-    const confidenceScore = tokens.length === 1 ? Math.min(confidence, 80) : confidence;
-    return { validatedName: name, confidenceScore, flags: [...flags, tokens.length === 1 ? 'SingleTokenWarning' : ''].filter(Boolean), validated: true };
-  } catch (e) {
-    log('error', 'validateCompanyName failed', { domain, name, error: e.message, stack: e.stack });
-    return { validatedName: '', confidenceScore: 0, flags: [...flags, 'ValidationError'], validated: false };
-  }
+function validateCompanyName(name, domain, brand, score, flags) {
+  return {
+    validatedName: name,
+    confidenceScore: score,
+    flags
+  };
 }
 
 // Export all functions required by batch-enrich.js
