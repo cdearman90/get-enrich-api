@@ -16,8 +16,7 @@ import {
   ABBREVIATION_EXPANSIONS,
   SORTED_CITY_LIST,
   TEST_CASE_OVERRIDES,
-  properNounsSet,
-  validateFallbackName
+  properNounsSet
 } from "./constants.js";
 
 const logger = winston.createLogger({
@@ -41,19 +40,6 @@ const logger = winston.createLogger({
  */
 function log(level, message, context = {}) {
   logger[level]({ message, ...context });
-}
-
-// Validates override format for manual audit
-function validateOverrideFormat(override) {
-
-  if (!override || typeof override !== "string") return false;
-  const tokens = override.split(" ").filter(Boolean);
-
-  // Ensure 1-3 tokens, proper capitalization, no connectors
-  if (tokens.length < 1 || tokens.length > 3) return false;
-  if (!override.match(/^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/)) return false;
-  if (COMMON_WORDS.has(tokens[0].toLowerCase()) || COMMON_WORDS.has(tokens[tokens.length - 1].toLowerCase())) return false;
-  return true;
 }
 
 // Normalizes domain by removing "www." and extracting base domain
@@ -555,86 +541,6 @@ function tryGenericPattern(tokens, properNounsSet) {
   };
 }
 
-// Ensure cleanCompanyName is defined earlier in the file (e.g., near other utilities)
-// Utility to clean company names
-// function cleanCompanyName(name) {
-//   if (!name || typeof name !== "string") return "";
-//   return name.trim().replace(/\s+/g, " "); // Remove extra spaces and trim
-// }
-
-// Helper: Handle override logic
-function handleOverride(normalizedDomain, override) {
-  if (!validateOverrideFormat(override)) {
-    log("warn", "Invalid override format", { domain: normalizedDomain, override });
-    return {
-      companyName: "",
-      confidenceScore: 0,
-      flags: ["override", "invalidOverrideFormat"],
-      tokens: [],
-      confidenceOrigin: "invalidOverrideFormat"
-    };
-  }
-
-  const companyName = cleanCompanyName(capitalizeName(override));
-  const nameTokens = companyName.split(" ").filter(Boolean);
-  const validation = validateFallbackName(
-    { name: companyName, brand: null, flagged: false },
-    normalizedDomain,
-    null,
-    125
-  );
-
-  if (!validation.validatedName) {
-    log("warn", "Override validation failed", { domain: normalizedDomain, override });
-    return {
-      companyName: "",
-      confidenceScore: 0,
-      flags: ["override", "patternValidationFailed"],
-      tokens: [],
-      confidenceOrigin: "overrideValidationFailed",
-      rawTokenCount: 0
-    };
-  }
-
-  log("info", "Override applied", { domain: normalizedDomain, companyName: validation.validatedName });
-  return {
-    companyName: validation.validatedName,
-    confidenceScore: validation.confidenceScore,
-    flags: ["override", ...validation.flags],
-    tokens: nameTokens.map(t => t.toLowerCase()),
-    confidenceOrigin: "override",
-    rawTokenCount: nameTokens.length
-  };
-}
-
-
-// Helper: Validate and update result using validateFallbackName
-function validateAndUpdateResult(result, normalizedDomain) {
-  const validation = validateFallbackName(
-    { name: result.companyName, brand: null, flagged: false },
-    normalizedDomain,
-    null,
-    result.confidenceScore
-  );
-
-  if (!validation.validatedName) {
-    return {
-      ...result,
-      companyName: "",
-      confidenceScore: 0,
-      flags: [...result.flags, "patternValidationFailed"],
-      confidenceOrigin: "patternValidationFailed"
-    };
-  }
-
-  return {
-    ...result,
-    companyName: validation.validatedName,
-    confidenceScore: validation.confidenceScore,
-    flags: [...result.flags, ...validation.flags]
-  };
-}
-
 // Main function to humanize domain names
 function humanizeName(domain) {
   if (!domain || typeof domain !== "string") {
@@ -657,15 +563,6 @@ function humanizeName(domain) {
     };
   }
 
-  // Check for override
-  const override = TEST_CASE_OVERRIDES.get(normalizedDomain + ".com");
-  if (override) {
-    const overrideResult = handleOverride(normalizedDomain, override);
-    log("debug", "Final result confidence", { companyName: overrideResult.companyName, confidenceScore: overrideResult.confidenceScore });
-    overrideResult.tokens = overrideResult.tokens.slice(0, 3);
-    return overrideResult;
-  }
-
   // Tokenize the domain
   const tokens = earlyCompoundSplit(normalizedDomain);
   const rawTokenCount = tokens.length;
@@ -673,7 +570,6 @@ function humanizeName(domain) {
   // Early exit if token set is too weak
   if (tokens.length < 2 || tokens.every(t => COMMON_WORDS.has(t.toLowerCase()))) {
     const result = {
-
       companyName: "",
       confidenceScore: 0,
       flags: ["tokenSetTooWeak"],
@@ -682,7 +578,6 @@ function humanizeName(domain) {
       rawTokenCount
     };
     log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
-
     result.tokens = result.tokens.slice(0, 3);
     return result;
   }
@@ -693,7 +588,6 @@ function humanizeName(domain) {
   // If no match, return failure
   if (!result) {
     const result = {
-
       companyName: "",
       confidenceScore: 0,
       flags: ["noPatternMatch"],
@@ -706,9 +600,9 @@ function humanizeName(domain) {
     return result;
   }
 
-  // Clean the company name
+  // Inline cleaning of the company name
   if (result.companyName) {
-    result.companyName = cleanCompanyName(result.companyName);
+    result.companyName = result.companyName.trim().replace(/\s+/g, " "); // Remove extra spaces and trim
   }
 
   // Apply confidence tuning based on domain structure
@@ -719,9 +613,6 @@ function humanizeName(domain) {
 
   // Add rawTokenCount to result
   result.rawTokenCount = rawTokenCount;
-
-  // Final validation
-  result = validateAndUpdateResult(result, normalizedDomain);
 
   log("info", `Processed domain: ${normalizedDomain}`, { result });
   log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
@@ -734,8 +625,6 @@ export {
   humanizeName,
   earlyCompoundSplit,
   capitalizeName,
-  cleanCompanyName,
-  validateOverrideFormat,
   expandInitials,
   extractBrandOfCityFromDomain
 };
