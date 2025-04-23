@@ -303,36 +303,36 @@ function validateLeads(leads) {
 }
 
 export default async function handler(req, res) {
-  if (!checkRateLimit(req)) {
-    logger.warn("Rate limit exceeded", { ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown-ip' });
-    return res.status(429).json({ error: "Rate limit exceeded. Please try again later." });
-  }
+  const leads = await buffer(req);
+  const body = JSON.parse(leads.toString());
+  const validatedLeads = body.leads;
 
-  let body = null;
-  let manualReviewQueue = [];
-  let fallbackTriggers = [];
-  let totalTokens = 0;
+  const results = await Promise.all(validatedLeads.map(async lead => {
+    const { domain, rowNum } = lead;
+    logger.debug('Processing lead', { domain, rowNum });
 
-  try {
-    // Validate VERCEL_AUTH_TOKEN
-    const authToken = process.env.VERCEL_AUTH_TOKEN;
-    const authHeader = req.headers.authorization;
-    logger.info(`Received auth header: ${authHeader}, Expected: Bearer ${authToken}`);
-    if (!authHeader || authHeader !== `Bearer ${authToken}`) {
-      logger.warn("Unauthorized request", { authHeader, expected: `Bearer ${authToken}` });
-      return res.status(401).json({
-        error: "Unauthorized",
-        message: "Invalid or missing authorization token",
-        details: "Please provide a valid Bearer token in the Authorization header"
-      });
+    try {
+      let result = humanizeName(domain);
+      logger.debug('extractBrandOfCityFromDomain result', { domain, result });
+
+      // If confidence is too low or companyName is empty, use fallback
+      if (!result.companyName || result.confidenceScore < 80) {
+        logger.debug('Falling back to company-name-fallback', { domain, initialResult: result });
+        result = await fallbackName(domain);
+        result.flags.push('fallbackApplied');
+      }
+
+      logger.debug('Processed lead', { domain, rowNum, result });
+      return { ...lead, ...result };
+    } catch (error) {
+      logger.error('processLead failed', { domain, rowNum, error: error.message });
+      return { ...lead, companyName: '', confidenceScore: 0, flags: ['error'], tokens: [] };
     }
+  }));
 
-    logger.debug("Handler started", { method: req.method });
-
-    if (req.method !== "POST") {
-      logger.warn("Invalid method, expected POST", { method: req.method });
-      return res.status(405).json({ error: "Method not allowed, use POST" });
-    }
+  logger.debug('Handler completed successfully', { results });
+  return res.status(200).json({ results });
+}
 
     // Safely access req.body with manual parsing for Vercel dev mode
     try {
