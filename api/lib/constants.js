@@ -8,7 +8,7 @@ const log = globalThis.log || ((level, message, meta) => {
 });
 
 // Comprehensive list of car brands
-const CAR_BRANDS = [
+const CAR_BRANDS = new Set([
     "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
     "cadillac", "carmax", "cdj", "cdjrf", "cdjr", "chev", "chevvy", "chevrolet", "chrysler", "cjd",
     "daewoo", "dodge", "eagle", "ferrari", "fiat", "ford", "genesis", "gmc", "honda", "hummer",
@@ -18,8 +18,7 @@ const CAR_BRANDS = [
     "polestar", "pontiac", "porsche", "ram", "rivian", "rolls-royce", "saab", "saturn", "scion",
     "smart", "subaru", "subie", "suzuki", "tesla", "toyota", "volkswagen", "volvo", "vw", "chevy",
     "honda"
-  ];
-
+]);
   // Mapping for standardized brand names
 const BRAND_MAPPING = new Map([
   ["acura", "Acura"], ["alfa romeo", "Alfa Romeo"], ["amc", "AMC"], ["aston martin", "Aston Martin"], ["audi", "Audi"],
@@ -131,7 +130,7 @@ const COMMON_WORDS = new Set([
   "to", "of", "and", "the", "for", "in", "on", "at", "inc", "llc", "corp", "co"
 ]);
 
-  const TEST_CASE_OVERRIDES = {
+const TEST_CASE_OVERRIDES = typeof TEST_CASE_OVERRIDES === 'object' && TEST_CASE_OVERRIDES !== null ? TEST_CASE_OVERRIDES : {
     "athensford.com": "Athens Ford",
     "patmilliken.com": "Pat Milliken",
     "gusmachadoford.com": "Gus Machado",
@@ -432,7 +431,7 @@ const BRAND_ONLY_DOMAINS = new Set([
     "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
   ]);
 
-  const KNOWN_PROPER_NOUNS = new Set([
+const KNOWN_PROPER_NOUNS = new Set([
     "rt128", "abbots", "dealer", "ac", "airport", "all", "american", "anderson", "art", "moehn", "atamian", "fox", "avis", "barnett", "beaty", "beck", "masten",
     "bentley", "berman", "bert", "smith", "bespoke", "motor", "bill", "dube", "bird", "now", "bob", "walk", "bob", "johnson", "boch", "south", "bulluck",
     "byers", "calavan", "camino", "real", "capitol", "carl", "black", "carrollton", "chapman", "charlie", "chastang", "ciocca", "classic", "criswell",
@@ -499,7 +498,7 @@ const BRAND_ONLY_DOMAINS = new Set([
     "Rising", "Fast", "Deluca"
   ]);
 
-  const KNOWN_CITIES_SET = new Set([
+const KNOWN_CITIES_SET = Array.isArray(SORTED_CITY_LIST) ? new Set(SORTED_CITY_LIST.map(c => c.toLowerCase())) : new Set(
     // Alabama (top 50)
       "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "bayshore", "la fontaine", "big bend", "walnut creek", "beverly hills", "boerne", "berlin city", "el cajon", "turner", "ocean", "siousx falls", "treasure coast", "stone mountain", "melbourne", "rallye", "north shore", "red river", "hawaii", "north cutt", "northpoint", "danberry", "st charles", "white plains", "dife", "el cajon", "lake charles", "queens", "lake geneva", "chester springs", "watertown", "west chester", "inver grove", "tucson", "san marcos", "habberstead", "vacaville", "san rafeal", "south charlotte", "hoover", "dothan", "auburn", "decatur", "madison",
       "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "cedar city", "huntsville", "coral gables", "redwood city", "alabaster", "opelika", "northport", "enterprise", "daphne",
@@ -1020,7 +1019,7 @@ const BRAND_ONLY_DOMAINS = new Set([
       "afton", "evanston", "glenrock", "green river", "jackson hole", "kemmerer", "lander", "powell", "riverton", "sheridan", "birmingham", "montgomery",
       "hunstville", "lakeland", "wilsonville", "palm coast", "morristown", "palm coast", "morristown", "roseville", "novato", "jacksonville", "richmond",
       "san leandro"
-    ]);
+    );
 
      // Define known first and last names for human name splitting
     const KNOWN_FIRST_NAMES = new Set([
@@ -1303,27 +1302,23 @@ const BRAND_ONLY_DOMAINS = new Set([
       "young", "youngblood", "zimmerman", "kadlac", "clark", "caruso", "perillo", "stoops", "weaver"
     ]);
 
-    const SUFFIXES_TO_REMOVE = new Set([
-      "llc", "inc", "corp", "co", "ltd", "group", "auto", "motors"
-      // Subset of COMMON_WORDS for trailing removal
-    ]);
+const SUFFIXES_TO_REMOVE = Array.isArray(SUFFIXES_TO_REMOVE) ? SUFFIXES_TO_REMOVE : [
+    "llc", "inc", "corp", "co", "ltd", "group", "auto", "motors"
+    // Subset of COMMON_WORDS for trailing removal
+];
 
-    // Pre-sort KNOWN_CITIES_SET for efficiency
-    const SORTED_CITY_LIST = Array.from(KNOWN_CITIES_SET).sort((a, b) => b.length - a.length);
-
-    const KNOWN_GENERIC_BLOBS = {
-        "capitalbpg": "BPG Auto",
-        "hmtrs": "HMTR Auto",
-        "czag": "CZAG Auto",
-        "nwh": "NWH Auto",
-        "pbg": "PBG Auto",
-        "rbm": "RBM Auto",
-        "sth": "STH Auto"
-      };
-
+const KNOWN_GENERIC_BLOBS = typeof KNOWN_GENERIC_BLOBS === 'object' && KNOWN_GENERIC_BLOBS !== null ? KNOWN_GENERIC_BLOBS : {
+    "capitalbpg": "BPG Auto",
+    "hmtrs": "HMTR Auto",
+    "czag": "CZAG Auto",
+    "nwh": "NWH Auto",
+    "pbg": "PBG Auto",
+    "rbm": "RBM Auto",
+    "sth": "STH Auto"
+};
 
 // Overrides for specific domains
-const OVERRIDES = {
+const OVERRIDES = typeof OVERRIDES === 'object' && OVERRIDES !== null ? OVERRIDES : {
     "acdealergroup.com": "AC Dealer",
     "aldermansvt.com": "Aldermans VT",
     "allamericanford.net": "All American",
@@ -1565,8 +1560,8 @@ const OVERRIDES = {
     "street-toyota.com": "Street",
     "subaruofwakefield.com": "Subaru Wakefield",
     "sundancechevy.com": "Sundance Chevy",
-    "sunsetmitsubishi.com": "Sunset Mitsubishi",
     "sunnysideauto.com": "Sunnyside Chevy",
+    "sunsetmitsubishi.com": "Sunset Mitsubishi",
     "suntrupbuickgmc.com": "Suntrup",
     "swantgraber.com": "Swant Graber",
     "tasca.com": "Tasca",
@@ -1602,42 +1597,34 @@ const OVERRIDES = {
     "wideworldbmw.com": "Wide World BMW",
     "williamssubarucharlotte.com": "Williams Subaru",
     "yorkautomotive.com": "York Auto"
-  };
+};
 
-  // Blocklist for spammy patterns
-  const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
+// Blocklist for spammy patterns
+const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
 
-  // Spammy tokens to filter out
-  const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
+// Spammy tokens to filter out
+const SPAMMY_TOKENS = ["sales", "autogroup", "cars"];
 
-// Precompute proper nouns set for performance
+// Precompute proper nouns set for performance (only proper nouns)
 const properNounsSet = new Set([
-  ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
-  ...(Array.isArray(KNOWN_LAST_NAMES) ? KNOWN_LAST_NAMES : []).map(n => n.toLowerCase()),
-  ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
-  ...(Array.isArray(COMMON_WORDS) ? COMMON_WORDS : []).map(w => w.toLowerCase())
+    ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
+    ...(Array.isArray(KNOWN_LAST_NAMES) ? KNOWN_LAST_NAMES : []).map(n => n.toLowerCase()),
+    ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
+    ...(Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS : []).map(n => n.toLowerCase())
 ]);
-
-// Ensure other constants are defined with defaults
-const KNOWN_CITIES_SET = Array.isArray(SORTED_CITY_LIST) ? new Set(SORTED_CITY_LIST.map(c => c.toLowerCase())) : new Set();
-const OVERRIDES = typeof OVERRIDES === 'object' && OVERRIDES !== null ? OVERRIDES : {};
-const KNOWN_GENERIC_BLOBS = typeof KNOWN_GENERIC_BLOBS === 'object' && KNOWN_GENERIC_BLOBS !== null ? KNOWN_GENERIC_BLOBS : {};
-const SUFFIXES_TO_REMOVE = Array.isArray(SUFFIXES_TO_REMOVE) ? SUFFIXES_TO_REMOVE : ["motors", "auto", "group"];
-const ABBREVIATION_EXPANSIONS = typeof ABBREVIATION_EXPANSIONS === 'object' && ABBREVIATION_EXPANSIONS !== null ? ABBREVIATION_EXPANSIONS : { "audi": "Audi", "ba": "BA Auto" };
-const TEST_CASE_OVERRIDES = typeof TEST_CASE_OVERRIDES === 'object' && TEST_CASE_OVERRIDES !== null ? TEST_CASE_OVERRIDES : {};
 
 // Log warnings if critical constants are empty or undefined
 if (!KNOWN_CITIES_SET.size) {
-  log('warn', 'KNOWN_CITIES_SET is empty or undefined', {});
+    log('warn', 'KNOWN_CITIES_SET is empty or undefined', {});
 }
 if (!properNounsSet.size) {
-  log('warn', 'properNounsSet is empty or undefined', {});
+    log('warn', 'properNounsSet is empty or undefined', {});
 }
 if (!Object.keys(OVERRIDES).length) {
-  log('warn', 'OVERRIDES is empty or undefined', {});
+    log('warn', 'OVERRIDES is empty or undefined', {});
 }
 if (!Object.keys(KNOWN_GENERIC_BLOBS).length) {
-  log('warn', 'KNOWN_GENERIC_BLOBS is empty or undefined', {});
+    log('warn', 'KNOWN_GENERIC_BLOBS is empty or undefined', {});
 }
 
 export {
@@ -1657,5 +1644,5 @@ export {
     SPAMMY_TOKENS,
     KNOWN_GENERIC_BLOBS,
     OVERRIDES,
-    properNounsSet
-  };
+    properNounsSet // Removed duplicate export
+};
