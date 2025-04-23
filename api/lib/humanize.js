@@ -231,6 +231,7 @@ function earlyCompoundSplit(domain) {
   return uniqueTokens;
 }
 
+// api/lib/humanize.js
 /**
  * Extracts brand and city from a domain
  * @param {string} domain - The domain to process
@@ -251,8 +252,8 @@ function extractBrandOfCityFromDomain(domain) {
       return { brand: '', city: '', connector: '' };
     }
 
-    // Check brand-only domains
-    if (BRAND_ONLY_DOMAINS.has(`${normalized}.com`)) {
+    // Check brand-only domains with existence guard
+    if (BRAND_ONLY_DOMAINS instanceof Set && BRAND_ONLY_DOMAINS.has(`${normalized}.com`)) {
       log('info', 'Skipping brand-only domain', { domain: normalized });
       return { brand: '', city: '', connector: '' };
     }
@@ -286,16 +287,16 @@ function extractBrandOfCityFromDomain(domain) {
       const token = tokens[i];
       if (typeof token !== 'string' || !token.trim()) continue;
       const lowerToken = token.toLowerCase();
-      if (carBrandsSet.has(lowerToken)) {
+      if (carBrandsSet instanceof Set && carBrandsSet.has(lowerToken)) {
         // Safe access to BRAND_MAPPING
         brand = isBrandMappingMap
           ? BRAND_MAPPING.get(lowerToken) || capitalizeName(token)?.name || token
-          : BRAND_MAPPING[lowerToken] || capitalizeName(token)?.name || token;
+          : (BRAND_MAPPING && BRAND_MAPPING[lowerToken]) || capitalizeName(token)?.name || token;
         for (let j = i + 1; j < tokens.length; j++) {
           const nextToken = tokens[j];
           if (typeof nextToken !== 'string' || !nextToken.trim()) continue;
           const lowerNextToken = nextToken.toLowerCase();
-          if (citiesSet.has(lowerNextToken)) {
+          if (citiesSet instanceof Set && citiesSet.has(lowerNextToken)) {
             city = capitalizeName(nextToken)?.name || nextToken;
             break;
           }
@@ -309,12 +310,12 @@ function extractBrandOfCityFromDomain(domain) {
       for (const token of tokens) {
         if (typeof token !== 'string' || !token.trim()) continue;
         const lowerToken = token.toLowerCase();
-        if (!brand && carBrandsSet.has(lowerToken)) {
+        if (!brand && carBrandsSet instanceof Set && carBrandsSet.has(lowerToken)) {
           brand = isBrandMappingMap
             ? BRAND_MAPPING.get(lowerToken) || capitalizeName(token)?.name || token
-            : BRAND_MAPPING[lowerToken] || capitalizeName(token)?.name || token;
+            : (BRAND_MAPPING && BRAND_MAPPING[lowerToken]) || capitalizeName(token)?.name || token;
         }
-        if (!city && citiesSet.has(lowerToken)) {
+        if (!city && citiesSet instanceof Set && citiesSet.has(lowerToken)) {
           city = capitalizeName(token)?.name || token;
         }
       }
@@ -615,6 +616,7 @@ function tryBrandCityPattern(tokens) {
   }
 }
 
+// api/lib/humanize.js
 // Matches proper noun + brand patterns (e.g., 'curryacura' → 'Curry Acura')
 function tryBrandGenericPattern(tokens) {
   try {
@@ -623,6 +625,7 @@ function tryBrandGenericPattern(tokens) {
       return null;
     }
 
+    // Validate dependencies with instanceof checks
     if (!(KNOWN_PROPER_NOUNS instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(COMMON_WORDS instanceof Set)) {
       log("error", "Invalid dependencies in tryBrandGenericPattern", {
         KNOWN_PROPER_NOUNS: KNOWN_PROPER_NOUNS instanceof Set,
@@ -645,8 +648,8 @@ function tryBrandGenericPattern(tokens) {
       const currentToken = tokens[i].toLowerCase();
       const nextToken = tokens[i + 1].toLowerCase();
 
-      if (!properNoun && !CAR_BRANDS.has(currentToken) && !KNOWN_CITIES_SET.has(currentToken) && !COMMON_WORDS.has(currentToken)) {
-        if (KNOWN_PROPER_NOUNS.has(currentToken) || KNOWN_LAST_NAMES.has(currentToken)) {
+      if (!properNoun && !(CAR_BRANDS instanceof Set && CAR_BRANDS.has(currentToken)) && !(KNOWN_CITIES_SET instanceof Set && KNOWN_CITIES_SET.has(currentToken)) && !(COMMON_WORDS instanceof Set && COMMON_WORDS.has(currentToken))) {
+        if ((KNOWN_PROPER_NOUNS instanceof Set && KNOWN_PROPER_NOUNS.has(currentToken)) || (KNOWN_LAST_NAMES instanceof Set && KNOWN_LAST_NAMES.has(currentToken))) {
           properNoun = tokens[i];
           confidenceScore = 125;
           flags.push("knownProperNoun");
@@ -657,10 +660,10 @@ function tryBrandGenericPattern(tokens) {
         }
       }
 
-      if (properNoun && CAR_BRANDS.has(nextToken)) {
-        // Fixed: Use object-safe access for BRAND_MAPPING
+      if (properNoun && (CAR_BRANDS instanceof Set && CAR_BRANDS.has(nextToken))) {
+        // Safe access to BRAND_MAPPING with existence guard
         if (properNoun.toLowerCase().endsWith("s")) {
-          brand = Object.hasOwn(BRAND_MAPPING, nextToken) ? BRAND_MAPPING[nextToken] : nextToken;
+          brand = (BRAND_MAPPING instanceof Map && BRAND_MAPPING.has(nextToken)) ? BRAND_MAPPING.get(nextToken) : (BRAND_MAPPING && Object.hasOwn(BRAND_MAPPING, nextToken)) ? BRAND_MAPPING[nextToken] : nextToken;
           flags.push("brandIncluded");
           confidenceScore = Math.max(confidenceScore, 125);
         }
@@ -677,7 +680,7 @@ function tryBrandGenericPattern(tokens) {
       return null;
     }
 
-    if (KNOWN_CITIES_SET.has(properNoun.toLowerCase()) || CAR_BRANDS.has(properNoun.toLowerCase())) {
+    if ((KNOWN_CITIES_SET instanceof Set && KNOWN_CITIES_SET.has(properNoun.toLowerCase())) || (CAR_BRANDS instanceof Set && CAR_BRANDS.has(properNoun.toLowerCase()))) {
       return null;
     }
 
@@ -689,7 +692,7 @@ function tryBrandGenericPattern(tokens) {
     const companyName = cleanCompanyName(nameResult.name || "") || "";
     nameResult.flags.forEach(flag => flags.push(flag));
 
-    if (!companyName || CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
+    if (!companyName || (CAR_BRANDS instanceof Set && CAR_BRANDS.has(companyName.toLowerCase())) || (KNOWN_CITIES_SET instanceof Set && KNOWN_CITIES_SET.has(companyName.toLowerCase()))) {
       flags.push("brandOrCityOnlyBlocked");
       return null;
     }
@@ -747,7 +750,7 @@ function tryGenericPattern(tokens, properNounsSet) {
 
     for (const token of tokens) {
       const lowerToken = token.toLowerCase();
-      if (!properNoun && properNounsSet.has(lowerToken) && !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken)) {
+      if (!properNoun && (properNounsSet instanceof Set && properNounsSet.has(lowerToken)) && !(CAR_BRANDS instanceof Set && CAR_BRANDS.has(lowerToken)) && !(KNOWN_CITIES_SET instanceof Set && KNOWN_CITIES_SET.has(lowerToken))) {
         const nameResult = capitalizeName(token) || { name: "" };
         properNoun = nameResult.name;
       }
@@ -798,7 +801,7 @@ function humanizeName(domain) {
       return { companyName: "", confidenceScore: 0, flags: ["invalidDependency"], tokens: [], confidenceOrigin: "invalidDependency", rawTokenCount: 0 };
     }
 
-    if (BRAND_ONLY_DOMAINS.has(normalizedDomain + ".com")) {
+    if (BRAND_ONLY_DOMAINS instanceof Set && BRAND_ONLY_DOMAINS.has(normalizedDomain + ".com")) {
       log("info", `Brand-only domain detected: ${normalizedDomain}`);
       return {
         companyName: "",
@@ -826,7 +829,7 @@ function humanizeName(domain) {
     }
 
     // Check token set strength
-    if (tokens.length < 2 || tokens.every(t => typeof t === "string" && COMMON_WORDS.has(t.toLowerCase()))) {
+    if (tokens.length < 2 || tokens.every(t => typeof t === "string" && (COMMON_WORDS instanceof Set && COMMON_WORDS.has(t.toLowerCase())))) {
       const result = {
         companyName: "",
         confidenceScore: 0,
