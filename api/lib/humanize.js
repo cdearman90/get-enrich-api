@@ -179,7 +179,7 @@ function earlyCompoundSplit(domain) {
   tokens = tokens.map(token => expandInitials(token)).flatMap(token => token.split(" ")).filter(Boolean);
 
   // Handle multi-word cities (e.g., 'northlasvegas')
-  for (const city of SORTED_CITY_LIST) {
+  for (const city of KNOWN_CITIES_SET) {
     const cityLower = city.toLowerCase().replace(/\s+/g, "");
     if (remaining.includes(cityLower)) {
       const cityTokens = city.toLowerCase().split(" ").filter(Boolean);
