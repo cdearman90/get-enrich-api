@@ -1,4 +1,4 @@
-// constants.js
+// api/lib/constants.js
 // Shared constant sets and mappings for domain enrichment
 
 const log = globalThis.log || ((level, message, meta) => {
