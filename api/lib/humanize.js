@@ -195,28 +195,37 @@ function earlyCompoundSplit(domain) {
 
 // Extracts brand and city from domain (for batch-enrich.js and tryBrandCityPattern)
 function extractBrandOfCityFromDomain(domain) {
-  const normalized = normalizeDomain(domain);
-  const tokens = earlyCompoundSplit(normalized);
-  let brand = "";
-  let city = "";
+  try {
+    const normalized = normalizeDomain(domain);
+    const tokens = earlyCompoundSplit(normalized);
+    let brand = "";
+    let city = "";
 
-  for (let i = 0; i < tokens.length; i++) {
-    const token = tokens[i].toLowerCase();
-    if (CAR_BRANDS.has(token)) {
-      brand = BRAND_MAPPING.get(token) || token;
-      for (let j = i + 1; j < tokens.length; j++) {
-        const nextToken = tokens[j].toLowerCase();
-        if (KNOWN_CITIES_SET.has(nextToken)) {
-          city = nextToken;
-          break;
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i].toLowerCase();
+      if (CAR_BRANDS.has(token)) {
+        brand = BRAND_MAPPING.get(token) || token;
+        for (let j = i + 1; j < tokens.length; j++) {
+          const nextToken = tokens[j].toLowerCase();
+          if (KNOWN_CITIES_SET.has(nextToken)) {
+            city = nextToken;
+            break;
+          }
         }
+        if (city) break;
       }
-      if (city) break;
     }
-  }
 
-  if (!brand || !city) return { brand: "", city: "", connector: "" };
-  return { brand: capitalizeName(brand), city: capitalizeName(city), connector: "" };
+    if (!brand || !city) {
+      log("debug", "No brand or city found", { domain, tokens });
+      return { brand: "", city: "", connector: "" };
+    }
+
+    return { brand: capitalizeName(brand), city: capitalizeName(city), connector: "" };
+  } catch (err) {
+    log("error", "extractBrandOfCityFromDomain failed", { domain, error: err.message, stack: err.stack });
+    return { brand: "", city: "", connector: "" };
+  }
 }
 
 // Matches first/last name patterns (e.g., 'jimmybrittchevrolet' → 'Jimmy Britt Chevrolet')
