@@ -367,7 +367,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
  * @returns {{companyName: string, confidenceScore: number, flags: Array<string>, tokens: number}} - Enriched result
  */
 async function fallbackName(domain, originalDomain, meta = {}) {
-  const normalizedDomain = domain?.toLowerCase().trim() || "";
+  const normalizedDomain = normalizeDomain(domain); // ✅ Use normalizeDomain
   let companyName = "";
   let confidenceScore = 0;
   let flags = new Set(["FallbackName"]);
@@ -429,7 +429,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     }
 
     let cleanDomain;
-    cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org|\.biz|\.ca|\.co\.uk)$/g, "");
+    cleanDomain = normalizedDomain.replace(/(\.com|\.net|\.org|\.biz|\.ca|\.co\.uk)$/g, "");
     const { brand: domainBrand, city } = extractBrandOfCityFromDomain(cleanDomain);
     let extractedTokensResult = extractTokens(cleanDomain);
     let extractedTokens = extractedTokensResult.tokens;
@@ -538,7 +538,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       }
     }
 
-    // Add logic for generic domains (similar to old tryGenericPattern)
     if (!companyName) {
       const spamTriggers = ["cars", "sales", "autogroup", "group"];
       let cleanedTokens = extractedTokens
@@ -590,7 +589,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         const initials = token.toUpperCase();
         companyName = `${initials} Auto`;
         if (!pattern.test(companyName)) {
-          log("warn", "Initials pattern validation failed", { domain: normalizedDomain, companyName }); // ✅ Fixed typo: NORMALIZED_DOMAIN -> normalizedDomain
+          log("warn", "Initials pattern validation failed", { domain: normalizedDomain, companyName });
           companyName = "";
           flags.add("PatternValidationFailed");
         } else {
