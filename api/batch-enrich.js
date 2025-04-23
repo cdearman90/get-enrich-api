@@ -15,7 +15,7 @@ import winston from "winston";
 import path from "path";
 import fs from "fs";
 import { buffer } from "micro";
-import rateLimit from 'express-rate-limit'; // ✅ Added for rate limiting
+import rateLimit from 'express-rate-limit'; // ✅ Ensure import is used
 
 // Disable Vercel's default body parser for manual parsing in vercel dev mode
 export const config = {
@@ -80,12 +80,19 @@ const pLimit = (concurrency) => {
   });
 };
 
-const limit = pLimit(2);
+const limit = pLimit(5); // Increased concurrency to 5 for better throughput
 const domainCache = new Map();
 const processedDomains = new Set();
 
 const RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 2000;
+
+// ✅ Define rate limiter for Vercel compliance (100 requests/minute)
+const limiter = rateLimit({
+  windowMs: 60 * 1000, // 1 minute
+  max: 100, // 100 requests per minute
+  message: 'Rate limit exceeded. Please try again later.'
+});
 
 /**
  * Calls fallback logic using fallbackName
@@ -122,7 +129,7 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
           companyName: fallback.companyName,
           confidenceScore: fallback.confidenceScore,
           flags: ["FallbackAPIUsed", ...fallback.flags],
-          tokens: Array.isArray(fallback.tokens) ? fallback.tokens.length : fallback.tokens || 0, // ✅ Handle array or number
+          tokens: Array.isArray(fallback.tokens) ? fallback.tokens.length : fallback.tokens || 0,
           rowNum
         };
       } catch (error) {
@@ -137,10 +144,10 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
     let local = { companyName: "", confidenceScore: 80, flags: [], tokens: 0 };
     try {
       const splitName = earlyCompoundSplit(domain.split(".")[0]);
-      const nameResult = capitalizeName(splitName.join(" ")); // ✅ Use { name, flags }
+      const nameResult = capitalizeName(splitName.join(" "));
       local.companyName = nameResult.name || "";
       local.confidenceScore = 80;
-      local.flags = ["LocalCompoundSplit", ...nameResult.flags]; // ✅ Merge flags
+      local.flags = ["LocalCompoundSplit", ...nameResult.flags];
       logger.debug("Local compound split result", { domain, result: local });
     } catch (error) {
       logger.error("Local compound split failed", { domain, error: error.message, stack: error.stack });
@@ -292,7 +299,7 @@ export default async function handler(req, res) {
                 companyName: cached.companyName,
                 confidenceScore: cached.confidenceScore,
                 flags: Array.from(new Set([...cached.flags, "DuplicateSkipped"])),
-                tokens: 0, // Cache hit, no tokens used
+                tokens: 0,
                 rowNum
               };
             }
@@ -342,7 +349,7 @@ export default async function handler(req, res) {
                 companyName: initialResult.companyName || "",
                 confidenceScore: initialResult.confidenceScore || 80,
                 flags: Array.from(new Set(initialResult.flags || [])),
-                tokens: initialResult.tokens?.length || 0 // Use length of tokens array
+                tokens: initialResult.tokens?.length || 0
               };
               tokensUsed = initialResult.tokens?.length || 0;
               humanizeError = null;
@@ -365,7 +372,7 @@ export default async function handler(req, res) {
                     companyName: initialResult.companyName || "",
                     confidenceScore: initialResult.confidenceScore || 80,
                     flags: Array.from(new Set(initialResult.flags || [])),
-                    tokens: initialResult.tokens?.length || 0 // Use length
+                    tokens: initialResult.tokens?.length || 0
                   };
                   tokensUsed = initialResult.tokens?.length || 0;
                   humanizeError = null;
@@ -402,7 +409,7 @@ export default async function handler(req, res) {
                 companyName: fallback.companyName,
                 confidenceScore: fallback.confidenceScore,
                 flags: Array.from(new Set([...fallback.flags, "FallbackAPIUsed"])),
-                tokens: Array.isArray(fallback.tokens) ? fallback.tokens.length : fallback.tokens || 0 // Handle array or number
+                tokens: Array.isArray(fallback.tokens) ? fallback.tokens.length : fallback.tokens || 0
               };
               tokensUsed += Array.isArray(fallback.tokens) ? fallback.tokens.length : fallback.tokens || 0;
               logger.debug("Fallback API result", { domain, result: finalResult });
@@ -478,7 +485,7 @@ export default async function handler(req, res) {
             companyName: finalResult.companyName,
             confidenceScore: finalResult.confidenceScore,
             flags: finalResult.flags,
-            tokens: tokensUsed, // Total tokens used as a number
+            tokens: tokensUsed,
             rowNum
           };
         } catch (err) {
@@ -503,7 +510,7 @@ export default async function handler(req, res) {
         companyName: result.companyName || "",
         confidenceScore: result.confidenceScore || 80,
         flags: result.flags ? result.flags.map(flag => String(flag)) : [],
-        tokens: result.tokens || 0, // Ensure number
+        tokens: result.tokens || 0,
         rowNum: result.rowNum
       }));
 
