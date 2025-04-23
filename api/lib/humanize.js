@@ -316,7 +316,6 @@ function tryHumanNamePattern(tokens) {
       return null;
     }
 
-    // Validate dependencies
     if (!(KNOWN_FIRST_NAMES instanceof Set) || !(KNOWN_LAST_NAMES instanceof Set) || !(CAR_BRANDS instanceof Set) || !(BRAND_MAPPING instanceof Map) || !(KNOWN_CITIES_SET instanceof Set)) {
       log("error", "Invalid dependencies in tryHumanNamePattern", {
         KNOWN_FIRST_NAMES: KNOWN_FIRST_NAMES instanceof Set,
@@ -350,9 +349,12 @@ function tryHumanNamePattern(tokens) {
     for (let i = tokens.indexOf(lastName) + 1; i < tokens.length; i++) {
       const token = tokens[i].toLowerCase();
       if (CAR_BRANDS.has(token)) {
-        brand = BRAND_MAPPING.get(token) || token;
-        flags.push("brandIncluded");
-        confidenceScore = 125;
+        // Only include the brand if the last name ends in 's' (e.g., "Avis" → "Avis Ford")
+        if (lastName.toLowerCase().endsWith("s")) {
+          brand = BRAND_MAPPING.get(token) || token;
+          flags.push("brandIncluded");
+          confidenceScore = 125;
+        }
         break;
       }
     }
@@ -361,7 +363,7 @@ function tryHumanNamePattern(tokens) {
     if (brand) nameParts.push(brand);
 
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
-    const companyName = nameResult.name;
+    const companyName = nameResult.name || "";
     nameResult.flags.forEach(flag => flags.push(flag));
 
     if (!companyName || CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
@@ -508,25 +510,51 @@ function tryBrandCityPattern(tokens) {
       return null;
     }
 
-    if (!(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
+    if (!(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set) || !(COMMON_WORDS instanceof Set)) {
       log("error", "Invalid dependencies in tryBrandCityPattern", {
         CAR_BRANDS: CAR_BRANDS instanceof Set,
-        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set
+        KNOWN_CITIES_SET: KNOWN_CITIES_SET instanceof Set,
+        COMMON_WORDS: COMMON_WORDS instanceof Set
       });
       return null;
     }
 
+    // Try extractBrandOfCityFromDomain first
     const domain = tokens.join("");
-    const { brand, city } = extractBrandOfCityFromDomain(domain) || { brand: "", city: "" };
+    let brandCityResult = extractBrandOfCityFromDomain(domain) || { brand: "", city: "" };
+    let brand = brandCityResult.brand;
+    let city = brandCityResult.city;
+
+    // Fallback: Manually check for brand + city if extractBrandOfCityFromDomain fails
+    if (!brand || !city) {
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i].toLowerCase();
+        if (CAR_BRANDS.has(token)) {
+          brand = BRAND_MAPPING.get(token) || token;
+          // Look for city before or after the brand
+          for (let j = 0; j < tokens.length; j++) {
+            if (j === i) continue; // Skip the brand token
+            const otherToken = tokens[j].toLowerCase();
+            if (KNOWN_CITIES_SET.has(otherToken) && !CAR_BRANDS.has(otherToken) && !COMMON_WORDS.has(otherToken)) {
+              city = tokens[j];
+              break;
+            }
+          }
+          if (city) break;
+        }
+      }
+    }
+
     if (!brand || !city) return null;
 
     let confidenceScore = 100;
     const flags = ["brandCityPattern"];
     const confidenceOrigin = "brandCityPattern";
 
-    const nameParts = [brand, city];
+    // Only include the brand if the city ends in 's' (e.g., "Avis" → "Avis Ford")
+    const nameParts = city.toLowerCase().endsWith("s") ? [city, brand] : [city];
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
-    const companyName = nameResult.name;
+    let companyName = nameResult.name || "";
     nameResult.flags.forEach(flag => flags.push(flag));
 
     confidenceScore = 100;
@@ -612,9 +640,12 @@ function tryBrandGenericPattern(tokens) {
       }
 
       if (properNoun && CAR_BRANDS.has(nextToken)) {
-        brand = BRAND_MAPPING.get(nextToken) || nextToken;
-        flags.push("brandIncluded");
-        confidenceScore = Math.max(confidenceScore, 125);
+        // Only include the brand if the proper noun ends in 's'
+        if (properNoun.toLowerCase().endsWith("s")) {
+          brand = BRAND_MAPPING.get(nextToken) || nextToken;
+          flags.push("brandIncluded");
+          confidenceScore = Math.max(confidenceScore, 125);
+        }
         break;
       } else if (properNoun && ["auto", "motors", "dealership"].includes(nextToken)) {
         generic = nextToken;
@@ -637,7 +668,7 @@ function tryBrandGenericPattern(tokens) {
     else if (generic) nameParts.push(generic);
 
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
-    const companyName = cleanCompanyName(nameResult.name) || "";
+    const companyName = cleanCompanyName(nameResult.name || "") || "";
     nameResult.flags.forEach(flag => flags.push(flag));
 
     if (!companyName || CAR_BRANDS.has(companyName.toLowerCase()) || KNOWN_CITIES_SET.has(companyName.toLowerCase())) {
