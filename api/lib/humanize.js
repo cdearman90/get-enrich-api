@@ -91,41 +91,36 @@ function cleanCompanyName(companyName) {
   }
 }
 
-// Capitalize name while preserving abbreviations
 function capitalizeName(name) {
   try {
-    // Validate input
     if (!name || typeof name !== "string" || !name.trim()) {
       log("error", "Invalid name in capitalizeName", { name });
       return { name: "", flags: ["InvalidInput"] };
     }
 
-    // Normalize the input by trimming and removing extra spaces
     const trimmedName = name.trim().replace(/\s+/g, " ");
     let flags = [];
     let result = trimmedName;
 
     if (trimmedName.includes(".")) {
-      // Preserve abbreviations with dots (e.g., "M.B.")
-      const parts = trimmedName.split(" ").filter(part => part); // Remove empty parts
+      const parts = trimmedName.split(" ").filter(Boolean);
       result = parts
         .map(word => {
-          if (!word) return word; // Guard against empty strings
-          if (word.match(/^[A-Z]\.[A-Z]\.$/)) return word; // Preserve "M.B."
-          if (word.length <= 5 && word === word.toUpperCase()) return word; // Preserve all-caps (e.g., "CDJR")
+          if (!word) return word;
+          if (/^[A-Z]\.[A-Z]\.$/.test(word)) return word; // Preserve "M.B."
+          if (word.length <= 5 && word === word.toUpperCase()) return word; // Preserve acronyms
           return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
         })
         .join(" ");
       flags.push("AbbreviationPreserved");
     } else {
-      // Insert spaces between camelCase fragments
       result = trimmedName.replace(/([a-z])([A-Z])/g, "$1 $2");
       result = result
         .split(" ")
-        .filter(part => part) // Remove empty parts
+        .filter(Boolean)
         .map(word => {
-          if (!word) return word; // Guard against empty strings
-          if (word.length <= 5 && word === word.toUpperCase()) return word; // Preserve all-caps
+          if (!word) return word;
+          if (word.length <= 5 && word === word.toUpperCase()) return word;
           return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
         })
         .join(" ");
