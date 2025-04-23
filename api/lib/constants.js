@@ -498,7 +498,7 @@ const KNOWN_PROPER_NOUNS = new Set([
     "Rising", "Fast", "Deluca"
   ]);
 
-const KNOWN_CITIES_SET = Array.isArray(SORTED_CITY_LIST) ? new Set(SORTED_CITY_LIST.map(c => c.toLowerCase())) : new Set(
+const SORTED_CITY_LIST = [
     // Alabama (top 50)
       "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "bayshore", "la fontaine", "big bend", "walnut creek", "beverly hills", "boerne", "berlin city", "el cajon", "turner", "ocean", "siousx falls", "treasure coast", "stone mountain", "melbourne", "rallye", "north shore", "red river", "hawaii", "north cutt", "northpoint", "danberry", "st charles", "white plains", "dife", "el cajon", "lake charles", "queens", "lake geneva", "chester springs", "watertown", "west chester", "inver grove", "tucson", "san marcos", "habberstead", "vacaville", "san rafeal", "south charlotte", "hoover", "dothan", "auburn", "decatur", "madison",
       "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "cedar city", "huntsville", "coral gables", "redwood city", "alabaster", "opelika", "northport", "enterprise", "daphne",
@@ -1019,7 +1019,10 @@ const KNOWN_CITIES_SET = Array.isArray(SORTED_CITY_LIST) ? new Set(SORTED_CITY_L
       "afton", "evanston", "glenrock", "green river", "jackson hole", "kemmerer", "lander", "powell", "riverton", "sheridan", "birmingham", "montgomery",
       "hunstville", "lakeland", "wilsonville", "palm coast", "morristown", "palm coast", "morristown", "roseville", "novato", "jacksonville", "richmond",
       "san leandro"
-    );
+  ];
+
+// Construct KNOWN_CITIES_SET from SORTED_CITY_LIST
+const KNOWN_CITIES_SET = new Set(SORTED_CITY_LIST.map(c => c.toLowerCase()));
 
      // Define known first and last names for human name splitting
     const KNOWN_FIRST_NAMES = new Set([
@@ -1630,7 +1633,7 @@ if (!Object.keys(KNOWN_GENERIC_BLOBS).length) {
 export {
     CAR_BRANDS,
     BRAND_MAPPING,
-    KNOWN_CITIES_SET,
+    KNOWN_CITIES_SET, // Export this for use in humanize.js
     KNOWN_PROPER_NOUNS,
     KNOWN_FIRST_NAMES,
     KNOWN_LAST_NAMES,
@@ -1639,10 +1642,9 @@ export {
     SUFFIXES_TO_REMOVE,
     TEST_CASE_OVERRIDES,
     ABBREVIATION_EXPANSIONS,
-    SORTED_CITY_LIST,
     BLOCKLIST,
     SPAMMY_TOKENS,
     KNOWN_GENERIC_BLOBS,
     OVERRIDES,
-    properNounsSet // Removed duplicate export
+    properNounsSet
 };
