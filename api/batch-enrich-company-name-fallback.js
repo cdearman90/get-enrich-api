@@ -1,4 +1,4 @@
-// api/batch-enrich.js
+// api/batch-enrich-company-name-fallback.js
 // Fallback logic using OpenAI with caching
 
 import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, normalizeDomain, expandInitials } from "./lib/humanize.js";
