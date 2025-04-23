@@ -304,6 +304,11 @@ function validateLeads(leads) {
 
 export default async function handler(req, res) {
   let body;
+  // Initialize variables to track state
+  let manualReviewQueue = [];
+  let fallbackTriggers = [];
+  let totalTokens = 0;
+
   // Safely access req.body with manual parsing for Vercel dev mode
   try {
     const rawBody = await buffer(req);
