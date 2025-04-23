@@ -1,7 +1,7 @@
 // api/batch-enrich.js
 // Fallback logic using OpenAI with caching
 
-import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, expandInitials } from "./lib/humanize.js";
+import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, normalizeDomain, expandInitials } from "./lib/humanize.js";
 
 import {
   CAR_BRANDS,
@@ -416,12 +416,12 @@ async function fallbackName(domain, originalDomain, meta = {}) {
           companyName: initialResult.companyName,
           confidenceScore: initialResult.confidenceScore,
           flags: Array.from(flags),
-          tokens: initialResult.tokens?.length || 0 // ✅ Normalize tokens to number
+          tokens: initialResult.tokens?.length || 0
         };
       }
       companyName = initialResult.companyName || "";
       confidenceScore = initialResult.confidenceScore || 0;
-      tokens = initialResult.tokens?.length || 0; // ✅ Normalize tokens
+      tokens = initialResult.tokens?.length || 0;
     } catch (error) {
       log("error", "humanizeName failed", { domain: normalizedDomain, error: error.message, stack: error.stack });
       flags.add("HumanizeNameError");
@@ -590,7 +590,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         const initials = token.toUpperCase();
         companyName = `${initials} Auto`;
         if (!pattern.test(companyName)) {
-          log("warn", "Initials pattern validation failed", { domain: NORMALIZED_DOMAIN, companyName });
+          log("warn", "Initials pattern validation failed", { domain: normalizedDomain, companyName }); // ✅ Fixed typo: NORMALIZED_DOMAIN -> normalizedDomain
           companyName = "";
           flags.add("PatternValidationFailed");
         } else {
