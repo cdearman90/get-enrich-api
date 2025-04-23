@@ -44,6 +44,9 @@ const BRAND_ONLY_DOMAINS = new Set([
     "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
   ]);
 
+// Spammy tokens to filter out
+const SPAMMY_TOKENS = ["sales", "autogroup", "cars"];
+
 const KNOWN_PROPER_NOUNS = new Set([
     "rt128", "abbots", "dealer", "ac", "airport", "all", "american", "anderson", "art", "moehn", "atamian", "fox", "avis", "barnett", "beaty", "beck", "masten",
     "bentley", "berman", "bert", "smith", "bespoke", "motor", "bill", "dube", "bird", "now", "bob", "walk", "bob", "johnson", "boch", "south", "bulluck",
@@ -111,7 +114,7 @@ const KNOWN_PROPER_NOUNS = new Set([
     "Rising", "Fast", "Deluca"
   ]);
 
-const SORTED_CITY_LIST = [
+const KNOWN_CITIES_LIST = [
     // Alabama (top 50)
       "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "bayshore", "la fontaine", "big bend", "walnut creek", "beverly hills", "boerne", "berlin city", "el cajon", "turner", "ocean", "siousx falls", "treasure coast", "stone mountain", "melbourne", "rallye", "north shore", "red river", "hawaii", "north cutt", "northpoint", "danberry", "st charles", "white plains", "dife", "el cajon", "lake charles", "queens", "lake geneva", "chester springs", "watertown", "west chester", "inver grove", "tucson", "san marcos", "habberstead", "vacaville", "san rafeal", "south charlotte", "hoover", "dothan", "auburn", "decatur", "madison",
       "florence", "gadsden", "vestavia hills", "prattville", "phenix city", "cedar city", "huntsville", "coral gables", "redwood city", "alabaster", "opelika", "northport", "enterprise", "daphne",
@@ -1207,7 +1210,7 @@ const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
 const properNounsSet = new Set([
     ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
     ...(Array.isArray(KNOWN_LAST_NAMES) ? KNOWN_LAST_NAMES : []).map(n => n.toLowerCase()),
-    ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
+    ...(Array.isArray(KNOWN_CITIES_LIST) ? KNOWN_CITIES_LIST : []).map(c => c.toLowerCase()),
     ...(Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS : []).map(n => n.toLowerCase())
 ]);
 
