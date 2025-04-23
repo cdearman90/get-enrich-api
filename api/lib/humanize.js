@@ -66,9 +66,21 @@ function cleanCompanyName(companyName) {
   return tokens.join(" ").trim();
 }
 
-// Capitalizes tokens for proper formatting
+// Replace the capitalizeName function in humanize.js (around line 60)
 function capitalizeName(name) {
   if (!name || typeof name !== "string") return "";
+
+  // Preserve abbreviations with dots (e.g., "M.B.")
+  if (name.includes(".")) {
+    const parts = name.split(" ");
+    return parts
+      .map(word => {
+        if (word.match(/^[A-Z]\.[A-Z]\.$/)) return word; // Preserve "M.B."
+        if (word.length <= 5 && word === word.toUpperCase()) return word; // Preserve all-caps (e.g., "CDJR")
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(" ");
+  }
 
   // Insert spaces between camelCase fragments (e.g., "MikeShawToyota" → "Mike Shaw Toyota")
   name = name.replace(/([a-z])([A-Z])/g, "$1 $2");
@@ -77,7 +89,6 @@ function capitalizeName(name) {
     .split(" ")
     .map(word => {
       if (!word) return word;
-      // Preserve all-caps words (e.g., "CDJR", "USA") if length <= 5
       if (word.length <= 5 && word === word.toUpperCase()) return word;
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     })
