@@ -1604,7 +1604,9 @@ const OVERRIDES = {
   const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
 
   // Precompute proper nouns set for performance
-  const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
+const properNounsSet = new Set(
+  Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()) : []
+);
 
 
 
