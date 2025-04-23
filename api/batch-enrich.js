@@ -9,6 +9,7 @@ import {
   earlyCompoundSplit
 } from "./lib/humanize.js";
 import { fallbackName, clearOpenAICache } from "./batch-enrich-company-name-fallback.js";
+import { BRAND_ONLY_DOMAINS } from "./lib/constants.js";
 import winston from "winston";
 import path from "path";
 import fs from "fs";
@@ -84,16 +85,6 @@ const processedDomains = new Set();
 const RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 2000;
 
-const BRAND_ONLY_DOMAINS = [
-  "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com",
-  "dodge.com", "ramtrucks.com", "jeep.com", "lincoln.com", "toyota.com", "honda.com",
-  "nissanusa.com", "subaru.com", "mazdausa.com", "mitsubishicars.com", "acura.com",
-  "lexus.com", "infinitiusa.com", "hyundaiusa.com", "kia.com", "genesis.com",
-  "bmwusa.com", "mercedes-benz.com", "audiusa.com", "vw.com", "volkswagen.com",
-  "porsche.com", "miniusa.com", "fiatusa.com", "alfa-romeo.com", "landroverusa.com",
-  "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
-];
-
 /**
  * Calls fallback logic using fallbackName
  * @param {string} domain - Domain to enrich
@@ -117,58 +108,58 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
       };
     }
 
-   let lastError;
-for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
-  try {
-    logger.debug(`Attempt ${attempt} to call fallback`, { domain, attempt });
-    const fallback = await fallbackName(domain, domain, meta);
+    let lastError;
+    for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
+      try {
+        logger.debug(`Attempt ${attempt} to call fallback`, { domain, attempt });
+        const fallback = await fallbackName(domain, domain, meta);
 
-    logger.debug("Fallback result", { domain, fallback });
+        logger.debug("Fallback result", { domain, fallback });
+        return {
+          domain,
+          companyName: fallback.companyName,
+          confidenceScore: fallback.confidenceScore,
+          flags: ["FallbackAPIUsed", ...fallback.flags],
+          tokens: fallback.tokens || 0,
+          rowNum
+        };
+      } catch (error) {
+        lastError = error;
+        logger.warn(`Fallback attempt ${attempt} failed`, { domain, error: error.message, stack: error.stack });
+        if (attempt < RETRY_ATTEMPTS) {
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        }
+      }
+    }
+    logger.error("Fallback exhausted retries", { domain, error: lastError?.message, stack: lastError?.stack });
+    let local = { companyName: "", confidenceScore: 80, flags: [], tokens: 0 };
+    try {
+      const splitName = earlyCompoundSplit(domain.split(".")[0]);
+      local.companyName = capitalizeName(splitName.join(" ")) || ""; // Fixed: Directly use split and capitalize
+      local.confidenceScore = 80;
+      local.flags = ["LocalCompoundSplit"];
+      logger.debug("Local compound split result", { domain, result: local });
+    } catch (error) {
+      logger.error("Local compound split failed", { domain, error: error.message, stack: error.stack });
+      local.companyName = "";
+      local.flags = ["LocalCompoundSplitFailed"];
+    }
+
+    if (!local.companyName || typeof local.companyName !== "string") {
+      local.companyName = "";
+      local.flags = [...local.flags, "InvalidLocalResponse"];
+    }
+
+    const combinedFlags = [...local.flags, "FallbackAPIFailed", "LocalFallbackUsed"];
     return {
       domain,
-      companyName: fallback.companyName,
-      confidenceScore: fallback.confidenceScore,
-      flags: ["FallbackAPIUsed", ...fallback.flags],
-      tokens: fallback.tokens || 0,
-      rowNum
+      companyName: local.companyName,
+      confidenceScore: local.confidenceScore,
+      flags: Array.from(new Set(combinedFlags)),
+      tokens: local.tokens || 0,
+      rowNum,
+      error: lastError ? lastError.message : "Unknown error"
     };
-  } catch (error) {
-    lastError = error;
-    logger.warn(`Fallback attempt ${attempt} failed`, { domain, error: error.message, stack: error.stack });
-    if (attempt < RETRY_ATTEMPTS) {
-      await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
-    }
-  }
-}
-logger.error("Fallback exhausted retries", { domain, error: lastError?.message, stack: lastError?.stack });
-let local = { companyName: "", confidenceScore: 80, flags: [], tokens: 0 };
-try {
-  const splitName = earlyCompoundSplit(domain.split(".")[0]);
-  local.companyName = capitalizeName(splitName.join(" ")) || ""; // Fixed: Directly use split and capitalize
-  local.confidenceScore = 80;
-  local.flags = ["LocalCompoundSplit"];
-  logger.debug("Local compound split result", { domain, result: local });
-} catch (error) {
-  logger.error("Local compound split failed", { domain, error: error.message, stack: error.stack });
-  local.companyName = "";
-  local.flags = ["LocalCompoundSplitFailed"];
-}
-
-if (!local.companyName || typeof local.companyName !== "string") {
-  local.companyName = "";
-  local.flags = [...local.flags, "InvalidLocalResponse"];
-}
-
-const combinedFlags = [...local.flags, "FallbackAPIFailed", "LocalFallbackUsed"];
-return {
-  domain,
-  companyName: local.companyName,
-  confidenceScore: local.confidenceScore,
-  flags: Array.from(new Set(combinedFlags)),
-  tokens: local.tokens || 0,
-  rowNum,
-  error: lastError ? lastError.message : "Unknown error"
-};
   } catch (err) {
     logger.error("callFallbackAPI failed", { domain, rowNum, error: err.message, stack: err.stack });
     return {
@@ -227,6 +218,10 @@ function validateLeads(leads) {
 
 export default async function handler(req, res) {
   let body = null;
+  let manualReviewQueue = [];
+  let fallbackTriggers = [];
+  let totalTokens = 0;
+
   try {
     // Validate VERCEL_AUTH_TOKEN
     const authToken = process.env.VERCEL_AUTH_TOKEN;
@@ -276,10 +271,6 @@ export default async function handler(req, res) {
     }
 
     const successful = [];
-    const manualReviewQueue = [];
-    const fallbackTriggers = [];
-    let totalTokens = 0;
-
     const processLead = async (lead) => {
       const { domain, rowNum, metaTitle } = lead;
       const domainKey = domain.toLowerCase();
@@ -495,6 +486,8 @@ export default async function handler(req, res) {
       tokens: result.tokens || 0,
       rowNum: result.rowNum
     }));
+
+    manualReviewQueue = sanitizedResults.filter(r => r.flags.includes("ManualReviewRecommended"));
 
     logger.info("Handler completed successfully", {
       successful: sanitizedResults.length,

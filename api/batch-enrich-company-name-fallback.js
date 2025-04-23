@@ -1,14 +1,24 @@
-// api/batch-enrich-company-name-fallback.js
+// api/batch-enrich.js
 // Fallback logic using OpenAI with caching
 
-import { humanizeName, KNOWN_CITIES_SET, KNOWN_PROPER_NOUNS, capitalizeName, earlyCompoundSplit } from "./lib/humanize.js";
+import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, expandInitials } from "./lib/humanize.js";
+
+import {
+  CAR_BRANDS,
+  BRAND_MAPPING,
+  KNOWN_CITIES_SET,
+  BRAND_ONLY_DOMAINS,
+  BLOCKLIST,
+  SPAMMY_TOKENS,
+  KNOWN_GENERIC_BLOBS,
+  OVERRIDES,
+  properNounsSet
+} from "./lib/constants.js";
 
 import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
 
-// Precompute proper nouns set for performance
-const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
-
+// Logging setup
 const logger = winston.createLogger({
   level: "debug",
   format: winston.format.combine(
@@ -30,347 +40,6 @@ function log(level, message, context = {}) {
   logger[level]({ message, domain: context.domain || null, ...context });
 }
 
-const KNOWN_GENERIC_BLOBS = {
-  "capitalbpg": "BPG Auto",
-  "hmtrs": "HMTR Auto",
-  "czag": "CZAG Auto",
-  "nwh": "NWH Auto",
-  "pbg": "PBG Auto",
-  "rbm": "RBM Auto",
-  "sth": "STH Auto"
-};
-
-// Comprehensive list of car brands
-const CAR_BRANDS = [
-  "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
-  "cadillac", "carmax", "cdj", "cdjrf", "cdjr", "chev", "chevvy", "chevrolet", "chrysler", "cjd",
-  "daewoo", "dodge", "eagle", "ferrari", "fiat", "ford", "genesis", "gmc", "honda", "hummer",
-  "hyundai", "inf", "infiniti", "isuzu", "jaguar", "jeep", "jlr", "kia", "lamborghini", "land rover",
-  "landrover", "lexus", "lincoln", "lucid", "maserati", "mclaren", "maz", "mazda", "mb", "merc", "mercedes",
-  "mercedes-benz", "mercedesbenz", "merk", "mini", "mitsubishi", "nissan", "oldsmobile", "plymouth",
-  "polestar", "pontiac", "porsche", "ram", "rivian", "rolls-royce", "saab", "saturn", "scion",
-  "smart", "subaru", "subie", "suzuki", "tesla", "toyota", "volkswagen", "volvo", "vw", "chevy",
-  "honda"
-];
-
-// Mapping for standardized brand names
-const BRAND_MAPPING = {
-  "acura": "Acura", "alfa romeo": "Alfa Romeo", "amc": "AMC", "aston martin": "Aston Martin", "audi": "Audi",
-  "bentley": "Bentley", "bmw": "BMW", "bugatti": "Bugatti", "buick": "Buick", "cadillac": "Cadillac",
-  "carmax": "Carmax", "cdj": "Dodge", "cdjrf": "Dodge", "cdjr": "Dodge", "chev": "Chevy",
-  "chevvy": "Chevy", "chevrolet": "Chevy", "chrysler": "Chrysler", "cjd": "Dodge", "daewoo": "Daewoo",
-  "dodge": "Dodge", "eagle": "Eagle", "ferrari": "Ferrari", "fiat": "Fiat", "ford": "Ford", "genesis": "Genesis",
-  "gmc": "GMC", "honda": "Honda", "hummer": "Hummer", "hyundai": "Hyundai", "inf": "Infiniti", "infiniti": "Infiniti",
-  "isuzu": "Isuzu", "jaguar": "Jaguar", "jeep": "Jeep", "jlr": "Jaguar Land Rover", "kia": "Kia",
-  "lamborghini": "Lamborghini", "land rover": "Land Rover", "landrover": "Land Rover", "lexus": "Lexus",
-  "lincoln": "Ford", "lucid": "Lucid", "maserati": "Maserati", "maz": "Mazda", "mazda": "Mazda",
-  "mb": "Mercedes", "merc": "Mercedes", "mercedes": "Mercedes", "mercedes-benz": "Mercedes", "mercedesbenz": "Mercedes",
-  "merk": "Mercedes", "mini": "Mini", "mitsubishi": "Mitsubishi", "nissan": "Nissan", "oldsmobile": "Oldsmobile",
-  "plymouth": "Plymouth", "polestar": "Polestar", "pontiac": "Pontiac", "porsche": "Porsche", "ram": "Ram",
-  "rivian": "Rivian", "rolls-royce": "Rolls-Royce", "saab": "Saab", "saturn": "Saturn", "scion": "Scion",
-  "smart": "Smart", "subaru": "Subaru", "subie": "Subaru", "suzuki": "Suzuki", "tesla": "Tesla", "toyota": "Toyota",
-  "volkswagen": "VW", "volvo": "Volvo", "vw": "VW", "chevy": "Chevy"
-};
-
-// List of brand-only domains to skip
-const BRAND_ONLY_DOMAINS = [
-  "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com",
-  "dodge.com", "ramtrucks.com", "jeep.com", "lincoln.com", "toyota.com", "honda.com",
-  "nissanusa.com", "subaru.com", "mazdausa.com", "mitsubishicars.com", "acura.com",
-  "lexus.com", "infinitiusa.com", "hyundaiusa.com", "kia.com", "genesis.com",
-  "bmwusa.com", "mercedes-benz.com", "audiusa.com", "vw.com", "volkswagen.com",
-  "porsche.com", "miniusa.com", "fiatusa.com", "alfa-romeo.com", "landroverusa.com",
-  "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
-];
-
-// Overrides for specific domains
-const OVERRIDES = {
-  "acdealergroup.com": "AC Dealer",
-  "aldermansvt.com": "Aldermans VT",
-  "allamericanford.net": "All American",
-  "alsopchevrolet.com": "Alsop Chevy",
-  "alpine-usa.com": "Alpine USA",
-  "andersonautogroup.com": "Anderson Auto",
-  "andymohr.com": "Andy Mohr",
-  "artmoehn.com": "Art Moehn",
-  "austininfiniti.com": "Austin Infiniti",
-  "autobahnmotors.com": "Autobahn Motor",
-  "autonationusa.com": "AutoNation",
-  "autobyfox.com": "Fox Auto",
-  "beckmasten.net": "Beck Masten",
-  "bentleyauto.com": "Bentley Auto",
-  "bettenbaker.com": "Baker Auto",
-  "bevsmithtoyota.com": "Bev Smith",
-  "bianchilhonda.com": "Bianchil Honda",
-  "bighorntoyota.com": "Big Horn",
-  "billdube.com": "Bill Dube",
-  "billsmithbuickgmc.com": "Bill Smith",
-  "bienerford.com": "Biener Ford",
-  "bmwofnorthhaven.com": "North Haven BMW",
-  "bmwwestspringfield.com": "BMW West Springfield",
-  "bobweaver.com": "Bob Weaver",
-  "bramanmc.com": "Braman MC",
-  "bulluckchevrolet.com": "Bulluck Chevy",
-  "bulldogkia.com": "Bulldog Kia",
-  "cadillacnorwood.com": "Norwood Cadillac",
-  "cadillacoflasvegas.com": "Vegas Cadillac",
-  "caminorealchevrolet.com": "Camino Real Chevy",
-  "capital-honda.com": "Capital Honda",
-  "carlblack.com": "Carl Black",
-  "carsatcarlblack.com": "Carl Black",
-  "caruso.com": "Caruso",
-  "carterhonda.com": "Carter Honda",
-  "carusofordlincoln.com": "Caruso",
-  "cavendercadillac.com": "Cavender",
-  "championerie.com": "Champion Erie",
-  "chapmanchoice.com": "Chapman",
-  "charliesmm.com": "Charlie's Motor",
-  "chastangford.com": "Chastang Ford",
-  "chevyland.com": "Chevy Land",
-  "chevyofcolumbuschevrolet.com": "Columbus Chevy",
-  "chmb.com": "M.B. Cherry Hill",
-  "chuckfairbankschevy.com": "Fairbanks Chevy",
-  "cincyjlr.com": "Cincy Jaguar",
-  "citykia.com": "City Kia",
-  "classicbmw.com": "Classic BMW",
-  "classiccadillac.net": "Classic Cadillac",
-  "classicchevrolet.com": "Classic Chevy",
-  "crewschevrolet.com": "Crews Chevy",
-  "crosscreekcars.com": "Cross Creek",
-  "crossroadscars.com": "Crossroad",
-  "crownautomotive.com": "Crown Auto",
-  "crystalautogroup.com": "Crystal",
-  "curriemotors.com": "Currie Motor",
-  "czag.net": "CZAG Auto",
-  "dancummins.com": "Dan Cummins",
-  "davischevrolet.com": "Davis Chevy",
-  "davisautosales.com": "Davis",
-  "daystarchrysler.com": "Daystar Chrysler",
-  "daytonahyundai.com": "Daytona Hyundai",
-  "daytonandrews.com": "Dayton Andrews",
-  "deaconscdjr.com": "Deacons CDJR",
-  "delandkia.net": "Deland Kia",
-  "demontrond.com": "DeMontrond",
-  "destinationkia.com": "Destination Kia",
-  "devineford.com": "Devine",
-  "dicklovett.co.uk": "Dick Lovett",
-  "donalsonauto.com": "Donalson Auto",
-  "donhattan.com": "Don Hattan",
-  "donhindsford.com": "Don Hinds Ford",
-  "donjacobs.com": "Don Jacobs",
-  "dougrehchevrolet.com": "Doug Reh",
-  "driveclassic.com": "Drive Classic",
-  "drivesuperior.com": "Drive Superior",
-  "drivevictory.com": "Victory Auto",
-  "duvalford.com": "Duval",
-  "dyerauto.com": "Dyer Auto",
-  "eagleautomall.com": "Eagle Auto Mall",
-  "eastcjd.com": "East CJD",
-  "eckenrodford.com": "Eckenrod",
-  "edwardsgm.com": "Edwards GM",
-  "edwardsautogroup.com": "Edwards Auto Group",
-  "ehchevy.com": "East Hills Chevy",
-  "elkgrovevw.com": "Elk Grove",
-  "elwaydealers.net": "Elway",
-  "elyriahyundai.com": "Elyria Hyundai",
-  "executiveag.com": "Executive AG",
-  "exprealty.com": "Exp Realty",
-  "faireychevrolet.com": "Fairey Chevy",
-  "fairoaksford.com": "Fair Oaks Ford",
-  "firstautogroup.com": "First Auto",
-  "fletcherauto.com": "Fletcher Auto",
-  "fordhamtoyota.com": "Fordham Toyota",
-  "fordlincolncharlotte.com": "Ford Charlotte",
-  "fordofdalton.com": "Dalton Ford",
-  "fordtustin.com": "Tustin Ford",
-  "galeanasc.com": "Galeana",
-  "garberchevrolet.com": "Garber Chevy",
-  "garlynshelton.com": "Garlyn Shelton",
-  "germaincars.com": "Germain Cars",
-  "geraldauto.com": "Gerald Auto",
-  "givemethevin.com": "Give me the Vin",
-  "golfmillchevrolet.com": "Golf Mill",
-  "golfmillford.com": "Golf Mill",
-  "goldcoastcadillac.com": "Gold Coast",
-  "gomontrose.com": "Go Montrose",
-  "gusmachadoford.com": "Gus Machado",
-  "gychevy.com": "Gy Chevy",
-  "haaszaautomall.com": "Haasza Auto",
-  "hananiaautos.com": "Hanania Auto",
-  "helloautogroup.com": "Hello Auto",
-  "hgreglux.com": "HGreg Lux",
-  "hillsidehonda.com": "Hillside Honda",
-  "hmtrs.com": "HMTR",
-  "hoehnmotors.com": "Hoehn Motor",
-  "hondaoftomsriver.com": "Toms River",
-  "hyundaioforangepark.com": "Orange Park Hyundai",
-  "jacksoncars.com": "Jackson",
-  "jakesweeney.com": "Jake Sweeney",
-  "jcroffroad.com": "JCR Offroad",
-  "jeffdeals.com": "Jeff",
-  "jenkinsandwynne.com": "Jenkins & Wynne",
-  "jetchevrolet.com": "Jet Chevy",
-  "jimfalkmotorsofmaui.com": "Jim Falk",
-  "joecs.com": "Joe",
-  "johnsondodge.com": "Johnson Dodge",
-  "joycekoons.com": "Joyce Koons",
-  "jtscars.com": "JT Auto",
-  "karlchevroletstuart.com": "Karl Stuart",
-  "kcmetroford.com": "Metro Ford",
-  "keatinghonda.com": "Keating Honda",
-  "kennedyauto.com": "Kennedy Auto",
-  "kerbeck.net": "Kerbeck",
-  "kiaofcerritos.com": "Cerritos Kia",
-  "kiaofchattanooga.com": "Chattanooga Kia",
-  "kiaoflagrange.com": "Lagrange Kia",
-  "kingsfordinc.com": "Kings Ford",
-  "kwic.com": "KWIC",
-  "lacitycars.com": "LA City",
-  "lamesarv.com": "La Mesa RV",
-  "landerscorp.com": "Landers",
-  "larryhmillertoyota.com": "Larry H. Miller",
-  "laurelautogroup.com": "Laurel Auto",
-  "laurelchryslerjeep.com": "Laurel",
-  "lexusofchattanooga.com": "Lexus Chattanooga",
-  "lexusoflakeway.com": "Lexus Lakeway",
-  "lexusofnorthborough.com": "Northborough Lexus",
-  "lexusoftulsa.com": "Tulsa Lexus",
-  "londoff.com": "Londoff",
-  "looklarson.com": "Larson",
-  "lynnlayton.com": "Lynn Layton",
-  "machens.com": "Machens",
-  "malouf.com": "Malouf",
-  "martinchevrolet.com": "Martin Chevy",
-  "maverickmotorgroup.com": "Maverick Motor",
-  "mazdanashville.com": "Nashville Mazda",
-  "mbbhm.com": "M.B. BHM",
-  "mbofbrooklyn.com": "M.B. Brooklyn",
-  "mbofcutlerbay.com": "M.B. Cutler Bay",
-  "mbofmc.com": "M.B. Music City",
-  "mbofsmithtown.com": "M.B. Smithtown",
-  "mbofwalnutcreek.com": "M.B. Walnut Creek",
-  "mbmnj.com": "M.B. Morristown",
-  "mbnaunet.com": "M.B. Naunet",
-  "mbrvc.com": "M.B. RVC",
-  "mbusa.com": "M.B. USA",
-  "mcdanielauto.com": "McDaniel",
-  "mclartydaniel.com": "McLarty Daniel",
-  "mclartydanielford.com": "McLarty Daniel",
-  "mcgeorgetoyota.com": "McGeorge",
-  "mccarthyautogroup.com": "McCarthy Auto Group",
-  "memorialchevrolet.com": "Memorial Chevy",
-  "mercedesbenzstcharles.com": "M.B. St. Charles",
-  "metrofordofmadison.com": "Metro Ford",
-  "miamilakesautomall.com": "Miami Lakes Auto",
-  "mikeerdman.com": "Mike Erdman",
-  "mikeerdmantoyota.com": "Mike Erdman",
-  "monadnockford.com": "Monadnock Ford",
-  "moreheadautogroup.com": "Morehead",
-  "mterryautogroup.com": "M Terry Auto",
-  "newhollandauto.com": "New Holland",
-  "newsmyrnachevy.com": "New Smyrna Chevy",
-  "newtontoyota.com": "Newton Toyota",
-  "nissanofcookeville.com": "Cookeville Nissan",
-  "northwestcars.com": "Northwest Toyota",
-  "npcdjr.com": "NP Chrysler",
-  "nplincoln.com": "NP Lincoln",
-  "obrienauto.com": "O'Brien Auto",
-  "oaklandauto.com": "Oakland Auto",
-  "oceanautomotivegroup.com": "Ocean Auto",
-  "onesubaru.com": "One Subaru",
-  "palmetto57.com": "Palmetto",
-  "parkerauto.com": "Parker Auto",
-  "patmilliken.com": "Pat Milliken",
-  "penskeautomotive.com": "Penske Auto",
-  "perillobmw.com": "Perillo BMW",
-  "philsmithkia.com": "Phil Smith",
-  "phofnash.com": "Porsche Nashville",
-  "pinehurstautomall.com": "Pinehurst Auto",
-  "planet-powersports.net": "Planet Power",
-  "potamkinhyundai.com": "Potamkin Hyundai",
-  "powerautogroup.com": "Power Auto Group",
-  "prestoncars.com": "Preston",
-  "prestonmotor.com": "Preston",
-  "racewayford.com": "Raceway Ford",
-  "radleyautogroup.com": "Radley Auto Group",
-  "rbmofatlanta.com": "RBM Atlanta",
-  "ricksmithchevrolet.com": "Rick Smith",
-  "risingfastmotors.com": "Rising Fast",
-  "robbinstoyota.com": "Robbin Toyota",
-  "robbynixonbuickgmc.com": "Robby Nixon",
-  "robertthorne.com": "Robert Thorne",
-  "rodbakerford.com": "Rod Baker",
-  "rohrmanhonda.com": "Rohrman Honda",
-  "rosenautomotive.com": "Rosen Auto",
-  "rossihonda.com": "Rossi Honda",
-  "rt128honda.com": "RT128",
-  "saabvw.com": "Scmelz",
-  "saffordauto.com": "Safford Auto",
-  "saffordbrown.com": "Safford Brown",
-  "samscismfordlm.com": "Sam Cism",
-  "sanleandroford.com": "San Leandro Ford",
-  "sansoneauto.com": "Sansone Auto",
-  "scottclark.com": "Scott Clark",
-  "scottclarkstoyota.com": "Scott Clark",
-  "secorauto.com": "Secor",
-  "serpentinichevy.com": "Serpentini",
-  "sharpecars.com": "Sharpe",
-  "shoplynch.com": "Lynch",
-  "signatureautony.com": "Signature Auto",
-  "slvdodge.com": "Silver Dodge",
-  "smithtowntoyota.com": "Smithtown Toyota",
-  "southcharlottejcd.com": "Charlotte Auto",
-  "stadiumtoyota.com": "Stadium Toyota",
-  "steelpointeauto.com": "Steel Pointe",
-  "steponeauto.com": "Step One Auto",
-  "street-toyota.com": "Street",
-  "subaruofwakefield.com": "Subaru Wakefield",
-  "sundancechevy.com": "Sundance Chevy",
-  "sunsetmitsubishi.com": "Sunset Mitsubishi",
-  "sunnysideauto.com": "Sunnyside Chevy",
-  "suntrupbuickgmc.com": "Suntrup",
-  "swantgraber.com": "Swant Graber",
-  "tasca.com": "Tasca",
-  "taylorauto.com": "Taylor",
-  "teamford.com": "Team Ford",
-  "teamsewell.com": "Sewell",
-  "tedbritt.com": "Ted Britt",
-  "teddynissan.com": "Teddy Nissan",
-  "tflauto.com": "TFL Auto",
-  "thechevyteam.com": "Chevy Team",
-  "thepremiercollection.com": "Premier Collection",
-  "tituswill.com": "Titus-Will",
-  "tomhesser.com": "Tom Hesser",
-  "tomlinsonmotorco.com": "Tomlinson Motor",
-  "tommynixautogroup.com": "Tommy Nix",
-  "towneauto.com": "Towne Auto",
-  "townandcountryford.com": "Town & Country",
-  "toyotacedarpark.com": "Cedar Park",
-  "toyotaofchicago.com": "Chicago Toyota",
-  "toyotaofgreenwich.com": "Greenwich Toyota",
-  "toyotaofredlands.com": "Toyota Redland",
-  "tuttleclick.com": "Tuttle Click",
-  "tvbuickgmc.com": "TV Buick",
-  "unionpark.com": "Union Park",
-  "valleynissan.com": "Valley Nissan",
-  "vanderhydeford.net": "Vanderhyde Ford",
-  "vannuyscdjr.com": "Van Nuys CDJR",
-  "vinart.com": "Vinart",
-  "vscc.com": "VSCC",
-  "wernerhyundai.com": "Werner Hyundai",
-  "westherr.com": "West Herr",
-  "wickmail.com": "Wick Mail",
-  "wideworldbmw.com": "Wide World BMW",
-  "williamssubarucharlotte.com": "Williams Subaru",
-  "yorkautomotive.com": "York Auto"
-};
-
-// Blocklist for spammy patterns
-const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
-
-// Spammy tokens to filter out
-const SPAMMY_TOKENS = ["sales", "autogroup", "cars", "group", "auto"];
-
 // Cache for OpenAI results
 const openAICache = new Map();
 
@@ -381,6 +50,64 @@ class FallbackError extends Error {
     this.name = "FallbackError";
     this.details = details;
   }
+}
+
+// Utility to clean company names
+function cleanCompanyName(name) {
+  if (!name || typeof name !== "string") return "";
+  return name.trim().replace(/\s+/g, " "); // Remove extra spaces and trim
+}
+
+// Utility to validate override format
+function validateOverrideFormat(override) {
+  if (!override || typeof override !== "string") return false;
+  const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/;
+  return pattern.test(override.trim());
+}
+
+// Helper: Handle override logic
+function handleOverride(normalizedDomain, override) {
+  if (!validateOverrideFormat(override)) {
+    log("warn", "Invalid override format", { domain: normalizedDomain, override });
+    return {
+      companyName: "",
+      confidenceScore: 0,
+      flags: ["override", "invalidOverrideFormat"],
+      tokens: [],
+      confidenceOrigin: "invalidOverrideFormat"
+    };
+  }
+
+  const companyName = cleanCompanyName(capitalizeName(override));
+  const nameTokens = companyName.split(" ").filter(Boolean);
+  const validation = validateFallbackName(
+    { name: companyName, brand: null, flagged: false },
+    normalizedDomain,
+    null,
+    125
+  );
+
+  if (!validation.validatedName) {
+    log("warn", "Override validation failed", { domain: normalizedDomain, override });
+    return {
+      companyName: "",
+      confidenceScore: 0,
+      flags: ["override", "patternValidationFailed"],
+      tokens: [],
+      confidenceOrigin: "overrideValidationFailed",
+      rawTokenCount: 0
+    };
+  }
+
+  log("info", "Override applied", { domain: normalizedDomain, companyName: validation.validatedName });
+  return {
+    companyName: validation.validatedName,
+    confidenceScore: validation.confidenceScore,
+    flags: ["override", ...validation.flags],
+    tokens: nameTokens.map(t => t.toLowerCase()),
+    confidenceOrigin: "override",
+    rawTokenCount: nameTokens.length
+  };
 }
 
 /**
@@ -403,6 +130,9 @@ function extractTokens(domain) {
     .replace(/([a-z])([A-Z])/g, "$1-$2") // Split camelCase (e.g., "JimmyBritt" → "Jimmy-Britt")
     .split(/[-_]/) // Split on hyphens and underscores
     .filter(token => token && /^[a-z0-9]+$/.test(token)); // Remove empty or invalid tokens
+
+  // Expand initials (e.g., "mb" → "M.B.")
+  tokens = tokens.map(t => expandInitials(t));
 
   // Remove suffixes and spammy tokens
   const SUFFIXES = new Set(["llc", "inc", "corp", "co", "ltd", "motors", "auto", "group"]);
@@ -659,12 +389,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         return { companyName: "", confidenceScore: 0, flags: Array.from(flags), tokens: 0 };
       }
       log("info", "Using override", { domain: normalizedDomain, companyName: overrideName });
-      return {
-        companyName: overrideName,
-        confidenceScore: 125,
-        flags: ["Override"],
-        tokens: 0
-      };
+      return handleOverride(normalizedDomain, overrideName);
     }
 
     if (!normalizedDomain) {
@@ -689,7 +414,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
 
       // Adaptive confidence threshold based on token characteristics
       const hasBrand = initialResult.tokens.some(t => CAR_BRANDS.includes(t.toLowerCase()));
-      const hasProper = initialResult.tokens.some(t => KNOWN_PROPER_NOUNS.has(t.toLowerCase()));
+      const hasProper = initialResult.tokens.some(t => properNounsSet.has(t.toLowerCase()));
       const hasCity = initialResult.tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
       const confidenceThreshold = (hasBrand || hasCity || hasProper) ? 95 : 80;
 
@@ -715,6 +440,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     let cleanDomain;
     try {
       cleanDomain = normalizedDomain.replace(/^(www\.)|(\.com|\.net|\.org|\.biz|\.ca|\.co\.uk)$/g, "");
+      const { brand: domainBrand, city } = extractBrandOfCityFromDomain(cleanDomain);
       let extractedTokensResult = extractTokens(cleanDomain);
       let extractedTokens = extractedTokensResult.tokens;
       tokens = extractedTokens.length;
@@ -726,28 +452,27 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         .filter(t => !SPAMMY_TOKENS.includes(t) && t !== "of");
 
       // Priority 1: Retry humanizeName with proper noun sequence (support multi-word proper nouns)
-// Removed redundant declaration: const properNounsSet = new Set(KNOWN_PROPER_NOUNS.map(n => n.toLowerCase()));
-const properNounTokens = extractedTokens.filter(t => properNounsSet.has(t));
-if (properNounTokens.length >= 2) {
-  const tempName = properNounTokens.map(t => capitalizeName(t)).join(" ");
-  const retryResult = await humanizeName(tempName);
-  if (retryResult.confidenceScore >= 95) {
-    const validatedName = retryResult.companyName;
-    if (!pattern.test(validatedName)) {
-      log("warn", "Retry humanizeName result pattern validation failed", { domain: normalizedDomain, companyName: validatedName });
-      flags.add("RetryPatternFailed");
-    } else {
-      log("info", "Retry humanizeName success with proper noun", { domain: normalizedDomain, companyName: validatedName });
-      flags.add("RetryHumanizeSuccess");
-      return {
-        companyName: validatedName,
-        confidenceScore: retryResult.confidenceScore,
-        flags: Array.from(new Set([...retryResult.flags, ...flags])),
-        tokens
-      };
-    }
-  }
-}
+      const properNounTokens = extractedTokens.filter(t => properNounsSet.has(t));
+      if (properNounTokens.length >= 2) {
+        const tempName = properNounTokens.map(t => capitalizeName(t)).join(" ");
+        const retryResult = await humanizeName(tempName);
+        if (retryResult.confidenceScore >= 95) {
+          const validatedName = retryResult.companyName;
+          if (!pattern.test(validatedName)) {
+            log("warn", "Retry humanizeName result pattern validation failed", { domain: normalizedDomain, companyName: validatedName });
+            flags.add("RetryPatternFailed");
+          } else {
+            log("info", "Retry humanizeName success with proper noun", { domain: normalizedDomain, companyName: validatedName });
+            flags.add("RetryHumanizeSuccess");
+            return {
+              companyName: validatedName,
+              confidenceScore: retryResult.confidenceScore,
+              flags: Array.from(new Set([...retryResult.flags, ...flags])),
+              tokens
+            };
+          }
+        }
+      }
 
       // Priority 2: Single proper noun with conditional brand append
       const singleProper = extractedTokens.find(t => properNounsSet.has(t) && !CAR_BRANDS.includes(t) && !KNOWN_CITIES_SET.has(t));
@@ -761,7 +486,6 @@ if (properNounTokens.length >= 2) {
           flags.add("SingleProperNoun");
 
           // Append brand only if the name is ambiguous for cold emails (e.g., too generic)
-          const domainBrand = CAR_BRANDS.find(b => cleanDomain.includes(b.toLowerCase()));
           if (domainBrand && (companyName.length < 5 || companyName.toLowerCase() === "smith" || companyName.toLowerCase() === "jones")) {
             const formattedBrand = BRAND_MAPPING[domainBrand.toLowerCase()] || capitalizeName(domainBrand);
             const combinedName = `${companyName} ${formattedBrand}`;
@@ -783,8 +507,6 @@ if (properNounTokens.length >= 2) {
       }
 
       // Priority 3: City + Brand or Generic (expanded generic terms)
-      const city = extractedTokens.find(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
-      const domainBrand = CAR_BRANDS.find(b => cleanDomain.includes(b.toLowerCase()));
       if (city) {
         if (domainBrand) {
           const formattedCity = capitalizeName(city);
@@ -1154,4 +876,4 @@ async function handler(req, res) {
   }
 }
 
-export { fallbackName, clearOpenAICache, handler, validateFallbackName };
+export { fallbackName, clearOpenAICache, handler, validateFallbackName, cleanCompanyName, validateOverrideFormat, handleOverride };
