@@ -22,7 +22,7 @@ import {
   BRAND_MAPPING,
   SUFFIXES_TO_REMOVE,
   BLOCKLIST
-} from './lib/constants.js';
+} from "./lib/constants.js";
 
 import winston from "winston";
 import path from "path";
