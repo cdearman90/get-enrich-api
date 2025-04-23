@@ -133,6 +133,9 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
       };
     }
 
+    // Define pattern for validation
+    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/;
+
     let lastError;
     for (let attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++) {
       try {
@@ -140,6 +143,18 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
         const fallback = await fallbackName(domain, domain, meta);
 
         logger.debug('Fallback result', { domain, fallback });
+
+        // Validate fallback result against pattern
+        if (fallback.companyName && !pattern.test(fallback.companyName)) {
+          logger.warn('callFallbackAPI result pattern validation failed', {
+            domain,
+            companyName: fallback.companyName
+          });
+          fallback.companyName = '';
+          fallback.flags.push('PatternValidationFailed');
+          fallback.confidenceScore = 0;
+        }
+
         return {
           domain,
           companyName: fallback.companyName,
@@ -150,13 +165,75 @@ async function callFallbackAPI(domain, rowNum, meta = {}) {
         };
       } catch (error) {
         lastError = error;
-        logger.warn(`Fallback attempt ${attempt} failed`, { domain, error: error.message, stack: error.stack });
+        logger.warn(`Fallback attempt ${attempt} failed`, {
+          domain,
+          error: error.message,
+          stack: error.stack
+        });
         if (attempt < RETRY_ATTEMPTS) {
           await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
         }
       }
     }
-    // ... (rest of function unchanged)
+
+    logger.error('Fallback exhausted retries', {
+      domain,
+      error: lastError?.message,
+      stack: lastError?.stack
+    });
+    let local = { companyName: '', confidenceScore: 80, flags: [], tokens: 0 };
+    try {
+      const splitName = earlyCompoundSplit(domain.split('.')[0]);
+      let nameResult = { name: '', flags: [] };
+      if (Array.isArray(splitName) && splitName.every(token => typeof token === 'string')) {
+        const joinedName = splitName.join(' ');
+        if (typeof joinedName === 'string' && joinedName.trim()) {
+          nameResult = capitalizeName(joinedName) || { name: '', flags: [] };
+        } else {
+          logger.warn('Invalid input to capitalizeName in callFallbackAPI', { domain, joinedName });
+        }
+      } else {
+        logger.warn('Invalid splitName result in callFallbackAPI', { domain, splitName });
+      }
+      local.companyName = nameResult.name || '';
+      local.confidenceScore = 80;
+      local.flags = ['LocalCompoundSplit', ...(nameResult.flags || [])];
+      logger.debug('Local compound split result', { domain, result: local });
+
+      // Validate local result
+      if (local.companyName && !pattern.test(local.companyName)) {
+        logger.warn('Local compound split pattern validation failed', {
+          domain,
+          companyName: local.companyName
+        });
+        local.companyName = '';
+        local.flags.push('PatternValidationFailed');
+      }
+    } catch (error) {
+      logger.error('Local compound split failed', {
+        domain,
+        error: error.message,
+        stack: error.stack
+      });
+      local.companyName = '';
+      local.flags = ['LocalCompoundSplitFailed'];
+    }
+
+    if (!local.companyName || typeof local.companyName !== 'string') {
+      local.companyName = '';
+      local.flags = [...local.flags, 'InvalidLocalResponse'];
+    }
+
+    const combinedFlags = [...local.flags, 'FallbackAPIFailed', 'LocalFallbackUsed'];
+    return {
+      domain,
+      companyName: local.companyName,
+      confidenceScore: local.confidenceScore,
+      flags: Array.from(new Set(combinedFlags)),
+      tokens: local.tokens || 0,
+      rowNum,
+      error: lastError ? lastError.message : 'Unknown error'
+    };
   } catch (err) {
     logger.error('callFallbackAPI failed', { domain, rowNum, error: err.message, stack: err.stack });
     return {
