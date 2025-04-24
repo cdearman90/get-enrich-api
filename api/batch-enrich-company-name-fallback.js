@@ -1212,6 +1212,7 @@ const properNounsSet = new Set([
     ...(Array.isArray(KNOWN_LAST_NAMES) ? KNOWN_LAST_NAMES : []).map(n => n.toLowerCase()),
     ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
     ...(Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS : []).map(n => n.toLowerCase())
+]);
 
 // Construct KNOWN_CITIES_SET from SORTED_CITY_LIST
 const KNOWN_CITIES_SET = new Set(SORTED_CITY_LIST.map(c => c.toLowerCase()));
@@ -1296,61 +1297,36 @@ function handleOverride(normalizedDomain, override) {
   };
 }
 
-/**
- * Extracts tokens from a domain for fallback processing.
- * @param {string} domain - The cleaned domain (e.g., "jimmybrittchevrolet").
- * @returns {Object} - { tokens: string[], confidenceScore: number, flags: string[] }
- */
 function extractTokens(domain) {
   const flags = [];
-  let confidenceScore = 80; // Default for token extraction
+  let confidenceScore = 80;
 
-  // Validate input
   if (!domain || typeof domain !== 'string' || !domain.trim()) {
     log('error', 'Invalid domain input in extractTokens', { domain });
     return { tokens: [], confidenceScore: 0, flags: ['InvalidDomainInput'] };
   }
 
   try {
-    // Split on separators and camelCase boundaries
-    let tokens = domain
-      .toLowerCase()
-      .replace(/([a-z])([A-Z])/g, '$1-$2') // Split camelCase (e.g., "JimmyBritt" → "Jimmy-Britt")
-      .split(/[-_]/) // Split on hyphens and underscores
-      .filter(token => token && /^[a-z0-9]+$/.test(token)); // Remove empty or invalid tokens
+    // Use earlyCompoundSplit for tokenization
+    let tokens = earlyCompoundSplit(domain);
 
     // Validate tokens
     if (tokens.length === 0) {
-      log('warn', 'No valid tokens extracted after initial split', { domain, tokens });
+      log('warn', 'No valid tokens extracted', { domain, tokens });
       flags.push('NoValidTokens');
       confidenceScore = 0;
       return { tokens: [], confidenceScore, flags };
     }
 
-    // Expand initials with validation
-    tokens = tokens.map(t => {
-      try {
-        const expanded = expandInitials(t);
-        if (!expanded || typeof expanded !== 'string') {
-          log('warn', 'Invalid output from expandInitials', { domain, token: t, expanded });
-          return t; // Fallback to original token
-        }
-        return expanded;
-      } catch (err) {
-        log('error', 'expandInitials failed', { domain, token: t, error: err.message, stack: err.stack });
-        return t; // Fallback to original token
-      }
-    }).flatMap(token => token.split(' ').filter(t => t)); // Handle multi-token expansions
-
-    // Remove suffixes and spammy tokens with existence guards
+    // Remove suffixes and spammy tokens
     const suffixes = SUFFIXES_TO_REMOVE instanceof Set ? new Set([...SUFFIXES_TO_REMOVE, 'motors', 'auto', 'group']) : new Set(['motors', 'auto', 'group']);
     tokens = tokens.filter(token => {
       const lowerToken = token.toLowerCase();
-      if (suffixes instanceof Set && suffixes.has(lowerToken)) {
+      if (suffixes.has(lowerToken)) {
         flags.push('SuffixRemoved');
         return false;
       }
-      if (Array.isArray(SPAMMY_TOKENS) && SPAMMY_TOKENS.includes(lowerToken)) {
+      if (SPAMMY_TOKENS.includes(lowerToken)) {
         flags.push('SpammyTokenRemoved');
         return false;
       }
@@ -1358,13 +1334,14 @@ function extractTokens(domain) {
     });
 
     // Deduplicate tokens
+    const originalLength = tokens.length;
     tokens = [...new Set(tokens)];
-    if (tokens.length < tokens.length) { // Note: This condition is always false due to deduplication; fix logic
+    if (tokens.length < originalLength) {
       flags.push('DuplicateTokensRemoved');
       confidenceScore = Math.min(confidenceScore, 95);
     }
 
-    // Cap at 3 tokens for cold-email safety
+    // Cap at 3 tokens
     if (tokens.length > 3) {
       log('debug', 'Token count exceeds limit, truncating', { domain, originalCount: tokens.length });
       flags.push('TokenCountAdjusted');
@@ -1372,14 +1349,12 @@ function extractTokens(domain) {
       tokens = tokens.slice(0, 3);
     }
 
-    // Final validation
     if (tokens.length === 0) {
       log('warn', 'No tokens remain after filtering', { domain });
       flags.push('AllTokensFiltered');
       confidenceScore = 0;
     }
 
-    // Log tokenization details
     log('debug', 'Extracted tokens', {
       domain,
       tokens,
