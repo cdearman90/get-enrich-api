@@ -2268,7 +2268,7 @@ if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t =>
 }
 
 // Main function to humanize domain names
-function humanizeName(domain) {
+async function humanizeName(domain) {
   try {
     if (!domain || typeof domain !== "string" || !domain.trim()) {
       log("error", "Invalid domain input", { domain });
