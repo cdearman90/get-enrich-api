@@ -1246,10 +1246,27 @@ function cleanCompanyName(name) {
 }
 
 // Utility to validate override format
-function validateOverrideFormat(override) {
-  if (!override || typeof override !== "string") return false;
-  const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/;
-  return pattern.test(override.trim());
+function validateOverrideFormat(overrideName) {
+  if (!overrideName || typeof overrideName !== 'string' || !overrideName.trim()) {
+    log('warn', 'Override validation failed: invalid input', { overrideName });
+    return null;
+  }
+
+  const pattern = /^[A-Z][a-z]+(?: [A-Z][a-z]+){0,2}$/;
+  const tokens = overrideName.trim().split(/\s+/).filter(Boolean);
+  if (tokens.length < 1 || tokens.length > 3 || !pattern.test(overrideName)) {
+    log('warn', 'Override validation failed: pattern or token count mismatch', { overrideName, tokens });
+    return null;
+  }
+
+  const spammyTokens = new Set(['cars', 'sales', 'autogroup', 'group']);
+  const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
+  if (tokens.some(token => spammyTokens.has(token.toLowerCase()) && !carBrandsSet.has(token.toLowerCase()))) {
+    log('warn', 'Override validation failed: contains spammy tokens', { overrideName, tokens });
+    return null;
+  }
+
+  return overrideName;
 }
 
 // Helper: Handle override logic
@@ -1656,7 +1673,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
   try {
     log('info', 'Starting fallback processing', { domain: normalizedDomain });
 
-    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/;
+    const pattern = /^[A-Z][a-z]+(?: [A-Z][a-z]+){0,2}$/; // Allow 1-3 capitalized tokens
 
     // Check cache
     const cacheKey = `${normalizedDomain}:${(meta.title || '').toLowerCase().trim()}`;
@@ -1674,8 +1691,17 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     meta = { ...meta, title: metadata.title || meta.title || '' };
 
     // Check overrides
-    if (OVERRIDES && typeof OVERRIDES === 'object' && OVERRIDES[normalizedDomain + '.com']) {
-      return handleOverride(normalizedDomain, OVERRIDES[normalizedDomain + '.com']);
+    if (OVERRIDES && typeof OVERRIDES === 'object') {
+      const overrideKey = normalizedDomain.endsWith('.com') ? normalizedDomain : `${normalizedDomain}.com`;
+      if (OVERRIDES[overrideKey]) {
+        const validatedOverride = validateOverrideFormat(OVERRIDES[overrideKey]);
+        if (validatedOverride) {
+          log('info', 'Override applied', { domain: normalizedDomain, companyName: validatedOverride });
+          return handleOverride(normalizedDomain, validatedOverride);
+        } else {
+          flags.add('OverrideValidationFailed');
+        }
+      }
     }
 
     // Validate input
@@ -1714,7 +1740,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       confidenceScore = initialResult.confidenceScore || 0;
       tokens = initialResult.tokens?.length || 0;
     } catch (error) {
-      log('error', 'humanizeName failed', { domain: normalizedDomain, error: error.message, stack: error.stack });
+      log('error', 'humanizeName failed', { domain: normalizedDomain, error: error.message, stack: err.stack });
       flags.add('HumanizeNameError');
       initialResult = { companyName: '', confidenceScore: 0, flags: [], tokens: 0 };
     }
@@ -1736,7 +1762,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       .map(t => t.toLowerCase())
       .filter(t => !SPAMMY_TOKENS.includes(t) && t !== 'of');
 
-    // Meta-title extraction
+    // Meta-title extraction (prioritize metadata)
     if (meta.title) {
       const metaResult = getMetaTitleBrand(meta);
       if (metaResult && metaResult.companyName) {
@@ -1843,62 +1869,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       }
     }
 
-    // OpenAI fallback for spacing/casing
-    if (companyName && (companyName.split(' ').length < 2 || /\b[a-z]+[A-Z]/.test(companyName))) {
-      const prompt = `
-        Given a name "${companyName}", return a JSON object with the name properly spaced and capitalized.
-        Rules:
-        - Only fix spacing and casing (e.g., "Jimmybritt" → {"name": "Jimmy Britt", "flagged": false}).
-        - Do not add or invent new words (e.g., do not add "Auto", "Group", "Mall").
-        - Use title case (e.g., "Rod Baker").
-        - Response format: {"name": string, "flagged": boolean}
-      `;
-      try {
-        log('info', 'Calling OpenAI for spacing fix', { domain: normalizedDomain });
-        const response = await callOpenAI(prompt, {
-          model: 'gpt-4-turbo',
-          max_tokens: 20,
-          temperature: 0.2,
-          systemMessage: 'You are a precise assistant for formatting names. Only adjust spacing and capitalization, do not add new words.',
-          response_format: { type: 'json_object' }
-        });
-
-        const result = JSON.parse(response.output);
-        let name = result.name?.trim();
-        tokens = response.tokens || tokens;
-
-        if (!name || result.flagged) {
-          log('warn', 'OpenAI spacing fix failed', { domain: normalizedDomain });
-          flags.add('OpenAIFallbackFailed');
-          flags.add('ReviewNeeded');
-        } else {
-          const originalWords = companyName.toLowerCase().split(/\s+/).filter(word => word);
-          const newWords = name.toLowerCase().split(/\s+/).filter(word => word);
-          const addedWords = newWords.filter(word => !originalWords.includes(word));
-          if (addedWords.length > 0) {
-            log('warn', 'OpenAI hallucinated words', { domain: normalizedDomain, addedWords });
-            flags.add('OpenAIHallucinationDetected');
-            flags.add('ReviewNeeded');
-          } else {
-            const validated = validateFallbackName({ name, brand: domainBrand, flagged: false }, normalizedDomain, domainBrand, confidenceScore);
-            if (validated.validatedName) {
-              companyName = validated.validatedName;
-              confidenceScore = validated.confidenceScore + 5;
-              flags.add(...validated.flags);
-              flags.add('OpenAISpacingFix');
-            } else {
-              flags.add('OpenAIFallbackFailed');
-              flags.add('ReviewNeeded');
-            }
-          }
-        }
-      } catch (error) {
-        log('error', 'OpenAI spacing fix failed', { domain: normalizedDomain, error: error.message });
-        flags.add('OpenAIFallbackFailed');
-        flags.add('ReviewNeeded');
-      }
-    }
-
     // Generic token fallback
     if (!companyName) {
       const spamTriggers = ['cars', 'sales', 'autogroup', 'group'];
@@ -1912,7 +1882,9 @@ async function fallbackName(domain, originalDomain, meta = {}) {
           flags.add('BrandOnlyFallback');
           confidenceScore = 80;
         } else {
-          companyName = '';
+          // Final fallback: use normalized domain (ChatGPT-inspired)
+          const fallback = capitalizeName(cleanDomain)?.name;
+          companyName = fallback || '';
           flags.add('NoValidTokens');
           confidenceScore = 0;
         }
