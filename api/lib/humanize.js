@@ -1520,7 +1520,7 @@ function capitalizeName(name) {
     let tokens = result.split(" ").filter(Boolean);
 
     // Step 2: Process tokens
-    tokens = tokens.map(word => {
+    tokens = tokens.map((word, i) => {
       if (!word) return word;
 
       const lowerWord = word.toLowerCase();
@@ -1540,11 +1540,10 @@ function capitalizeName(name) {
         "la": "Los Angeles",
         "sf": "San Francisco",
         "sj": "San Jose",
-        "mb": "M.B." // Already handled by BRAND_ABBREVIATIONS, but kept for consistency
+        "mb": "M.B."
       }[lowerWord] || ABBREVIATION_EXPANSIONS[lowerWord];
       if (fullExpansion) {
         flags.push("AbbreviationExpanded");
-        // Handle multi-word expansions (e.g., "Los Angeles")
         const expandedTokens = fullExpansion.split(" ").map(subWord => {
           if (/^[A-Z]{1,4}$/.test(subWord)) return subWord.toUpperCase();
           return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
@@ -1561,11 +1560,9 @@ function capitalizeName(name) {
 
       // Step 2.4: Preserve known proper nouns and cities in their original or proper case
       if (KNOWN_PROPER_NOUNS.has(lowerWord) || KNOWN_CITIES_SET.has(lowerWord)) {
-        // Preserve original casing if all uppercase
         if (word === word.toUpperCase()) {
           return word;
         }
-        // Otherwise, apply standard capitalization
         const properTokens = lowerWord.split(" ").map(subWord => {
           return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
         });
@@ -1582,15 +1579,27 @@ function capitalizeName(name) {
         }
       }
 
-      // Step 2.6: Handle mixed-case tokens (e.g., "McLaren")
+      // Step 2.6: Handle 2-3 letter abbreviations before/after nouns or car brands
+      if (word.length <= 3 && /^[a-zA-Z]+$/.test(word)) {
+        const isBeforeOrAfterNounOrBrand = tokens.some((t, idx) => {
+          const isNoun = properNounsSet.has(t.toLowerCase()) || KNOWN_CITIES_SET.has(t.toLowerCase());
+          const isBrand = CAR_BRANDS.has(t.toLowerCase());
+          return (isNoun || isBrand) && (idx === i - 1 || idx === i + 1);
+        });
+        if (isBeforeOrAfterNounOrBrand) {
+          flags.push("ShortTokenCapitalized");
+          return word.toUpperCase(); // e.g., "eh" → "EH" in "EH Ford"
+        }
+      }
+
+      // Step 2.7: Handle mixed-case tokens (e.g., "McLaren")
       if (/^[A-Z][a-z]+[A-Z][a-z]+$/.test(word)) {
-        // Preserve Mc-style names
         if (word.startsWith("Mc") || word.startsWith("Mac")) {
           return word.charAt(0).toUpperCase() + word.slice(1, 3).toLowerCase() + word.charAt(3).toUpperCase() + word.slice(4).toLowerCase();
         }
       }
 
-      // Step 2.7: Standard capitalization
+      // Step 2.8: Standard capitalization
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     });
 
