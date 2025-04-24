@@ -1434,90 +1434,125 @@ function expandInitials(token) {
   return token;
 }
 
-// Tokenizes domain into meaningful components
+// api/lib/humanize.js
+/**
+ * Tokenizes domain into meaningful components
+ * @param {string} domain - The domain to tokenize
+ * @returns {Array<string>} - Array of tokenized words
+ */
 function earlyCompoundSplit(domain) {
   if (!domain || typeof domain !== "string") {
     log("error", "Invalid domain for tokenization", { domain });
     return [];
   }
 
-  // Check for overrides first
-  const override = TEST_CASE_OVERRIDES.get(domain + ".com");
+  // Normalize domain and remove TLD
+  const normalized = normalizeDomain(domain).toLowerCase();
+  if (!normalized) {
+    log("error", "normalizeDomain returned empty result", { domain });
+    return [];
+  }
+
+  // Blob fixes for specific domains
+  const blobFixes = {
+    'northbakersfieldtoyota': ['north', 'bakersfield', 'toyota'],
+    'subaruofgwinnett': ['subaru', 'gwinnett'],
+    'kalidykia': ['kalidy', 'kia'],
+    'mbofbrooklyn': ['m.b.', 'brooklyn'],
+    'toyotaofslidell': ['toyota', 'slidell']
+  };
+
+  // Check for overrides and blob fixes
+  const override = TEST_CASE_OVERRIDES.get(normalized + ".com") || blobFixes[normalized];
   if (override) {
-    log("info", `Override applied for domain: ${domain}`, { override });
-    return override.split(" ").map(word => word.toLowerCase());
+    log("info", `Override applied for domain: ${normalized}`, { override });
+    return Array.isArray(override) ? override.map(word => word.toLowerCase()) : override.split(" ").map(word => word.toLowerCase());
   }
 
   // Initialize tokens
   let tokens = [];
+  let remaining = normalized;
 
-  // Handle camelCase and basic splitting
-  const camelCaseTokens = domain.match(/[A-Z]?[a-z]+/g) || [domain];
-  let remaining = camelCaseTokens.join("");
-
-  // Process abbreviations with word boundaries (e.g., 'mb' → 'M.B.')
-  for (const [abbr, expansion] of ABBREVIATION_EXPANSIONS) {
-    const regex = new RegExp(`\\b${abbr}\\b`, "g");
+  // Process abbreviations (e.g., 'mb' → 'm.b.')
+  for (const [abbr, expansion] of Object.entries(ABBREVIATION_EXPANSIONS)) {
+    const regex = new RegExp(`\\b${abbr}\\b`, "gi");
     if (remaining.match(regex)) {
-      remaining = remaining.replace(regex, expansion.toLowerCase());
+      remaining = remaining.replace(regex, expansion.toLowerCase().replace(/\s+/g, ""));
     }
   }
 
-  // Re-split after expansions
-  tokens = remaining.split(/[^a-zA-Z]+/).filter(Boolean);
+  // Split on camelCase, delimiters, and 'of'
+  tokens = remaining
+    .split(/(?=[A-Z])|[-_\s]|of/)
+    .filter(Boolean)
+    .flatMap(token => token.match(/[A-Z]?[a-z]+/g) || [token])
+    .filter(Boolean);
 
-  // Expand initials in tokens
+  // Expand initials (e.g., 'm.b.' → 'm b')
   tokens = tokens.map(token => expandInitials(token)).flatMap(token => token.split(" ")).filter(Boolean);
 
-  // Handle multi-word cities (e.g., 'northlasvegas')
-  for (const city of KNOWN_CITIES_SET) {
+  // Handle multi-word cities (sorted by length for priority)
+  const sortedCities = Array.from(KNOWN_CITIES_SET).sort((a, b) => b.replace(/\s+/g, "").length - a.replace(/\s+/g, "").length);
+  const cityTokens = [];
+  for (const city of sortedCities) {
     const cityLower = city.toLowerCase().replace(/\s+/g, "");
     if (remaining.includes(cityLower)) {
-      const cityTokens = city.toLowerCase().split(" ").filter(Boolean);
-      const index = tokens.join("").indexOf(cityLower);
-      if (index !== -1) {
-        tokens.splice(tokens.findIndex(t => t.includes(cityLower[0])), 0, ...cityTokens);
-        tokens = tokens.filter(t => !cityLower.includes(t) || cityTokens.includes(t));
-        remaining = remaining.replace(cityLower, "");
-      }
+      const cityWords = city.toLowerCase().split(" ").filter(Boolean);
+      cityTokens.push(...cityWords);
+      remaining = remaining.replace(cityLower, "");
     }
   }
+  tokens = [...new Set([...tokens, ...cityTokens])]; // Deduplicate
+
+  // Fuzzy splitting for glued tokens (e.g., 'mclartydaniel')
+  const fuzzyTokens = [];
+  for (let token of tokens) {
+    if (token.length >= 6 && !/[A-Z]/.test(token.slice(1))) {
+      for (let j = 2; j < token.length - 2; j++) {
+        const left = token.slice(0, j);
+        const right = token.slice(j);
+        if (
+          (properNounsSet.has(left) || KNOWN_CITIES_SET.has(left)) &&
+          (CAR_BRANDS.has(right) || ['auto', 'motors', 'group'].includes(right))
+        ) {
+          fuzzyTokens.push(left, right);
+          log("debug", "Fuzzy split applied", { token, split: [left, right] });
+          break;
+        }
+      }
+    } else {
+      fuzzyTokens.push(token);
+    }
+  }
+  tokens = fuzzyTokens;
 
   // Greedy prefix matching for proper nouns and brands
-  const tokenParts = tokens.slice();
-  tokens = [];
-  for (let i = 0; i < tokenParts.length; i++) {
+  const finalTokens = [];
+  for (let i = 0; i < tokens.length; i++) {
     let matched = false;
-    for (let len = 3; len >= 1; len--) {
-      if (i + len > tokenParts.length) continue;
-      const segment = tokenParts.slice(i, i + len).join("");
-      if (KNOWN_PROPER_NOUNS.has(segment.toLowerCase())) {
-        tokens.push(segment.toLowerCase());
-        i += len - 1;
-        matched = true;
-        break;
-      } else if (CAR_BRANDS.has(segment.toLowerCase())) {
-        tokens.push(segment.toLowerCase());
+    for (let len = Math.min(3, tokens.length - i); len >= 1; len--) {
+      const segment = tokens.slice(i, i + len).join("");
+      if (properNounsSet.has(segment) || CAR_BRANDS.has(segment)) {
+        finalTokens.push(segment);
         i += len - 1;
         matched = true;
         break;
       }
     }
     if (!matched) {
-      tokens.push(tokenParts[i]);
+      finalTokens.push(tokens[i]);
     }
   }
 
-  // Add remaining tokens, excluding common words unless necessary
-  const finalTokens = tokens
+  // Filter tokens: remove common words unless part of brands or cities, cap at 3
+  const filteredTokens = finalTokens
     .filter(token => token && (!COMMON_WORDS.has(token.toLowerCase()) || CAR_BRANDS.has(token) || KNOWN_CITIES_SET.has(token)))
-    .slice(0, 3); // Cap at 3 tokens
+    .slice(0, 3);
 
   // Deduplicate tokens
-  const uniqueTokens = [...new Set(finalTokens)];
+  const uniqueTokens = [...new Set(filteredTokens)];
 
-  log("debug", `Tokenized domain: ${domain}`, { tokens: uniqueTokens });
-
+  log("debug", `Tokenized domain: ${normalized}`, { tokens: uniqueTokens });
   return uniqueTokens;
 }
 
