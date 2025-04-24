@@ -1,7 +1,7 @@
 // api/batch-enrich-company-name-fallback.js
 // Fallback logic using OpenAI with caching
 
-import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, normalizeDomain } from "./lib/humanize.js";
+import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, normalizeDomain, cleanCompanyName } from "./lib/humanize.js";
 
 // Comprehensive list of car brands
 const CAR_BRANDS = new Set([
@@ -1325,12 +1325,6 @@ function log(level, message, context = {}) {
 // Cache for OpenAI results
 const openAICache = new Map();
 
-// Utility to clean company names
-function cleanCompanyName(name) {
-  if (!name || typeof name !== "string") return "";
-  return name.trim().replace(/\s+/g, " "); // Remove extra spaces and trim
-}
-
 // Utility to validate override format
 function validateOverrideFormat(overrideName) {
   if (!overrideName || typeof overrideName !== 'string' || !overrideName.trim()) {
@@ -1338,16 +1332,27 @@ function validateOverrideFormat(overrideName) {
     return null;
   }
 
-  const pattern = /^[A-Z][a-z]+(?: [A-Z][a-z]+){0,2}$/;
+  // Relaxed pattern to allow abbreviations (e.g., "M.B.") and all-uppercase tokens (e.g., "BMW")
+  const pattern = /^(?:[A-Z]\.[A-Z]\.|(?:[A-Z][a-z]+|[A-Z]+)(?: (?:[A-Z][a-z]+|[A-Z]+))*)$/;
   const tokens = overrideName.trim().split(/\s+/).filter(Boolean);
   if (tokens.length < 1 || tokens.length > 3 || !pattern.test(overrideName)) {
     log('warn', 'Override validation failed: pattern or token count mismatch', { overrideName, tokens });
     return null;
   }
 
-  const spammyTokens = new Set(['cars', 'sales', 'autogroup', 'group']);
+  const spammyTokens = new Set(['cars', 'sales', 'autogroup']);
   const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
-  if (tokens.some(token => spammyTokens.has(token.toLowerCase()) && !carBrandsSet.has(token.toLowerCase()))) {
+  const isSpammy = tokens.some(token => {
+    const lowerToken = token.toLowerCase();
+    // Check if the token is part of a multi-word proper noun, city, or brand
+    const segment = tokens.join("");
+    return spammyTokens.has(lowerToken) && 
+           !carBrandsSet.has(lowerToken) && 
+           !properNounsSet.has(segment) && 
+           !KNOWN_CITIES_SET.has(segment);
+  });
+
+  if (isSpammy) {
     log('warn', 'Override validation failed: contains spammy tokens', { overrideName, tokens });
     return null;
   }
@@ -1355,7 +1360,6 @@ function validateOverrideFormat(overrideName) {
   return overrideName;
 }
 
-// Helper: Handle override logic
 function handleOverride(normalizedDomain, override) {
   if (!validateOverrideFormat(override)) {
     log('warn', 'Invalid override format', { domain: normalizedDomain, override });
@@ -1367,6 +1371,43 @@ function handleOverride(normalizedDomain, override) {
       confidenceOrigin: 'invalidOverrideFormat'
     };
   }
+
+  const companyName = cleanCompanyName(override); // Using humanize.js version
+  const nameTokens = companyName.split(' ').filter(Boolean);
+  const validation = validateFallbackName(
+    { name: companyName, brand: null, flagged: false },
+    normalizedDomain,
+    null,
+    125
+  );
+
+  if (!validation.validatedName) {
+    log('warn', 'Override validation failed in validateFallbackName', { domain: normalizedDomain, override, validation });
+    return {
+      companyName: '',
+      confidenceScore: 0,
+      flags: ['override', 'overrideValidationFailed', ...validation.flags],
+      tokens: [],
+      confidenceOrigin: 'overrideValidationFailed',
+      rawTokenCount: 0
+    };
+  }
+
+  log('info', 'Override applied successfully', { 
+    domain: normalizedDomain, 
+    companyName: validation.validatedName,
+    confidenceScore: validation.confidenceScore,
+    flags: validation.flags
+  });
+  return {
+    companyName: validation.validatedName,
+    confidenceScore: validation.confidenceScore,
+    flags: ['override', ...validation.flags],
+    tokens: nameTokens.map(t => t.toLowerCase()),
+    confidenceOrigin: 'override',
+    rawTokenCount: nameTokens.length
+  };
+}
 
   const companyName = cleanCompanyName(capitalizeName(override));
   const nameTokens = companyName.split(' ').filter(Boolean);
