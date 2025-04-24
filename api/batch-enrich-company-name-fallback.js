@@ -1304,7 +1304,6 @@ const properNounsSet = new Set([
 // Construct KNOWN_CITIES_SET from SORTED_CITY_LIST
 const KNOWN_CITIES_SET = new Set(SORTED_CITY_LIST.map(c => c.toLowerCase()));
 
-import { callOpenAI } from "./lib/openai.js";
 import winston from "winston";
 
 // Logging setup
@@ -2051,16 +2050,16 @@ if (companyName) {
 }
 
 // Add fetchMetaData
-async function fetchMetaData(domain) {
+async function fetchMetaData(domain, meta = {}) {
   try {
     if (!domain || typeof domain !== 'string') {
       log('error', 'Invalid domain in fetchMetaData', { domain });
-      return {};
+      return { title: meta.title || '' };
     }
 
     const clean = domain.trim().toLowerCase();
 
-    const meta = {
+    const metadata = {
       'donjacobs.com': { title: 'Chevrolet Dealer' },
       'crossroadscars.com': { title: 'Toyota Dealer' },
       'chicagocars.com': { title: 'Toyota Dealer in Chicago' },
@@ -2099,10 +2098,10 @@ async function fetchMetaData(domain) {
     };
 
     // TODO: Add real metadata fetching (e.g., HTTP request to domain) for production
-    return meta[clean] || { title: meta.title || '' };
+    return metadata[clean] || { title: meta.title || '' };
   } catch (e) {
     log('error', 'fetchMetaData failed', { domain, error: e.message, stack: e.stack });
-    return { title: meta.title || '' };
+    return { title: meta.title || '' }; // Use the meta parameter passed to the function
   }
 }
 
@@ -2132,12 +2131,12 @@ function getMetaTitleBrand(meta) {
     for (const word of words) {
       const wordNoSpaces = word.replace(/\s+/g, '');
       if (properNounsSet.has(wordNoSpaces) && !CAR_BRANDS.has(word)) {
-        companyName = capitalizeName(properNounsMap.get(wordNoSpaces) || word).name;
+        companyName = capitalizeName(word).name; // Remove properNounsMap.get()
         flags.add('ProperNounMatch');
         break;
       }
       if (KNOWN_CITIES_SET.has(wordNoSpaces) && !CAR_BRANDS.has(word)) {
-        companyName = capitalizeName(KNOWN_CITIES_SET.has(wordNoSpaces) ? wordNoSpaces : word).name;
+        companyName = capitalizeName(wordNoSpaces).name;
         flags.add('CityMatch');
         break;
       }
