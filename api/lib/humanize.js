@@ -2176,10 +2176,10 @@ function tryBrandGenericPattern(tokens) {
 // Matches patterns with a proper noun and generic term (e.g., 'sunsetauto' → 'Sunset Auto')
 function tryGenericPattern(tokens, properNounsSet, meta = {}) {
   try {
-    if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t =>     if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t => typeof t === "string")) {
-      log("error", "Invalid tokens in tryGenericPattern", { tokens });
-      return null;
-    }
+if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t => typeof t === "string")) {
+  log("error", "Invalid tokens in tryGenericPattern", { tokens });
+  return null;
+}
 
     if (!(properNounsSet instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
       log("error", "Invalid dependencies in tryGenericPattern", {
