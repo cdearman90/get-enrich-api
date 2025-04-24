@@ -1453,7 +1453,7 @@ function earlyCompoundSplit(domain) {
     return [];
   }
 
-  // Blob fixes for specific domains
+  // Blob fixes for specific domains (ChatGPT suggestion: integrate as separate map)
   const blobFixes = {
     'northbakersfieldtoyota': ['north', 'bakersfield', 'toyota'],
     'subaruofgwinnett': ['subaru', 'gwinnett'],
@@ -1467,11 +1467,31 @@ function earlyCompoundSplit(domain) {
     'teamford': ['team', 'ford'],
     'sanleandroford': ['san', 'leandro', 'ford'],
     'gusmachadoford': ['gus', 'machado', 'ford'],
-    'donhindsford': ['don', 'hinds', 'ford']
+    'donhindsford': ['don', 'hinds', 'ford'],
+    'unionpark': ['union', 'park'],
+    'jackpowell': ['jack', 'powell'],
+    'malouf': ['malouf'],
+    'prestonmotor': ['preston', 'motor'],
+    'billdube': ['bill', 'dube'],
+    'golfmillford': ['golf', 'mill', 'ford'],
+    'demontrond': ['demontrond'],
+    'carlblack': ['carl', 'black'],
+    'fletcherauto': ['fletcher', 'auto'],
+    'richmondford': ['richmond', 'ford'],
+    'tasca': ['tasca'],
+    'bentleyauto': ['bentley', 'auto'],
+    'avisford': ['avis', 'ford'],
+    'rodbakerford': ['rod', 'baker', 'ford']
   };
 
-  // Check for overrides and blob fixes
-  const override = TEST_CASE_OVERRIDES.get(normalized + ".com") || blobFixes[normalized];
+  // Check for overrides and blob fixes (ChatGPT suggestion: apply blobFix early)
+  const blobFix = blobFixes[normalized];
+  if (blobFix && Array.isArray(blobFix)) {
+    log("info", "BlobFix override applied", { domain, blobFix });
+    return blobFix;
+  }
+
+  const override = TEST_CASE_OVERRIDES.get(normalized + ".com");
   if (override) {
     log("info", `Override applied for domain: ${normalized}`, { override });
     return Array.isArray(override) ? override.map(word => word.toLowerCase()) : override.split(" ").map(word => word.toLowerCase());
@@ -1481,7 +1501,7 @@ function earlyCompoundSplit(domain) {
   let tokens = [];
   let remaining = normalized;
 
-  // Process abbreviations (e.g., 'mb' → 'm.b.')
+  // Process abbreviations before tokenizing (ChatGPT suggestion: preprocess abbreviations)
   for (const [abbr, expansion] of Object.entries(ABBREVIATION_EXPANSIONS)) {
     const regex = new RegExp(`\\b${abbr}\\b`, "gi");
     if (remaining.match(regex)) {
@@ -1489,11 +1509,11 @@ function earlyCompoundSplit(domain) {
     }
   }
 
-  // Split on camelCase, delimiters, and 'of'
+  // Split on camelCase, delimiters, 'of', and numeric boundaries (ChatGPT suggestion: hybrid split logic)
   tokens = remaining
-    .split(/(?=[A-Z])|[-_\s]|of/)
+    .split(/(?=[A-Z])|[-_\s]|of|(?<=\D)(?=\d)/) // Enhanced regex split
     .filter(Boolean)
-    .flatMap(token => token.match(/[A-Z]?[a-z]+/g) || [token])
+    .flatMap(token => token.match(/[a-zA-Z]+/g) || [token])
     .filter(Boolean);
 
   // Expand initials (e.g., 'm.b.' → 'm b')
@@ -1512,7 +1532,7 @@ function earlyCompoundSplit(domain) {
   }
   tokens = [...new Set([...tokens, ...cityTokens])]; // Deduplicate
 
-  // Fuzzy splitting for glued tokens (e.g., 'mclartydaniel')
+  // Fuzzy splitting for glued tokens (ChatGPT suggestion: enhanced fuzzy matching)
   const fuzzyTokens = [];
   for (let token of tokens) {
     if (token.length >= 6 && !/[A-Z]/.test(token.slice(1))) {
@@ -1524,7 +1544,7 @@ function earlyCompoundSplit(domain) {
           (CAR_BRANDS.has(right) || ['auto', 'motors', 'group'].includes(right))
         ) {
           fuzzyTokens.push(left, right);
-          log("debug", "Fuzzy split applied", { token, split: [left, right] });
+          log("debug", "Fuzzy token split applied", { token, split: [left, right] });
           break;
         }
       }
@@ -1559,6 +1579,13 @@ function earlyCompoundSplit(domain) {
 
   // Deduplicate tokens
   const uniqueTokens = [...new Set(filteredTokens)];
+
+  // Final fallback (ChatGPT suggestion: prevent empty output)
+  if (uniqueTokens.length === 0) {
+    const fallback = capitalizeName(normalized)?.name?.toLowerCase();
+    log('warn', 'No valid tokens after filtering, using fallback', { domain, fallback });
+    return fallback ? [fallback] : [];
+  }
 
   log("debug", `Tokenized domain: ${normalized}`, { tokens: uniqueTokens });
   return uniqueTokens;
@@ -1636,7 +1663,31 @@ function extractBrandOfCityFromDomain(domain) {
       }
     }
 
-    // Second pass: Check all tokens if no match found
+    // Second pass: Look for city followed by brand (ChatGPT suggestion: reversed order)
+    if (!brand || !city) {
+      for (let i = 0; i < tokens.length; i++) {
+        const token = tokens[i];
+        if (typeof token !== 'string' || !token.trim()) continue;
+        const lowerToken = token.toLowerCase();
+        if (!city && citiesSet.has(lowerToken)) {
+          city = capitalizeName(token).name;
+          for (let j = i + 1; j < tokens.length; j++) {
+            const nextToken = tokens[j];
+            if (typeof nextToken !== 'string' || !nextToken.trim()) continue;
+            const lowerNextToken = nextToken.toLowerCase();
+            if (carBrandsSet.has(lowerNextToken)) {
+              brand = isBrandMappingMap
+                ? BRAND_MAPPING.get(lowerNextToken) || capitalizeName(nextToken).name
+                : capitalizeName(nextToken).name;
+              break;
+            }
+          }
+          if (brand) break;
+        }
+      }
+    }
+
+    // Third pass: Check all tokens if no match found
     if (!brand || !city) {
       for (const token of tokens) {
         if (typeof token !== 'string' || !token.trim()) continue;
@@ -1653,11 +1704,11 @@ function extractBrandOfCityFromDomain(domain) {
     }
 
     if (!brand && !city) {
-      log('debug', 'No brand or city found', { domain, tokens });
+      log('warn', 'No brand or city found after all passes', { domain, tokens });
       return { brand: '', city: '', connector: '' };
     }
 
-    log('info', 'Brand and city extracted', { domain, brand, city, tokens });
+    log('info', 'Brand-city extraction result', { domain, brand, city, tokens });
     return { brand, city, connector: '' };
   } catch (err) {
     log('error', 'extractBrandOfCityFromDomain failed', { domain, error: err.message, stack: err.stack });
