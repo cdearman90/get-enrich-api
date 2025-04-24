@@ -1492,7 +1492,7 @@ function splitMergedTokens(name) {
     }
 
     // Use earlyCompoundSplit to tokenize
-    const splitTokens = earlyCompoundSplit(name.trim());
+    let splitTokens = earlyCompoundSplit(name.trim());
     
     // Validate output
     if (!Array.isArray(splitTokens) || !splitTokens.every(token => typeof token === 'string' && token.trim())) {
@@ -1500,9 +1500,19 @@ function splitMergedTokens(name) {
       return capitalizeName(name.trim())?.name || name.trim();
     }
 
-    // Capitalize tokens and join
+    // Apply abbreviation expansions during tokenization
+    splitTokens = splitTokens.map(token => {
+      if (ABBREVIATION_EXPANSIONS[token.toLowerCase()]) {
+        return ABBREVIATION_EXPANSIONS[token.toLowerCase()];
+      }
+      return token;
+    });
+
+    // Capitalize tokens and handle special cases (e.g., "mb" → "M.B.")
     const capitalizedTokens = splitTokens
       .map(token => {
+        if (token.toLowerCase() === 'mb') return 'M.B.';
+        if (token.toLowerCase() === 'bhm') return 'Birmingham';
         const capResult = capitalizeName(token) || { name: token };
         return capResult.name;
       })
@@ -1567,13 +1577,20 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
-    // Step 2: Validate against pattern and token count (relaxed to 1–4 tokens)
+    // Step 2: Validate against pattern and token count (enforce 2–4 tokens unless override)
     let tokens = validatedName.split(' ').filter(Boolean);
-    if (!pattern.test(validatedName) || tokens.length < 1 || tokens.length > 4) {
-      log('warn', 'Uncapitalized, malformed, or invalid token count', { domain, validatedName, tokenCount: tokens.length });
-      flags.add('FallbackNameError');
-      flags.add('ReviewNeeded');
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+    const isOverride = OVERRIDES[domain.endsWith('.com') ? domain : `${domain}.com`];
+    if (!pattern.test(validatedName) || tokens.length < 2 || tokens.length > 4) {
+      if (isOverride && tokens.length === 1 && pattern.test(validatedName)) {
+        // Allow single-token overrides if they pass pattern (e.g., "Duval")
+        log('info', 'Single-token override allowed', { domain, validatedName });
+        flags.add('SingleTokenOverride');
+      } else {
+        log('warn', 'Uncapitalized, malformed, or invalid token count', { domain, validatedName, tokenCount: tokens.length });
+        flags.add('FallbackNameError');
+        flags.add('ReviewNeeded');
+        return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+      }
     }
 
     // Step 3: Check for overrides to ensure consistency
@@ -1595,7 +1612,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cars', 'drive', 'center', 'world'];
     const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
 
-    if (!isProper) {
+    if (!isProper || (isProper && tokens.length === 1 && !isOverride)) {
       if (isBrand) {
         log('warn', 'Brand-only output detected', { domain, validatedName });
         flags.add('BrandOnlyFallback');
@@ -1694,7 +1711,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     const hasFinalCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
     const hasFinalGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
 
-    if (!isFinalProper) {
+    if (!isFinalProper || (isFinalProper && tokens.length === 1 && !isOverride)) {
       if (isFinalBrand) {
         log('warn', 'Brand-only output after filtering', { domain, validatedName });
         flags.add('BrandOnlyFallback');
@@ -1706,6 +1723,16 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
         flags.add('CityOnlyFallback');
         flags.add('ReviewNeeded');
         return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+      }
+    }
+
+    // Step 11: Allow brand + city combinations even if city ends in "s"
+    if (hasFinalCity && tokens.length === 2) {
+      const isBrandCityCombo = (carBrandsSet.has(tokens[0].toLowerCase()) || carBrandsSet.has(tokens[1].toLowerCase())) &&
+                               (KNOWN_CITIES_SET.has(tokens[0].toLowerCase()) || KNOWN_CITIES_SET.has(tokens[1].toLowerCase()));
+      if (isBrandCityCombo) {
+        log('info', 'Brand + city combination validated', { domain, validatedName });
+        flags.add('BrandCityCombo');
       }
     }
 
