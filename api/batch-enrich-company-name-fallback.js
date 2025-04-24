@@ -1399,38 +1399,7 @@ function handleOverride(normalizedDomain, override) {
     confidenceScore: validation.confidenceScore,
     flags: validation.flags
   });
-  return {
-    companyName: validation.validatedName,
-    confidenceScore: validation.confidenceScore,
-    flags: ['override', ...validation.flags],
-    tokens: nameTokens.map(t => t.toLowerCase()),
-    confidenceOrigin: 'override',
-    rawTokenCount: nameTokens.length
-  };
-}
 
-  const companyName = cleanCompanyName(capitalizeName(override));
-  const nameTokens = companyName.split(' ').filter(Boolean);
-  const validation = validateFallbackName(
-    { name: companyName, brand: null, flagged: false },
-    normalizedDomain,
-    null,
-    125
-  );
-
-  if (!validation.validatedName) {
-    log('warn', 'Override validation failed', { domain: normalizedDomain, override });
-    return {
-      companyName: '',
-      confidenceScore: 0,
-      flags: ['override', 'patternValidationFailed'],
-      tokens: [],
-      confidenceOrigin: 'overrideValidationFailed',
-      rawTokenCount: 0
-    };
-  }
-
-  log('info', 'Override applied', { domain: normalizedDomain, companyName: validation.validatedName });
   return {
     companyName: validation.validatedName,
     confidenceScore: validation.confidenceScore,
