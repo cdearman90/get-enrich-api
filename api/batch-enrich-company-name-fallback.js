@@ -1,7 +1,7 @@
 // api/batch-enrich-company-name-fallback.js
 // Fallback logic using OpenAI with caching
 
-import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, normalizeDomain, expandInitials } from "./lib/humanize.js";
+import { humanizeName, capitalizeName, earlyCompoundSplit, extractBrandOfCityFromDomain, normalizeDomain } from "./lib/humanize.js";
 
 // Comprehensive list of car brands
 const CAR_BRANDS = new Set([
