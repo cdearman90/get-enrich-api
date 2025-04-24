@@ -1982,24 +1982,28 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     }
 
     // Abbreviation and brand normalization
-    if (companyName) {
-      let normalizedName = companyName;
-      Object.entries(ABBREVIATION_EXPANSIONS).forEach(([abbr, expansion]) => {
-        const regex = new RegExp(`\\b${abbr}\\b`, 'gi');
-        normalizedName = normalizedName.replace(regex, expansion);
-      });
-      if (normalizedName.includes('Chevrolet')) {
-        normalizedName = normalizedName.replace('Chevrolet', 'Chevy');
-      }
-      if (normalizedName.includes('Mercedes-Benz')) {
-        normalizedName = normalizedName.replace('Mercedes-Benz', 'M.B.');
-      }
-      if (normalizedName !== companyName) {
-        companyName = normalizedName;
-        log('info', 'Applied abbreviation and brand normalization', { domain: normalizedDomain, companyName });
-        flags.add('NormalizationApplied');
-      }
-    }
+if (companyName) {
+  let normalizedName = companyName;
+  if (typeof ABBREVIATION_EXPANSIONS === 'object' && ABBREVIATION_EXPANSIONS !== null) {
+    Object.entries(ABBREVIATION_EXPANSIONS).forEach(([abbr, expansion]) => {
+      const regex = new RegExp(`\\b${abbr}\\b`, 'gi');
+      normalizedName = normalizedName.replace(regex, expansion);
+    });
+  } else {
+    log('warn', 'ABBREVIATION_EXPANSIONS is not defined, skipping abbreviation normalization', { domain: normalizedDomain });
+  }
+  if (normalizedName.includes('Chevrolet')) {
+    normalizedName = normalizedName.replace('Chevrolet', 'Chevy');
+  }
+  if (normalizedName.includes('Mercedes-Benz')) {
+    normalizedName = normalizedName.replace('Mercedes-Benz', 'M.B.');
+  }
+  if (normalizedName !== companyName) {
+    companyName = normalizedName;
+    log('info', 'Applied abbreviation and brand normalization', { domain: normalizedDomain, companyName });
+    flags.add('NormalizationApplied');
+  }
+}
 
     // Final validation
     if (!companyName || companyName.length < 3) {
