@@ -2673,5 +2673,6 @@ export {
   extractBrandOfCityFromDomain,
   fetchMetaData,
   validateCompanyName,
-  getMetaTitleBrand
+  getMetaTitleBrand,
+  cleanCompanyName // Added to resolve import error
 };
