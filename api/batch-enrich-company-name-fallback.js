@@ -922,6 +922,93 @@ const OVERRIDES = {
     "yorkautomotive.com": "York Auto"
 };
 
+const ABBREVIATION_EXPANSIONS = {
+    "audiof": "Audi",
+    "ba": "BA Auto",
+    "bmwof": "BMW",
+    "cdj": "Dodge",
+    "cdjr": "Dodge",
+    "chevroletof": "Chevy",
+    "chevyof": "Chevy",
+    "ch": "CH",
+    "dv": "Don Vandercraft", // Resolved: kept over "DV"
+    "ec": "EC", // Resolved: removed duplicate
+    "eh": "East Hills",
+    "fordof": "Ford",
+    "gh": "Green Hills",
+    "gy": "GY",
+    "hgreg": "HGreg",
+    "hondaof": "Honda",
+    "inf": "Infiniti",
+    "jlr": "Jaguar",
+    "jm": "JM", // Resolved: removed duplicate
+    "jt": "JT",
+    "kia": "Kia",
+    "la": "LA",
+    "lh": "La Habra",
+    "lv": "LV",
+    "mb": "M.B.",
+    "mbof": "M.B.",
+    "mc": "MC",
+    "mercedesbenzof": "M.B.",
+    "mercedesof": "M.B.",
+    "mv": "Mountain View",
+    "nc": "North County",
+    "np": "North Park",
+    "nv": "North Valley",
+    "rt": "RT",
+    "sb": "Santa Barbara",
+    "sc": "South County",
+    "sp": "SP",
+    "sv": "South Valley",
+    "toyotaof": "Toyota",
+    "tv": "Treasure Valley",
+    "vc": "Valley Chevy",
+    "vw": "VW",
+    "wc": "Walnut Creek", // Resolved: kept over "WC"
+    "wg": "WG",
+    "ph": "Porsche",
+    "nash": "Nashville",
+    "slv": "SLV",
+    "bh": "BH",
+    "bhm": "BHM",
+    "bpg": "BPG", // Resolved: removed duplicate
+    "dm": "DM",
+    "gmc": "GMC",
+    "usa": "USA",
+    "us": "US",
+    "ada": "ADA",
+    "bmw": "BMW",
+    "lac": "LAC",
+    "fm": "FM",
+    "socal": "SoCal",
+    "uvw": "UVW",
+    "bb": "BB",
+    "dfw": "DFW",
+    "fj": "FJ",
+    "cc": "CC",
+    "hh": "HH",
+    "sj": "SJ",
+    "jc": "JC",
+    "jcr": "JCR", // Fixed: corrected syntax error from "jcr"; "JCR"
+    "chev": "Chevy",
+    "kc": "KC",
+    "ac": "AC",
+    "okc": "OKC",
+    "obr": "OBR",
+    "benz": "M.B.",
+    "mbokc": "M.B. OKC",
+    "nwh": "NWH",
+    "nw": "NW",
+    "pbg": "PBG",
+    "rbm": "RBM",
+    "sm": "SM",
+    "sf": "SF",
+    "sth": "STH",
+    "gm": "GM",
+    "tea": "Stead"
+  };
+
      // Define known first and last names for human name splitting
     const KNOWN_FIRST_NAMES = new Set([
       "aaron", "abel", "al", "abraham", "adam", "arnie", "adrian", "al", "alan", "allan", "allen", "albert", "alden", "alex",
@@ -1422,18 +1509,11 @@ function splitMergedTokens(name) {
       })
       .filter(token => token); // Remove empty tokens
 
-    // Cap at 3 tokens for cold-email safety
-    const finalTokens = capitalizedTokens.slice(0, 3);
+    // Cap at 4 tokens for cold-email safety (aligned with validateFallbackName)
+    const finalTokens = capitalizedTokens.slice(0, 4);
     
     // Join tokens
     const result = finalTokens.join(' ');
-
-    // Validate result
-    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/;
-    if (!result || !pattern.test(result)) {
-      log('warn', 'Split tokens result does not match pattern', { name, result });
-      return capitalizeName(name.trim())?.name || name.trim();
-    }
 
     log('debug', 'splitMergedTokens result', { name, result, tokens: finalTokens });
     return result;
