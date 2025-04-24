@@ -1739,7 +1739,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     flags.add(...extractedTokensResult.flags);
     confidenceScore = Math.max(confidenceScore, extractedTokensResult.confidenceScore);
 
-    // Fixed token filtering block (corrected syntax)
+    // Fixed token filtering block (ensuring correct syntax)
     const filteredTokens = extractedTokens
       .map(t => t.toLowerCase())
       .filter(t => !SPAMMY_TOKENS.includes(t) && t !== 'of');
