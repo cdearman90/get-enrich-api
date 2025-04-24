@@ -2570,6 +2570,15 @@ function getMetaTitleBrand(meta) {
     return null;
   }
 }
+
+function validateCompanyName(name, domain, brand, score, flags) {
+  return {
+    validatedName: name,
+    confidenceScore: score,
+    flags
+  };
+}
+
 // Export all functions required by batch-enrich.js
 export {
   humanizeName,
@@ -2579,5 +2588,6 @@ export {
   normalizeDomain,
   extractBrandOfCityFromDomain,
   fetchMetaData,
+  validateCompanyName,
   getMetaTitleBrand
 };
