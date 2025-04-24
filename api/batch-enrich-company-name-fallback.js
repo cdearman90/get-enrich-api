@@ -1643,6 +1643,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
  * @param {Object} meta - Meta data
  * @returns {{companyName: string, confidenceScore: number, flags: string[], tokens: number}} - Enriched result
  */
+// Location: /api/batch-enrich-company-name-fallback.js, replace fallbackName function
 async function fallbackName(domain, originalDomain, meta = {}) {
   const normalizedDomain = normalizeDomain(domain);
   let companyName = '';
@@ -1738,7 +1739,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     flags.add(...extractedTokensResult.flags);
     confidenceScore = Math.max(confidenceScore, extractedTokensResult.confidenceScore);
 
-    // Fixed token filtering block (retyped to eliminate Unicode issues)
+    // Fixed token filtering block (corrected syntax)
     const filteredTokens = extractedTokens
       .map(t => t.toLowerCase())
       .filter(t => !SPAMMY_TOKENS.includes(t) && t !== 'of');
