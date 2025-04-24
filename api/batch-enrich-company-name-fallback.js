@@ -1456,16 +1456,12 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
   let validatedName = result.name?.trim();
   let currentConfidenceScore = confidenceScore;
 
-  const logger = require('winston');
-  const { CAR_BRANDS, KNOWN_CITIES_SET, BRAND_MAPPING, BLOCKLIST, SPAMMY_TOKENS } = require('./constants');
-  const properNounsSet = new Set([...KNOWN_FIRST_NAMES, ...KNOWN_LAST_NAMES, ...SORTED_CITY_LIST, ...KNOWN_PROPER_NOUNS].map(n => n.toLowerCase()));
-
-  logger.info('validateFallbackName started', { domain, result });
+  log('info', 'validateFallbackName started', { domain, result });
 
   try {
     // Initial validation: Ensure result is valid
     if (!result || !validatedName || typeof validatedName !== 'string') {
-      logger.warn('Invalid OpenAI result', { domain, result });
+      log('warn', 'Invalid OpenAI result', { domain, result });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
@@ -1474,15 +1470,16 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     // Convert CAR_BRANDS to Set for consistency
     const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
 
-    // Relaxed pattern for 1–3 capitalized tokens
-    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)*)$/;
+    // Relaxed pattern to allow abbreviations (e.g., "M.B.") and all-caps brands (e.g., "BMW")
+    const pattern = /^(?:[A-Z]\.[A-Z]\.|(?:[A-Z][a-z]+|[A-Z]+)(?: (?:[A-Z][a-z]+|[A-Z]+))*)$/;
 
     // Step 1: Split merged tokens if necessary
-    if (validatedName.split(' ').length === 1) {
+    const initialTokens = validatedName.split(' ').filter(Boolean);
+    if (initialTokens.length === 1) {
       const splitName = splitMergedTokens(validatedName);
       if (splitName !== validatedName) {
         validatedName = splitName;
-        logger.info('Merged tokens split', { domain, validatedName });
+        log('info', 'Merged tokens split', { domain, validatedName });
         flags.add('TokenSplitApplied');
         currentConfidenceScore = Math.min(currentConfidenceScore, 95);
       } else {
@@ -1491,69 +1488,43 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
-    // Step 2: Handle blob-like names
-    if (validatedName && validatedName.length > 12 && !/\s/.test(validatedName)) {
-      const lowerName = validatedName.toLowerCase();
-      if (properNounsSet.has(lowerName)) {
-        const capResult = capitalizeName(validatedName) || { name: validatedName };
-        validatedName = capResult.name;
-        logger.info('Blob-like name recovered as proper noun', { domain, validatedName });
-        flags.add('BlobLikeRecovered');
-      } else {
-        const splitAttempt = validatedName
-          .replace(/([a-z])([A-Z])/g, '$1 $2')
-          .split(' ')
-          .filter(Boolean)
-          .map(t => {
-            const capResult = capitalizeName(t) || { name: t };
-            return capResult.name;
-          })
-          .join(' ');
-        if (splitAttempt.split(' ').length > 1 && pattern.test(splitAttempt)) {
-          validatedName = splitAttempt;
-          logger.info('Blob-like name split', { domain, validatedName });
-          flags.add('BlobLikeSplit');
-          currentConfidenceScore = Math.min(currentConfidenceScore, 95);
-        } else {
-          logger.warn('Blob-like name detected', { domain, validatedName });
-          flags.add('BlobLikeFallback');
-          flags.add('ReviewNeeded');
-          currentConfidenceScore = Math.min(currentConfidenceScore, 80);
-          validatedName = null;
-        }
-      }
-    }
-
-    // If validation failed, return early
-    if (!validatedName) {
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
-    }
-
-    // Step 3: Validate against pattern and token count
-    const tokens = validatedName.split(' ');
-    if (!pattern.test(validatedName) || tokens.length < 1 || tokens.length > 3) {
-      logger.warn('Uncapitalized, malformed, or invalid token count', { domain, validatedName, tokenCount: tokens.length });
+    // Step 2: Validate against pattern and token count (relaxed to 1–4 tokens)
+    let tokens = validatedName.split(' ').filter(Boolean);
+    if (!pattern.test(validatedName) || tokens.length < 1 || tokens.length > 4) {
+      log('warn', 'Uncapitalized, malformed, or invalid token count', { domain, validatedName, tokenCount: tokens.length });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+    }
+
+    // Step 3: Check for overrides to ensure consistency
+    const normalizedDomain = domain.endsWith('.com') ? domain : `${domain}.com`;
+    if (OVERRIDES[normalizedDomain]) {
+      const overrideName = OVERRIDES[normalizedDomain];
+      if (validatedName !== overrideName) {
+        log('warn', 'OpenAI name does not match override', { domain, validatedName, override: overrideName });
+        validatedName = overrideName;
+        currentConfidenceScore = 125;
+        flags.add('OverrideApplied');
+      }
     }
 
     // Step 4: Check for city-only or brand-only outputs
     const isBrand = carBrandsSet.has(validatedName.toLowerCase());
     const isProper = properNounsSet.has(validatedName.toLowerCase());
     const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
-    const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
+    const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cars', 'drive', 'center', 'world'];
     const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
 
     if (!isProper) {
       if (isBrand) {
-        logger.warn('Brand-only output detected', { domain, validatedName });
+        log('warn', 'Brand-only output detected', { domain, validatedName });
         flags.add('BrandOnlyFallback');
         flags.add('ReviewNeeded');
         return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
       }
       if (hasCity && !hasGeneric && tokens.length === 1) {
-        logger.warn('City-only output detected', { domain, validatedName });
+        log('warn', 'City-only output detected', { domain, validatedName });
         flags.add('CityOnlyFallback');
         flags.add('ReviewNeeded');
         return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
@@ -1562,14 +1533,14 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
 
     // Step 5: Handle brand mismatch
     if (result.brand && domainBrand && result.brand.toLowerCase() !== domainBrand.toLowerCase()) {
-      logger.warn('OpenAI brand mismatch, prioritizing domain brand', { domain, openAIBrand: result.brand, domainBrand });
+      log('warn', 'OpenAI brand mismatch, prioritizing domain brand', { domain, openAIBrand: result.brand, domainBrand });
       flags.add('BrandMismatchPenalty');
       currentConfidenceScore = Math.max(currentConfidenceScore - 5, 50);
       if (tokens.some(w => carBrandsSet.has(w.toLowerCase()))) {
         validatedName = tokens
           .map(w =>
             carBrandsSet.has(w.toLowerCase())
-              ? (BRAND_MAPPING.has(domainBrand.toLowerCase()) ? BRAND_MAPPING.get(domainBrand.toLowerCase()) : capitalizeName(domainBrand)?.name || domainBrand)
+              ? (BRAND_MAPPING.get(domainBrand.toLowerCase()) || capitalizeName(domainBrand).name || domainBrand)
               : w
           )
           .join(' ');
@@ -1579,17 +1550,49 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
 
     // Step 6: Validate brand against CAR_BRANDS
     if (result.brand && !carBrandsSet.has(result.brand.toLowerCase())) {
-      logger.warn('OpenAI hallucinated brand', { domain, brand: result.brand });
+      log('warn', 'OpenAI hallucinated brand', { domain, brand: result.brand });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    // Step 7: Consolidated validation checks
-    const words = validatedName.toLowerCase().split(' ');
+    // Step 7: Remove suffixes and spammy tokens
+    tokens = validatedName.split(' ').filter(Boolean);
+    const suffixesSet = new Set(SUFFIXES_TO_REMOVE.map(s => s.toLowerCase()));
+    const filteredTokens = tokens.filter(token => {
+      const lowerToken = token.toLowerCase();
+      if (suffixesSet.has(lowerToken)) {
+        flags.add('SuffixRemoved');
+        return false;
+      }
+      if (SPAMMY_TOKENS.includes(lowerToken) && !genericTerms.includes(lowerToken)) {
+        flags.add('SpammyTokens');
+        return false;
+      }
+      return true;
+    });
+
+    if (filteredTokens.length === 0) {
+      log('warn', 'All tokens removed during suffix/spammy token filtering', { domain, validatedName });
+      flags.add('AllTokensFiltered');
+      flags.add('ReviewNeeded');
+      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+    }
+
+    validatedName = filteredTokens.join(' ');
+    if (!pattern.test(validatedName)) {
+      log('warn', 'Name invalid after suffix/spammy token removal', { domain, validatedName });
+      flags.add('FallbackNameError');
+      flags.add('ReviewNeeded');
+      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+    }
+
+    // Step 8: Check for duplicates
+    tokens = validatedName.split(' ').filter(Boolean);
+    const words = tokens.map(w => w.toLowerCase());
     const uniqueWords = [...new Set(words)];
     if (uniqueWords.length !== words.length) {
-      logger.warn('Duplicate tokens in output', { domain, validatedName });
+      log('warn', 'Duplicate tokens in output', { domain, validatedName });
       validatedName = uniqueWords
         .map(t => capitalizeName(t)?.name || t)
         .join(' ');
@@ -1597,31 +1600,37 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       currentConfidenceScore = Math.min(currentConfidenceScore, 95);
     }
 
-    if (Array.isArray(BLOCKLIST) && BLOCKLIST.includes(validatedName.toLowerCase())) {
-      logger.warn('Output in blocklist', { domain, validatedName });
+    // Step 9: Check blocklist
+    if (BLOCKLIST.includes(validatedName.toLowerCase())) {
+      log('warn', 'Output in blocklist', { domain, validatedName });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    const safeGenerics = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
-    const hasSpammyTokens = Array.isArray(SPAMMY_TOKENS) && SPAMMY_TOKENS.some(
-      token => validatedName.toLowerCase().includes(token) && !safeGenerics.includes(token)
-    );
-    if (hasSpammyTokens) {
-      logger.warn('Output contains spammy tokens', { domain, validatedName });
-      flags.add('SpammyTokens');
-      validatedName = tokens
-        .filter(t => !(Array.isArray(SPAMMY_TOKENS) && SPAMMY_TOKENS.includes(t.toLowerCase())) || safeGenerics.includes(t.toLowerCase()))
-        .join(' ');
-      if (!validatedName || !pattern.test(validatedName)) {
-        flags.add('FallbackNameError');
+    // Step 10: Final city-only/brand-only check after filtering
+    tokens = validatedName.split(' ').filter(Boolean);
+    const isFinalBrand = carBrandsSet.has(validatedName.toLowerCase());
+    const isFinalProper = properNounsSet.has(validatedName.toLowerCase());
+    const hasFinalCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+    const hasFinalGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
+
+    if (!isFinalProper) {
+      if (isFinalBrand) {
+        log('warn', 'Brand-only output after filtering', { domain, validatedName });
+        flags.add('BrandOnlyFallback');
+        flags.add('ReviewNeeded');
+        return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+      }
+      if (hasFinalCity && !hasFinalGeneric && tokens.length === 1) {
+        log('warn', 'City-only output after filtering', { domain, validatedName });
+        flags.add('CityOnlyFallback');
         flags.add('ReviewNeeded');
         return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
       }
     }
 
-    logger.info('Output validated successfully', {
+    log('info', 'Output validated successfully', {
       domain,
       validatedName,
       confidenceScore: currentConfidenceScore,
@@ -1629,7 +1638,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     });
     return { validatedName, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
   } catch (e) {
-    logger.error('validateFallbackName failed', { domain, error: e.message, stack: e.stack });
+    log('error', 'validateFallbackName failed', { domain, error: e.message, stack: e.stack });
     flags.add('FallbackNameError');
     flags.add('ReviewNeeded');
     return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
