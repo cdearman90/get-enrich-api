@@ -2285,7 +2285,7 @@ function humanizeName(domain) {
       const companyName = TEST_CASE_OVERRIDES[normalizedDomain + ".com"];
       log("info", `Override applied for domain: ${normalizedDomain}`, { companyName });
       return {
-        companyName: capitalizeName(companyName).name,
+        companyName: cleanCompanyName(capitalizeName(companyName).name), // Use cleanCompanyName
         confidenceScore: 125,
         flags: ["overrideApplied"],
         tokens: companyName.toLowerCase().split(" "),
@@ -2328,7 +2328,7 @@ function humanizeName(domain) {
       if (tokens.length === 1 && !CAR_BRANDS.has(tokens[0].toLowerCase()) && !KNOWN_CITIES_SET.has(tokens[0].toLowerCase())) {
         const companyName = capitalizeName(tokens[0]).name;
         const result = {
-          companyName,
+          companyName: cleanCompanyName(companyName), // Use cleanCompanyName
           confidenceScore: 80,
           flags: ["singleTokenFallback"],
           tokens: [tokens[0].toLowerCase()],
@@ -2353,7 +2353,7 @@ function humanizeName(domain) {
 
     let meta = {};
     try {
-      meta = fetchMetaData(domain);
+      meta = await fetchMetaData(domain);
     } catch (err) {
       log("error", "fetchMetaData failed", { domain, error: err.message, stack: err.stack });
     }
@@ -2407,12 +2407,41 @@ function humanizeName(domain) {
       return result;
     }
 
-    if (result.companyName && typeof result.companyName === "string") {
-      result.companyName = capitalizeName(result.companyName.trim().replace(/\s+/g, " ")).name;
-    } else {
-      result.companyName = "";
-      result.flags.push("invalidCompanyName");
+    // Extract domain brand for validation
+    let domainBrand = null;
+    for (const token of tokens) {
+      if (CAR_BRANDS.has(token.toLowerCase())) {
+        domainBrand = token;
+        break;
+      }
     }
+
+    // Validate the company name
+    const validationResult = validateCompanyName(
+      result.companyName,
+      domain,
+      domainBrand,
+      result.confidenceScore,
+      result.flags
+    );
+
+    if (!validationResult.validatedName) {
+      result = {
+        companyName: "",
+        confidenceScore: validationResult.confidenceScore,
+        flags: validationResult.flags,
+        tokens: [],
+        confidenceOrigin: result.confidenceOrigin,
+        rawTokenCount
+      };
+      log("debug", "Final result confidence after validation", { companyName: result.companyName, confidenceScore: result.confidenceScore });
+      result.tokens = result.tokens.slice(0, 3);
+      return result;
+    }
+
+    result.companyName = cleanCompanyName(validationResult.validatedName); // Use cleanCompanyName
+    result.confidenceScore = validationResult.confidenceScore;
+    result.flags = validationResult.flags;
 
     result.rawTokenCount = rawTokenCount;
 
