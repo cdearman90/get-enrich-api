@@ -1503,45 +1503,8 @@ function earlyCompoundSplit(domain) {
     return [];
   }
 
-  // Blob fixes for specific domains (ChatGPT suggestion: integrate as separate map)
-  const blobFixes = {
-    'northbakersfieldtoyota': ['north', 'bakersfield', 'toyota'],
-    'subaruofgwinnett': ['subaru', 'gwinnett'],
-    'kalidykia': ['kalidy', 'kia'],
-    'mbofbrooklyn': ['m.b.', 'brooklyn'],
-    'toyotaofslidell': ['toyota', 'slidell'],
-    'duvalford': ['duval', 'ford'],
-    'athensford': ['athens', 'ford'],
-    'patmillikenford': ['pat', 'milliken', 'ford'],
-    'townandcountryford': ['town', 'country', 'ford'],
-    'teamford': ['team', 'ford'],
-    'sanleandroford': ['san', 'leandro', 'ford'],
-    'gusmachadoford': ['gus', 'machado', 'ford'],
-    'donhindsford': ['don', 'hinds', 'ford'],
-    'unionpark': ['union', 'park'],
-    'jackpowell': ['jack', 'powell'],
-    'malouf': ['malouf'],
-    'prestonmotor': ['preston', 'motor'],
-    'billdube': ['bill', 'dube'],
-    'golfmillford': ['golf', 'mill', 'ford'],
-    'demontrond': ['demontrond'],
-    'carlblack': ['carl', 'black'],
-    'fletcherauto': ['fletcher', 'auto'],
-    'richmondford': ['richmond', 'ford'],
-    'tasca': ['tasca'],
-    'bentleyauto': ['bentley', 'auto'],
-    'avisford': ['avis', 'ford'],
-    'rodbakerford': ['rod', 'baker', 'ford']
-  };
-
-  // Check for overrides and blob fixes (ChatGPT suggestion: apply blobFix early)
-  const blobFix = blobFixes[normalized];
-  if (blobFix && Array.isArray(blobFix)) {
-    log("info", "BlobFix override applied", { domain, blobFix });
-    return blobFix;
-  }
-
-  const override = TEST_CASE_OVERRIDES.get(normalized + ".com");
+  // Check for overrides
+  const override = TEST_CASE_OVERRIDES[normalized + ".com"];
   if (override) {
     log("info", `Override applied for domain: ${normalized}`, { override });
     return Array.isArray(override) ? override.map(word => word.toLowerCase()) : override.split(" ").map(word => word.toLowerCase());
@@ -1551,7 +1514,7 @@ function earlyCompoundSplit(domain) {
   let tokens = [];
   let remaining = normalized;
 
-  // Process abbreviations before tokenizing (ChatGPT suggestion: preprocess abbreviations)
+  // Preprocess abbreviations
   for (const [abbr, expansion] of Object.entries(ABBREVIATION_EXPANSIONS)) {
     const regex = new RegExp(`\\b${abbr}\\b`, "gi");
     if (remaining.match(regex)) {
@@ -1559,9 +1522,9 @@ function earlyCompoundSplit(domain) {
     }
   }
 
-  // Split on camelCase, delimiters, 'of', and numeric boundaries (ChatGPT suggestion: hybrid split logic)
+  // Split on camelCase, delimiters, 'of', and numeric boundaries
   tokens = remaining
-    .split(/(?=[A-Z])|[-_\s]|of|(?<=\D)(?=\d)/) // Enhanced regex split
+    .split(/(?=[A-Z])|[-_\s]|of|(?<=\D)(?=\d)/)
     .filter(Boolean)
     .flatMap(token => token.match(/[a-zA-Z]+/g) || [token])
     .filter(Boolean);
@@ -1569,34 +1532,38 @@ function earlyCompoundSplit(domain) {
   // Expand initials (e.g., 'm.b.' → 'm b')
   tokens = tokens.map(token => expandInitials(token)).flatMap(token => token.split(" ")).filter(Boolean);
 
-  // Handle multi-word cities (sorted by length for priority)
+  // Enhanced multi-word city handling
   const sortedCities = Array.from(KNOWN_CITIES_SET).sort((a, b) => b.replace(/\s+/g, "").length - a.replace(/\s+/g, "").length);
   const cityTokens = [];
+  let tempRemaining = remaining;
   for (const city of sortedCities) {
     const cityLower = city.toLowerCase().replace(/\s+/g, "");
-    if (remaining.includes(cityLower)) {
+    if (tempRemaining.includes(cityLower)) {
       const cityWords = city.toLowerCase().split(" ").filter(Boolean);
       cityTokens.push(...cityWords);
-      remaining = remaining.replace(cityLower, "");
+      tempRemaining = tempRemaining.replace(cityLower, "");
     }
   }
-  tokens = [...new Set([...tokens, ...cityTokens])]; // Deduplicate
+  tokens = [...new Set([...tokens, ...cityTokens])];
 
-  // Fuzzy splitting for glued tokens (ChatGPT suggestion: enhanced fuzzy matching)
+  // Enhanced fuzzy splitting for glued tokens
   const fuzzyTokens = [];
   for (let token of tokens) {
-    if (token.length >= 6 && !/[A-Z]/.test(token.slice(1))) {
-      for (let j = 2; j < token.length - 2; j++) {
+    if (token.length >= 4) { // Lowered threshold from 6 to 4
+      for (let j = 2; j <= token.length - 2; j++) {
         const left = token.slice(0, j);
         const right = token.slice(j);
         if (
-          (properNounsSet.has(left) || KNOWN_CITIES_SET.has(left)) &&
-          (CAR_BRANDS.has(right) || ['auto', 'motors', 'group'].includes(right))
+          (properNounsSet.has(left) || KNOWN_CITIES_SET.has(left) || CAR_BRANDS.has(left)) &&
+          (properNounsSet.has(right) || CAR_BRANDS.has(right) || ['auto', 'motors', 'group', 'dealers', 'cars'].includes(right))
         ) {
           fuzzyTokens.push(left, right);
           log("debug", "Fuzzy token split applied", { token, split: [left, right] });
           break;
         }
+      }
+      if (fuzzyTokens.length === 0 || fuzzyTokens[fuzzyTokens.length - 1] !== token) {
+        fuzzyTokens.push(token);
       }
     } else {
       fuzzyTokens.push(token);
@@ -1604,25 +1571,27 @@ function earlyCompoundSplit(domain) {
   }
   tokens = fuzzyTokens;
 
-  // Greedy prefix matching for proper nouns and brands
+  // Enhanced proper noun and brand matching
   const finalTokens = [];
-  for (let i = 0; i < tokens.length; i++) {
+  let i = 0;
+  while (i < tokens.length) {
     let matched = false;
     for (let len = Math.min(3, tokens.length - i); len >= 1; len--) {
       const segment = tokens.slice(i, i + len).join("");
-      if (properNounsSet.has(segment) || CAR_BRANDS.has(segment)) {
+      if (properNounsSet.has(segment) || CAR_BRANDS.has(segment) || KNOWN_CITIES_SET.has(segment)) {
         finalTokens.push(segment);
-        i += len - 1;
+        i += len;
         matched = true;
         break;
       }
     }
     if (!matched) {
       finalTokens.push(tokens[i]);
+      i++;
     }
   }
 
-  // Filter tokens: relax COMMON_WORDS filtering to preserve valid tokens
+  // Filter tokens
   const filteredTokens = finalTokens
     .filter(token => token && (!COMMON_WORDS.has(token.toLowerCase()) || CAR_BRANDS.has(token) || KNOWN_CITIES_SET.has(token) || properNounsSet.has(token)))
     .slice(0, 3);
@@ -1630,13 +1599,14 @@ function earlyCompoundSplit(domain) {
   // Deduplicate tokens
   const uniqueTokens = [...new Set(filteredTokens)];
 
-  // Final fallback (ChatGPT suggestion: prevent empty output)
+  // Final fallback
   if (uniqueTokens.length === 0) {
     const fallback = capitalizeName(normalized)?.name?.toLowerCase();
     log('warn', 'No valid tokens after filtering, using fallback', { domain, fallback });
     return fallback ? [fallback] : [];
   }
 
+  // Remove blobFixes to reduce maintenance
   log("debug", `Tokenized domain: ${normalized}`, { tokens: uniqueTokens });
   return uniqueTokens;
 }
