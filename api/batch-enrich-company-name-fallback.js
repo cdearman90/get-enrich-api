@@ -13,7 +13,7 @@ const CAR_BRANDS = new Set([
     "mercedes-benz", "mercedesbenz", "merk", "mini", "mitsubishi", "nissan", "oldsmobile", "plymouth",
     "polestar", "pontiac", "porsche", "ram", "rivian", "rolls-royce", "saab", "saturn", "scion",
     "smart", "subaru", "subie", "suzuki", "tesla", "toyota", "volkswagen", "volvo", "vw", "chevy",
-    "honda"
+    "honda", "lambo"
 ]);
   // Mapping for standardized brand names
 const BRAND_MAPPING = new Map([
@@ -31,7 +31,7 @@ const BRAND_MAPPING = new Map([
   ["plymouth", "Plymouth"], ["polestar", "Polestar"], ["pontiac", "Pontiac"], ["porsche", "Porsche"], ["ram", "Ram"],
   ["rivian", "Rivian"], ["rolls-royce", "Rolls-Royce"], ["saab", "Saab"], ["saturn", "Saturn"], ["scion", "Scion"],
   ["smart", "Smart"], ["subaru", "Subaru"], ["subie", "Subaru"], ["suzuki", "Suzuki"], ["tesla", "Tesla"], ["toyota", "Toyota"],
-  ["volkswagen", "VW"], ["volvo", "Volvo"], ["vw", "VW"], ["chevy", "Chevy"], ["jcd", "Jeep"]
+  ["volkswagen", "VW"], ["volvo", "Volvo"], ["vw", "VW"], ["chevy", "Chevy"], ["jcd", "Jeep"], ["lamborghini", "Lambo"]
 ]);
 
 const BRAND_ONLY_DOMAINS = new Set([
@@ -1620,12 +1620,11 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
-    // Step 2: Validate against pattern and token count (enforce 2–4 tokens unless override)
+    // Step 2: Validate against pattern and token count (allow single-token overrides)
     let tokens = validatedName.split(' ').filter(Boolean);
     const isOverride = OVERRIDES[domain.endsWith('.com') ? domain : `${domain}.com`];
-    if (!pattern.test(validatedName) || tokens.length < 2 || tokens.length > 4) {
+    if (!pattern.test(validatedName) || (tokens.length < 2 && !isOverride) || tokens.length > 4) {
       if (isOverride && tokens.length === 1 && pattern.test(validatedName)) {
-        // Allow single-token overrides if they pass pattern (e.g., "Duval")
         log('info', 'Single-token override allowed', { domain, validatedName });
         flags.add('SingleTokenOverride');
       } else {
@@ -1897,7 +1896,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     flags.add(...extractedTokensResult.flags);
     confidenceScore = Math.max(confidenceScore, extractedTokensResult.confidenceScore);
 
-    // Fixed token filtering block (ensuring correct syntax)
     const filteredTokens = extractedTokens
       .map(t => t.toLowerCase())
       .filter(t => !SPAMMY_TOKENS.includes(t) && t !== 'of');
@@ -1942,7 +1940,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       }
     }
 
-    // Single proper noun fallback
+    // Single proper noun fallback with city inclusion
     const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
     const singleProper = extractedTokens.find(t => properNounsSet.has(t) && !carBrandsSet.has(t) && !KNOWN_CITIES_SET.has(t));
     if (singleProper) {
@@ -1955,11 +1953,25 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         confidenceScore = 95;
         flags.add('SingleProperNoun');
 
-        const POSSESSIVE_SAFE_NAMES = ['Rick Smith', 'Don Jacobs', 'Bill Dube', 'Robby Nixon', 'Robert Thorne', 'Team'];
-        if (!POSSESSIVE_SAFE_NAMES.includes(companyName) && domainBrand && (companyName.length < 5 || companyName.toLowerCase() === 'smith' || companyName.toLowerCase() === 'jones')) {
+        // Check if there's a city to append (e.g., for potamkinatlanta.com)
+        if (city && !companyName.toLowerCase().includes(city.toLowerCase())) {
+          const formattedCity = capitalizeName(city).name;
+          const combinedName = `${companyName} ${formattedCity}`;
+          if (pattern.test(combinedName) && combinedName.split(' ').length <= 4) {
+            companyName = combinedName;
+            flags.add('CityAppended');
+            confidenceScore = 100;
+            log('info', 'Appended city to single proper noun', { domain: normalizedDomain, companyName });
+          }
+        }
+
+        // Skip brand appending for overrides like "Duval"
+        const overrideKey = normalizedDomain.endsWith('.com') ? normalizedDomain : `${normalizedDomain}.com`;
+        const isOverride = OVERRIDES[overrideKey];
+        if (!isOverride && domainBrand && (companyName.length < 5 || companyName.toLowerCase() === 'smith' || companyName.toLowerCase() === 'jones')) {
           const formattedBrand = BRAND_MAPPING.get(domainBrand.toLowerCase()) || capitalizeName(domainBrand).name;
           const combinedName = `${companyName} ${formattedBrand}`;
-          if (pattern.test(combinedName)) {
+          if (pattern.test(combinedName) && combinedName.split(' ').length <= 4) {
             companyName = combinedName;
             flags.add('BrandAppendedForClarity');
             confidenceScore = 100;
@@ -1973,7 +1985,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       const formattedCity = capitalizeName(city).name;
       if (domainBrand) {
         const formattedBrand = BRAND_MAPPING.get(domainBrand.toLowerCase()) || capitalizeName(domainBrand).name;
-        companyName = formattedCity.toLowerCase().endsWith('s') ? `${formattedCity} ${formattedBrand}` : formattedCity;
+        companyName = `${formattedCity} ${formattedBrand}`;
         if (pattern.test(companyName)) {
           log('info', 'City and domain brand applied', { domain: normalizedDomain, companyName });
           flags.add('CityBrandPattern');
@@ -2039,8 +2051,11 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         companyName = primaryTokenResult.name;
         const isPossessiveFriendly = companyName.toLowerCase().endsWith('s') || !/^[aeiou]$/i.test(companyName.slice(-1));
         if (!isPossessiveFriendly && brand && !companyName.toLowerCase().includes(brand.toLowerCase())) {
-          companyName = `${companyName} ${brand}`;
-          flags.add('BrandAppended');
+          const overrideKey = normalizedDomain.endsWith('.com') ? normalizedDomain : `${normalizedDomain}.com`;
+          if (!OVERRIDES[overrideKey]) { // Skip brand appending for overrides
+            companyName = `${companyName} ${brand}`;
+            flags.add('BrandAppended');
+          }
         }
 
         const nameTokens = companyName.split(' ').filter((t, i, arr) => i === 0 || t.toLowerCase() !== arr[i - 1].toLowerCase());
@@ -2051,28 +2066,28 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     }
 
     // Abbreviation and brand normalization
-if (companyName) {
-  let normalizedName = companyName;
-  if (typeof ABBREVIATION_EXPANSIONS === 'object' && ABBREVIATION_EXPANSIONS !== null) {
-    Object.entries(ABBREVIATION_EXPANSIONS).forEach(([abbr, expansion]) => {
-      const regex = new RegExp(`\\b${abbr}\\b`, 'gi');
-      normalizedName = normalizedName.replace(regex, expansion);
-    });
-  } else {
-    log('warn', 'ABBREVIATION_EXPANSIONS is not defined, skipping abbreviation normalization', { domain: normalizedDomain });
-  }
-  if (normalizedName.includes('Chevrolet')) {
-    normalizedName = normalizedName.replace('Chevrolet', 'Chevy');
-  }
-  if (normalizedName.includes('Mercedes-Benz')) {
-    normalizedName = normalizedName.replace('Mercedes-Benz', 'M.B.');
-  }
-  if (normalizedName !== companyName) {
-    companyName = normalizedName;
-    log('info', 'Applied abbreviation and brand normalization', { domain: normalizedDomain, companyName });
-    flags.add('NormalizationApplied');
-  }
-}
+    if (companyName) {
+      let normalizedName = companyName;
+      if (typeof ABBREVIATION_EXPANSIONS === 'object' && ABBREVIATION_EXPANSIONS !== null) {
+        Object.entries(ABBREVIATION_EXPANSIONS).forEach(([abbr, expansion]) => {
+          const regex = new RegExp(`\\b${abbr}\\b`, 'gi');
+          normalizedName = normalizedName.replace(regex, expansion);
+        });
+      } else {
+        log('warn', 'ABBREVIATION_EXPANSIONS is not defined, skipping abbreviation normalization', { domain: normalizedDomain });
+      }
+      if (normalizedName.includes('Chevrolet')) {
+        normalizedName = normalizedName.replace('Chevrolet', 'Chevy');
+      }
+      if (normalizedName.includes('Mercedes-Benz')) {
+        normalizedName = normalizedName.replace('Mercedes-Benz', 'M.B.');
+      }
+      if (normalizedName !== companyName) {
+        companyName = normalizedName;
+        log('info', 'Applied abbreviation and brand normalization', { domain: normalizedDomain, companyName });
+        flags.add('NormalizationApplied');
+      }
+    }
 
     // Final validation
     if (!companyName || companyName.length < 3) {
@@ -2081,7 +2096,8 @@ if (companyName) {
       confidenceScore = 0;
       flags.add('InvalidFinalName');
       flags.add('ManualReviewRecommended');
-    } else if (carBrandsSet.has(companyName.toLowerCase())) {
+    } else if (carBrandsSet.has(companyName.toLowerCase()) && !OVERRIDES[normalizedDomain.endsWith('.com') ? normalizedDomain : `${normalizedDomain}.com`]) {
+      log('warn', 'Brand-only output detected in final validation', { domain: normalizedDomain, companyName });
       companyName = '';
       confidenceScore = 0;
       flags.add('BrandOnlyFallback');
