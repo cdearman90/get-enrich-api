@@ -1570,102 +1570,99 @@ function earlyCompoundSplit(domain) {
  * @returns {Object} - { brand: string, city: string, connector: string }
  */
 function extractBrandOfCityFromDomain(domain) {
-    try {
-        // Validate input
-        if (!domain || typeof domain !== 'string' || !domain.trim()) {
-            log('error', 'Invalid domain in extractBrandOfCityFromDomain', { domain });
-            return { brand: '', city: '', connector: '' };
-        }
-
-        // Normalize the domain
-        const normalized = normalizeDomain(domain);
-        if (!normalized || typeof normalized !== 'string') {
-            log('error', 'normalizeDomain returned invalid result', { domain, normalized });
-            return { brand: '', city: '', connector: '' };
-        }
-
-        // Check brand-only domains with existence guard
-        if (BRAND_ONLY_DOMAINS instanceof Set && BRAND_ONLY_DOMAINS.has(`${normalized}.com`)) {
-            log('info', 'Skipping brand-only domain', { domain: normalized });
-            return { brand: '', city: '', connector: '' };
-        }
-
-        // Split into tokens
-        let tokens = earlyCompoundSplit(normalized);
-        if (!Array.isArray(tokens) || !tokens.every(token => typeof token === 'string') || tokens.length === 0) {
-            log('warn', 'earlyCompoundSplit returned invalid or empty tokens', { domain, tokens });
-            return { brand: '', city: '', connector: '' };
-        }
-
-        // Validate dependencies
-        const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set(CAR_BRANDS || []);
-        const citiesSet = KNOWN_CITIES_SET instanceof Set ? KNOWN_CITIES_SET : new Set(KNOWN_CITIES_SET || []);
-        const isBrandMappingMap = BRAND_MAPPING instanceof Map;
-
-        if (!carBrandsSet.size || !citiesSet.size) {
-            log('error', 'Invalid dependencies in extractBrandOfCityFromDomain', {
-                CAR_BRANDS: carBrandsSet.size,
-                KNOWN_CITIES_SET: citiesSet.size,
-                BRAND_MAPPING: isBrandMappingMap
-            });
-            return { brand: '', city: '', connector: '' };
-        }
-
-        let brand = '';
-        let city = '';
-
-        // First pass: Look for brand followed by city
-        for (let i = 0; i < tokens.length; i++) {
-            const token = tokens[i];
-            if (typeof token !== 'string' || !token.trim()) continue;
-            const lowerToken = token.toLowerCase();
-            if (carBrandsSet instanceof Set && carBrandsSet.has(lowerToken)) {
-                // Safe access to BRAND_MAPPING
-                brand = isBrandMappingMap
-                    ? BRAND_MAPPING.get(lowerToken) || (capitalizeName(token) && typeof capitalizeName(token).name === 'string' ? capitalizeName(token).name : token)
-                    : (BRAND_MAPPING && BRAND_MAPPING[lowerToken]) || (capitalizeName(token) && typeof capitalizeName(token).name === 'string' ? capitalizeName(token).name : token);
-                for (let j = i + 1; j < tokens.length; j++) {
-                    const nextToken = tokens[j];
-                    if (typeof nextToken !== 'string' || !nextToken.trim()) continue;
-                    const lowerNextToken = nextToken.toLowerCase();
-                    if (citiesSet instanceof Set && citiesSet.has(lowerNextToken)) {
-                        city = capitalizeName(nextToken) && typeof capitalizeName(nextToken).name === 'string' ? capitalizeName(nextToken).name : nextToken;
-                        break;
-                    }
-                }
-                if (city) break;
-            }
-        }
-
-        // Second pass: Check all tokens if no match found
-        if (!brand || !city) {
-            for (const token of tokens) {
-                if (typeof token !== 'string' || !token.trim()) continue;
-                const lowerToken = token.toLowerCase();
-                if (!brand && carBrandsSet instanceof Set && carBrandsSet.has(lowerToken)) {
-                    brand = isBrandMappingMap
-                        ? BRAND_MAPPING.get(lowerToken) || (capitalizeName(token) && typeof capitalizeName(token).name === 'string' ? capitalizeName(token).name : token)
-                        : (BRAND_MAPPING && BRAND_MAPPING[lowerToken]) || (capitalizeName(token) && typeof capitalizeName(token).name === 'string' ? capitalizeName(token).name : token);
-                }
-                if (!city && citiesSet instanceof Set && citiesSet.has(lowerToken)) {
-                    city = capitalizeName(token) && typeof capitalizeName(token).name === 'string' ? capitalizeName(token).name : token;
-                }
-            }
-        }
-
-        if (!brand && !city) {
-            log('debug', 'No brand or city found', { domain, tokens });
-            return { brand: '', city: '', connector: '' };
-        }
-
-        // Add success logging for matched brand/city pair
-        log('info', 'Brand and city extracted', { domain, brand, city, tokens });
-
-        return { brand, city, connector: '' };
-    } catch (err) {
-        log('error', 'extractBrandOfCityFromDomain failed', { domain, error: err.message, stack: err.stack });
-        return { brand: '', city: '', connector: '' };
+  try {
+    // Validate input
+    if (!domain || typeof domain !== 'string' || !domain.trim()) {
+      log('error', 'Invalid domain in extractBrandOfCityFromDomain', { domain });
+      return { brand: '', city: '', connector: '' };
     }
+
+    // Normalize the domain
+    const normalized = normalizeDomain(domain);
+    if (!normalized || typeof normalized !== 'string') {
+      log('error', 'normalizeDomain returned invalid result', { domain, normalized });
+      return { brand: '', city: '', connector: '' };
+    }
+
+    // Check brand-only domains
+    if (BRAND_ONLY_DOMAINS instanceof Set && BRAND_ONLY_DOMAINS.has(`${normalized}.com`)) {
+      log('info', 'Skipping brand-only domain', { domain: normalized });
+      return { brand: '', city: '', connector: '' };
+    }
+
+    // Split into tokens
+    let tokens = earlyCompoundSplit(normalized);
+    if (!Array.isArray(tokens) || !tokens.every(token => typeof token === 'string') || tokens.length === 0) {
+      log('warn', 'earlyCompoundSplit returned invalid or empty tokens', { domain, tokens });
+      return { brand: '', city: '', connector: '' };
+    }
+
+    // Validate dependencies
+    const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set(CAR_BRANDS || []);
+    const citiesSet = KNOWN_CITIES_SET instanceof Set ? KNOWN_CITIES_SET : new Set(KNOWN_CITIES_SET || []);
+    const isBrandMappingMap = BRAND_MAPPING instanceof Map;
+
+    if (!carBrandsSet.size || !citiesSet.size) {
+      log('error', 'Invalid dependencies in extractBrandOfCityFromDomain', {
+        CAR_BRANDS: carBrandsSet.size,
+        KNOWN_CITIES_SET: citiesSet.size,
+        BRAND_MAPPING: isBrandMappingMap
+      });
+      return { brand: '', city: '', connector: '' };
+    }
+
+    let brand = '';
+    let city = '';
+
+    // First pass: Look for brand followed by city
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      if (typeof token !== 'string' || !token.trim()) continue;
+      const lowerToken = token.toLowerCase();
+      if (carBrandsSet.has(lowerToken)) {
+        brand = isBrandMappingMap
+          ? BRAND_MAPPING.get(lowerToken) || capitalizeName(token).name
+          : capitalizeName(token).name;
+        for (let j = i + 1; j < tokens.length; j++) {
+          const nextToken = tokens[j];
+          if (typeof nextToken !== 'string' || !nextToken.trim()) continue;
+          const lowerNextToken = nextToken.toLowerCase();
+          if (citiesSet.has(lowerNextToken)) {
+            city = capitalizeName(nextToken).name;
+            break;
+          }
+        }
+        if (city) break;
+      }
+    }
+
+    // Second pass: Check all tokens if no match found
+    if (!brand || !city) {
+      for (const token of tokens) {
+        if (typeof token !== 'string' || !token.trim()) continue;
+        const lowerToken = token.toLowerCase();
+        if (!brand && carBrandsSet.has(lowerToken)) {
+          brand = isBrandMappingMap
+            ? BRAND_MAPPING.get(lowerToken) || capitalizeName(token).name
+            : capitalizeName(token).name;
+        }
+        if (!city && citiesSet.has(lowerToken)) {
+          city = capitalizeName(token).name;
+        }
+      }
+    }
+
+    if (!brand && !city) {
+      log('debug', 'No brand or city found', { domain, tokens });
+      return { brand: '', city: '', connector: '' };
+    }
+
+    log('info', 'Brand and city extracted', { domain, brand, city, tokens });
+    return { brand, city, connector: '' };
+  } catch (err) {
+    log('error', 'extractBrandOfCityFromDomain failed', { domain, error: err.message, stack: err.stack });
+    return { brand: '', city: '', connector: '' };
+  }
 }
 
 // Matches first/last name patterns (e.g., 'jimmybrittchevrolet' → 'Jimmy Britt Chevrolet')
