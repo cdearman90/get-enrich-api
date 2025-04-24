@@ -1674,8 +1674,8 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     meta = { ...meta, title: metadata.title || meta.title || '' };
 
     // Check overrides
-    if (OVERRIDES && typeof OVERRIDES === 'object' && OVERRIDES[normalizedDomain]) {
-      return handleOverride(normalizedDomain, OVERRIDES[normalizedDomain]);
+    if (OVERRIDES && typeof OVERRIDES === 'object' && OVERRIDES[normalizedDomain + '.com']) {
+      return handleOverride(normalizedDomain, OVERRIDES[normalizedDomain + '.com']);
     }
 
     // Validate input
