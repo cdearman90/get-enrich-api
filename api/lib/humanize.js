@@ -1368,17 +1368,65 @@ function cleanCompanyName(companyName) {
       return companyName.trim();
     }
 
-    // Remove leading connectors (e.g., "Of Ford")
-    while (tokens.length > 0 && COMMON_WORDS.has(tokens[0].toLowerCase())) {
-      tokens.shift();
+    // Step 1: Deduplicate tokens while preserving case
+    const seen = new Set();
+    const dedupedTokens = [];
+    for (const token of tokens) {
+      const tokenKey = token.toLowerCase();
+      if (!seen.has(tokenKey)) {
+        seen.add(tokenKey);
+        dedupedTokens.push(token);
+      } else {
+        log("debug", "Duplicate token removed", { companyName, token });
+      }
+    }
+    tokens = dedupedTokens;
+
+    // Step 2: Context-aware removal of leading and trailing tokens
+    const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
+
+    // Remove leading connectors only if they are not part of a proper noun, city, or brand
+    while (tokens.length > 1 && COMMON_WORDS.has(tokens[0].toLowerCase())) {
+      const remainingSegment = tokens.slice(1).join("").toLowerCase();
+      if (
+        !properNounsSet.has(remainingSegment) &&
+        !KNOWN_CITIES_SET.has(remainingSegment) &&
+        !carBrandsSet.has(remainingSegment)
+      ) {
+        log("debug", "Leading connector removed", { companyName, removed: tokens[0] });
+        tokens.shift();
+      } else {
+        break; // Preserve if part of a proper noun, city, or brand
+      }
     }
 
-    // Remove trailing suffixes and connectors (e.g., "Toyota The")
-    while (tokens.length > 0 && (SUFFIXES_TO_REMOVE.has(tokens[tokens.length - 1].toLowerCase()) || COMMON_WORDS.has(tokens[tokens.length - 1].toLowerCase()))) {
-      tokens.pop();
+    // Remove trailing suffixes and connectors only if they are not part of a proper noun, city, or brand
+    while (tokens.length > 1 && 
+           (SUFFIXES_TO_REMOVE.has(tokens[tokens.length - 1].toLowerCase()) || 
+            COMMON_WORDS.has(tokens[tokens.length - 1].toLowerCase()))) {
+      const precedingSegment = tokens.slice(0, -1).join("").toLowerCase();
+      if (
+        !properNounsSet.has(precedingSegment) &&
+        !KNOWN_CITIES_SET.has(precedingSegment) &&
+        !carBrandsSet.has(precedingSegment)
+      ) {
+        log("debug", "Trailing suffix/connector removed", { companyName, removed: tokens[tokens.length - 1] });
+        tokens.pop();
+      } else {
+        break; // Preserve if part of a proper noun, city, or brand
+      }
     }
 
-    return tokens.join(" ").trim();
+    // Step 3: Handle edge case where all tokens are removed
+    if (tokens.length === 0) {
+      log("warn", "All tokens removed, using fallback", { companyName });
+      return companyName.trim(); // Fallback to original trimmed input
+    }
+
+    // Step 4: Join tokens and final trim
+    const result = tokens.join(" ").trim();
+    log("debug", "Cleaned company name", { companyName, result, tokens });
+    return result;
   } catch (e) {
     log("error", "cleanCompanyName failed", { companyName, error: e.message, stack: e.stack });
     return companyName ? companyName.trim() : "";
@@ -1396,61 +1444,80 @@ function capitalizeName(name) {
     let flags = [];
     let result = trimmedName;
 
-    const lowerName = trimmedName.toLowerCase();
-    const abbrFixed = ABBREVIATION_EXPANSIONS[lowerName];
-    if (abbrFixed) {
-      result = abbrFixed
-        .split(" ")
-        .map(word => {
-          if (/^[A-Z]{1,4}$/.test(word)) return word.toUpperCase();
-          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-        })
-        .join(" ");
-      flags.push("AbbreviationExpanded");
-      return { name: result, flags };
-    }
-
+    // Step 1: Split tokens
     let tokens = result.split(" ").filter(Boolean);
 
-    result = tokens
-      .map(word => {
-        if (!word) return word;
+    // Step 2: Process tokens
+    tokens = tokens.map(word => {
+      if (!word) return word;
 
-        const lowerWord = word.toLowerCase();
-        const tokenAbbr = ABBREVIATION_EXPANSIONS[lowerWord];
-        if (tokenAbbr) {
-          flags.push("AbbreviationExpanded");
-          return tokenAbbr
-            .split(" ")
-            .map(subWord => {
-              if (/^[A-Z]{1,4}$/.test(subWord)) return subWord.toUpperCase();
-              return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
-            })
-            .join(" ");
+      const lowerWord = word.toLowerCase();
+
+      // Step 2.1: Apply abbreviation expansions with full names
+      const fullExpansion = {
+        "bhm": "Birmingham",
+        "okc": "Oklahoma City",
+        "dfw": "Dallas Fort Worth",
+        "kc": "Kansas City",
+        "la": "Los Angeles",
+        "sf": "San Francisco",
+        "sj": "San Jose",
+        "mb": "M.B."
+      }[lowerWord] || ABBREVIATION_EXPANSIONS[lowerWord];
+      if (fullExpansion) {
+        flags.push("AbbreviationExpanded");
+        // Handle multi-word expansions (e.g., "Los Angeles")
+        const expandedTokens = fullExpansion.split(" ").map(subWord => {
+          if (/^[A-Z]{1,4}$/.test(subWord)) return subWord.toUpperCase();
+          return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
+        });
+        return expandedTokens.join(" ");
+      }
+
+      // Step 2.2: Apply brand mapping
+      const brandMapped = BRAND_MAPPING.get(lowerWord);
+      if (brandMapped) {
+        flags.push("BrandMapped");
+        return brandMapped;
+      }
+
+      // Step 2.3: Preserve known proper nouns and cities in their original or proper case
+      if (KNOWN_PROPER_NOUNS.has(lowerWord) || KNOWN_CITIES_SET.has(lowerWord)) {
+        // Preserve original casing if all uppercase
+        if (word === word.toUpperCase()) {
+          return word;
         }
+        // Otherwise, apply standard capitalization
+        const properTokens = lowerWord.split(" ").map(subWord => {
+          return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
+        });
+        return properTokens.join(" ");
+      }
 
-        const brandMapped = BRAND_MAPPING.get(lowerWord);
-        if (brandMapped) {
-          flags.push("BrandMapped");
-          return brandMapped;
+      // Step 2.4: Handle abbreviations with dots (e.g., "M.B.")
+      if (word.includes(".")) {
+        if (/^[A-Z]\.[A-Z]\.$/.test(word)) {
+          return word; // Preserve "M.B."
         }
-
-        if (word.length <= 4 && (/^[a-z]{1,4}$/.test(word) || /^[A-Z]{1,4}$/.test(word))) {
-          const upper = word.toUpperCase();
-          if (KNOWN_PROPER_NOUNS.has(lowerWord) || upper === word) {
-            return upper;
-          }
+        if (word.length <= 5 && word === word.toUpperCase()) {
+          return word; // Preserve "A.B.C."
         }
+      }
 
-        if (word.includes(".")) {
-          if (/^[A-Z]\.[A-Z]\.$/.test(word)) return word;
-          if (word.length <= 5 && word === word.toUpperCase()) return word;
+      // Step 2.5: Handle mixed-case tokens (e.g., "McLaren")
+      if (/^[A-Z][a-z]+[A-Z][a-z]+$/.test(word)) {
+        // Preserve Mc-style names
+        if (word.startsWith("Mc") || word.startsWith("Mac")) {
+          return word.charAt(0).toUpperCase() + word.slice(1, 3).toLowerCase() + word.charAt(3).toUpperCase() + word.slice(4).toLowerCase();
         }
+      }
 
-        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-      })
-      .join(" ");
+      // Step 2.6: Standard capitalization
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    });
 
+    // Step 3: Join tokens and handle token count
+    result = tokens.join(" ").replace(/\s+/g, " ").trim();
     tokens = result.split(" ").filter(Boolean);
     if (tokens.length > 4) {
       result = tokens.slice(0, 4).join(" ");
@@ -1493,33 +1560,93 @@ function earlyCompoundSplit(domain) {
     return [];
   }
 
+  // Step 1: Check for overrides
   const override = TEST_CASE_OVERRIDES[normalized + ".com"];
   if (override) {
     log("info", `Override applied for domain: ${normalized}`, { override });
     return Array.isArray(override) ? override.map(word => word.toLowerCase()) : override.split(" ").map(word => word.toLowerCase());
   }
 
-  let tokens = [];
+  // Step 2: Apply abbreviation expansions and expand to full names
   let remaining = normalized;
-
   for (const [abbr, expansion] of Object.entries(ABBREVIATION_EXPANSIONS)) {
     const regex = new RegExp(`\\b${abbr}\\b`, "gi");
     if (remaining.match(regex)) {
-      remaining = remaining.replace(regex, expansion.toLowerCase().replace(/\s+/g, ""));
+      // Expand specific abbreviations to full names
+      const fullExpansion = {
+        "bhm": "birmingham",
+        "okc": "oklahoma city",
+        "dfw": "dallas fort worth",
+        "kc": "kansas city",
+        "la": "los angeles",
+        "sf": "san francisco",
+        "sj": "san jose",
+        "mb": "m.b."
+      }[abbr.toLowerCase()] || expansion.toLowerCase().replace(/\s+/g, "");
+      remaining = remaining.replace(regex, fullExpansion);
+      log("debug", `Abbreviation expanded: ${abbr} → ${fullExpansion}`, { domain: normalized });
     }
   }
 
-  tokens = remaining
+  // Step 3: Initial splitting with enhanced regex
+  let tokens = remaining
     .split(/(?=[A-Z])|[-_\s]|of|(?<=\D)(?=\d)/)
     .filter(Boolean)
     .flatMap(token => token.match(/[a-zA-Z]+/g) || [token])
     .filter(Boolean);
 
-  tokens = tokens.map(token => expandInitials(token)).flatMap(token => token.split(" ")).filter(Boolean);
+  // Step 4: Enhanced compound splitting using known lists
+  const knownWords = [
+    ...CAR_BRANDS,
+    ...KNOWN_CITIES_SET,
+    ...KNOWN_FIRST_NAMES,
+    ...KNOWN_LAST_NAMES,
+    ...KNOWN_PROPER_NOUNS
+  ].map(word => word.toLowerCase()).sort((a, b) => b.length - a.length); // Sort by length for longer matches first
 
+  const fuzzyTokens = [];
+  for (let token of tokens) {
+    if (token.includes(" ")) {
+      fuzzyTokens.push(token);
+      continue;
+    }
+    let split = false;
+    if (token.length >= 4) {
+      let current = token;
+      const subTokens = [];
+      while (current.length > 0) {
+        let matched = false;
+        for (let word of knownWords) {
+          if (current.startsWith(word)) {
+            subTokens.push(word);
+            current = current.slice(word.length);
+            matched = true;
+            break;
+          }
+        }
+        if (!matched) {
+          // Fallback: Split by length heuristic (minimum 2 chars)
+          const nextSplit = current.length > 5 ? current.slice(0, Math.min(5, current.length)) : current;
+          subTokens.push(nextSplit);
+          current = current.slice(nextSplit.length);
+        }
+      }
+      if (subTokens.length > 1) {
+        log("debug", "Enhanced compound split applied", { token, split: subTokens });
+        fuzzyTokens.push(...subTokens);
+        split = true;
+      }
+    }
+    if (!split) {
+      fuzzyTokens.push(token);
+    }
+  }
+  tokens = fuzzyTokens;
+
+  // Step 5: City and proper noun grouping
   const sortedCities = Array.from(KNOWN_CITIES_SET).sort((a, b) => b.replace(/\s+/g, "").length - a.replace(/\s+/g, "").length);
   const cityTokens = [];
-  let tempRemaining = remaining;
+  let tempRemaining = tokens.join("");
   for (const city of sortedCities) {
     const cityLower = city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and");
     if (tempRemaining.includes(cityLower)) {
@@ -1527,67 +1654,14 @@ function earlyCompoundSplit(domain) {
       tempRemaining = tempRemaining.replace(cityLower, "");
     }
   }
-  tokens = [...tokens, ...cityTokens];
 
-  const fuzzyTokens = [];
-  for (let token of tokens) {
-    if (token.includes(" ")) continue;
-    if (token.length >= 4) {
-      let split = false;
-
-      for (let j = 2; j <= token.length - 2; j++) {
-        const left = token.slice(0, j);
-        const right = token.slice(j);
-        if (
-          (KNOWN_FIRST_NAMES.has(left) && KNOWN_LAST_NAMES.has(right)) ||
-          (KNOWN_FIRST_NAMES.has(left) && CAR_BRANDS.has(right)) ||
-          (properNounsSet.has(left) && CAR_BRANDS.has(right)) ||
-          (CAR_BRANDS.has(left) && ['auto', 'motors', 'group', 'dealers', 'cars'].includes(right))
-        ) {
-          fuzzyTokens.push(left, right);
-          log("debug", "Prefix-based split applied", { token, split: [left, right] });
-          split = true;
-          break;
-        }
-      }
-
-      if (!split) {
-        for (let j = 2; j <= token.length - 2; j++) {
-          const left = token.slice(0, j);
-          const right = token.slice(j);
-          if (
-            (properNounsSet.has(left) || KNOWN_CITIES_SET.has(left)) &&
-            (CAR_BRANDS.has(right) || ['auto', 'motors', 'group', 'dealers', 'cars'].includes(right))
-          ) {
-            fuzzyTokens.push(left, right);
-            log("debug", "Fuzzy token split applied", { token, split: [left, right] });
-            split = true;
-            break;
-          }
-        }
-      }
-
-      if (!split) {
-        fuzzyTokens.push(token);
-      }
-    } else {
-      fuzzyTokens.push(token);
-    }
-  }
-  tokens = fuzzyTokens;
-
-  // Fallback regex split for compound tokens
-  if (tokens.length === 1 && /^[a-z]{8,}$/i.test(tokens[0])) {
-    tokens = tokens[0].split(/(?<=[a-z]{2,})(?=[A-Z]{1,}[a-z]+)/);
-    log("debug", "Fallback camelCase split applied", { token: tokens[0], split: tokens });
-  }
-
+  // Step 6: Reconstruct tokens with proper noun grouping
   const finalTokens = [];
   let i = 0;
   while (i < tokens.length) {
     let matched = false;
     for (let len = Math.min(3, tokens.length - i); len >= 1; len--) {
-      const segment = tokens.slice(i, i + len).join(" ");
+      const segment = tokens.slice(i, i + len).join("");
       const segmentNoSpace = segment.replace(/\s+/g, "");
       if (properNounsSet.has(segmentNoSpace) || CAR_BRANDS.has(segmentNoSpace) || KNOWN_CITIES_SET.has(segment)) {
         finalTokens.push(segment);
@@ -1602,12 +1676,21 @@ function earlyCompoundSplit(domain) {
     }
   }
 
+  // Add city tokens if not already included
+  for (const cityToken of cityTokens) {
+    if (!finalTokens.some(token => token.replace(/\s+/g, "").toLowerCase() === cityToken.replace(/\s+/g, "").toLowerCase())) {
+      finalTokens.push(cityToken);
+    }
+  }
+
+  // Step 7: Filter and deduplicate tokens
   const filteredTokens = finalTokens
     .filter(token => {
       const tokenNoSpace = token.replace(/\s+/g, "");
+      // Only remove common words if they aren't part of a valid proper noun, city, or brand
       return token && (!COMMON_WORDS.has(tokenNoSpace.toLowerCase()) || CAR_BRANDS.has(tokenNoSpace) || KNOWN_CITIES_SET.has(token) || properNounsSet.has(tokenNoSpace));
     })
-    .slice(0, 3);
+    .slice(0, 3); // Cap at 3 tokens
 
   const uniqueTokens = [];
   const seen = new Set();
@@ -1619,6 +1702,7 @@ function earlyCompoundSplit(domain) {
     }
   }
 
+  // Step 8: Fallback if no tokens remain
   if (uniqueTokens.length === 0) {
     const fallback = capitalizeName(normalized)?.name?.toLowerCase();
     log('warn', 'No valid tokens after filtering, using fallback', { domain, fallback });
