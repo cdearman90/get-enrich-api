@@ -1537,7 +1537,7 @@ function earlyCompoundSplit(domain) {
   const cityTokens = [];
   let tempRemaining = remaining;
   for (const city of sortedCities) {
-    const cityLower = city.toLowerCase().replace(/\s+/g, "");
+    const cityLower = city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"); // Handle & in city names
     if (tempRemaining.includes(cityLower)) {
       const cityWords = city.toLowerCase().split(" ").filter(Boolean);
       cityTokens.push(...cityWords);
@@ -1549,7 +1549,8 @@ function earlyCompoundSplit(domain) {
   // Enhanced fuzzy splitting for glued tokens
   const fuzzyTokens = [];
   for (let token of tokens) {
-    if (token.length >= 4) { // Lowered threshold from 6 to 4
+    if (token.length >= 4) {
+      let split = false;
       for (let j = 2; j <= token.length - 2; j++) {
         const left = token.slice(0, j);
         const right = token.slice(j);
@@ -1559,10 +1560,11 @@ function earlyCompoundSplit(domain) {
         ) {
           fuzzyTokens.push(left, right);
           log("debug", "Fuzzy token split applied", { token, split: [left, right] });
+          split = true;
           break;
         }
       }
-      if (fuzzyTokens.length === 0 || fuzzyTokens[fuzzyTokens.length - 1] !== token) {
+      if (!split) {
         fuzzyTokens.push(token);
       }
     } else {
@@ -1606,7 +1608,6 @@ function earlyCompoundSplit(domain) {
     return fallback ? [fallback] : [];
   }
 
-  // Remove blobFixes to reduce maintenance
   log("debug", `Tokenized domain: ${normalized}`, { tokens: uniqueTokens });
   return uniqueTokens;
 }
@@ -1735,7 +1736,7 @@ function extractBrandOfCityFromDomain(domain) {
     return { brand: '', city: '', connector: '' };
   }
 }
-
+      
 // Matches first/last name patterns (e.g., 'jimmybrittchevrolet' → 'Jimmy Britt Chevrolet')
 function tryHumanNamePattern(tokens) {
   try {
