@@ -13,7 +13,7 @@ const CAR_BRANDS = new Set([
     "mercedes-benz", "mercedesbenz", "merk", "mini", "mitsubishi", "nissan", "oldsmobile", "plymouth",
     "polestar", "pontiac", "porsche", "ram", "rivian", "rolls-royce", "saab", "saturn", "scion",
     "smart", "subaru", "subie", "suzuki", "tesla", "toyota", "volkswagen", "volvo", "vw", "chevy",
-    "honda"
+    "honda", "lambo"
 ]);
   // Mapping for standardized brand names
 const BRAND_MAPPING = new Map([
@@ -31,7 +31,7 @@ const BRAND_MAPPING = new Map([
   ["plymouth", "Plymouth"], ["polestar", "Polestar"], ["pontiac", "Pontiac"], ["porsche", "Porsche"], ["ram", "Ram"],
   ["rivian", "Rivian"], ["rolls-royce", "Rolls-Royce"], ["saab", "Saab"], ["saturn", "Saturn"], ["scion", "Scion"],
   ["smart", "Smart"], ["subaru", "Subaru"], ["subie", "Subaru"], ["suzuki", "Suzuki"], ["tesla", "Tesla"], ["toyota", "Toyota"],
-  ["volkswagen", "VW"], ["volvo", "Volvo"], ["vw", "VW"], ["chevy", "Chevy"], ["jcd", "Jeep"]
+  ["volkswagen", "VW"], ["volvo", "Volvo"], ["vw", "VW"], ["chevy", "Chevy"], ["jcd", "Jeep"], ["lamborghini", "Lambo"]
 ]);
 
   // Revised ABBREVIATION_EXPANSIONS in api/lib/humanize.js
@@ -121,6 +121,78 @@ const ABBREVIATION_EXPANSIONS = {
     "gm": "GM",
     "tea": "Stead"
   };
+
+const BRAND_ABBREVIATIONS = {
+    "audiof": "Audi",
+    "bmwof": "BMW",
+    "cdj": "Dodge",
+    "cdjr": "Dodge",
+    "chevroletof": "Chevy",
+    "chevyof": "Chevy",
+    "ch": "CH",
+    "ec": "EC", // Resolved: removed duplicate
+    "fordof": "Ford",
+    "gh": "Green Hills",
+    "gy": "GY",
+    "hgreg": "HGreg",
+    "hondaof": "Honda",
+    "inf": "Infiniti",
+    "jlr": "Jaguar",
+    "jm": "JM", // Resolved: removed duplicate
+    "jt": "JT",
+    "kia": "Kia",
+    "la": "LA",
+    "lh": "La Habra",
+    "lv": "LV",
+    "mb": "M.B.",
+    "mbof": "M.B.",
+    "mc": "MC",
+    "mercedesbenzof": "M.B.",
+    "mercedesof": "M.B.",
+    "rt": "RT",
+    "sp": "SP",
+    "toyotaof": "Toyota",
+    "vw": "VW",
+    "wg": "WG",
+    "ph": "Porsche",
+    "slv": "SLV",
+    "bh": "BH",
+    "bhm": "BHM",
+    "bpg": "BPG", // Resolved: removed duplicate
+    "dm": "DM",
+    "gmc": "GMC",
+    "usa": "USA",
+    "us": "US",
+    "ada": "ADA",
+    "bmw": "BMW",
+    "lac": "LAC",
+    "fm": "FM",
+    "socal": "SoCal",
+    "uvw": "UVW",
+    "bb": "BB",
+    "dfw": "DFW",
+    "fj": "FJ",
+    "cc": "CC",
+    "hh": "HH",
+    "sj": "SJ",
+    "jc": "JC",
+    "jcr": "JCR", // Fixed: corrected syntax error from "jcr"; "JCR"
+    "chev": "Chevy",
+    "kc": "KC",
+    "ac": "AC",
+    "okc": "OKC",
+    "obr": "OBR",
+    "benz": "M.B.",
+    "mbokc": "M.B. OKC",
+    "nwh": "NWH",
+    "nw": "NW",
+    "pbg": "PBG",
+    "rbm": "RBM",
+    "sm": "SM",
+    "sf": "SF",
+    "sth": "STH",
+    "gm": "GM"
+};
 
 const COMMON_WORDS = new Set([
   "to", "of", "and", "the", "for", "in", "on", "at", "inc", "llc", "corp", "co"
@@ -1453,7 +1525,13 @@ function capitalizeName(name) {
 
       const lowerWord = word.toLowerCase();
 
-      // Step 2.1: Apply abbreviation expansions with full names
+      // Step 2.1: Apply brand abbreviation mapping
+      if (BRAND_ABBREVIATIONS[lowerWord]) {
+        flags.push("BrandAbbreviationFormatted");
+        return BRAND_ABBREVIATIONS[lowerWord];
+      }
+
+      // Step 2.2: Apply abbreviation expansions with full names
       const fullExpansion = {
         "bhm": "Birmingham",
         "okc": "Oklahoma City",
@@ -1462,7 +1540,7 @@ function capitalizeName(name) {
         "la": "Los Angeles",
         "sf": "San Francisco",
         "sj": "San Jose",
-        "mb": "M.B."
+        "mb": "M.B." // Already handled by BRAND_ABBREVIATIONS, but kept for consistency
       }[lowerWord] || ABBREVIATION_EXPANSIONS[lowerWord];
       if (fullExpansion) {
         flags.push("AbbreviationExpanded");
@@ -1474,14 +1552,14 @@ function capitalizeName(name) {
         return expandedTokens.join(" ");
       }
 
-      // Step 2.2: Apply brand mapping
+      // Step 2.3: Apply brand mapping
       const brandMapped = BRAND_MAPPING.get(lowerWord);
       if (brandMapped) {
         flags.push("BrandMapped");
         return brandMapped;
       }
 
-      // Step 2.3: Preserve known proper nouns and cities in their original or proper case
+      // Step 2.4: Preserve known proper nouns and cities in their original or proper case
       if (KNOWN_PROPER_NOUNS.has(lowerWord) || KNOWN_CITIES_SET.has(lowerWord)) {
         // Preserve original casing if all uppercase
         if (word === word.toUpperCase()) {
@@ -1494,7 +1572,7 @@ function capitalizeName(name) {
         return properTokens.join(" ");
       }
 
-      // Step 2.4: Handle abbreviations with dots (e.g., "M.B.")
+      // Step 2.5: Handle abbreviations with dots (e.g., "M.B.")
       if (word.includes(".")) {
         if (/^[A-Z]\.[A-Z]\.$/.test(word)) {
           return word; // Preserve "M.B."
@@ -1504,7 +1582,7 @@ function capitalizeName(name) {
         }
       }
 
-      // Step 2.5: Handle mixed-case tokens (e.g., "McLaren")
+      // Step 2.6: Handle mixed-case tokens (e.g., "McLaren")
       if (/^[A-Z][a-z]+[A-Z][a-z]+$/.test(word)) {
         // Preserve Mc-style names
         if (word.startsWith("Mc") || word.startsWith("Mac")) {
@@ -1512,7 +1590,7 @@ function capitalizeName(name) {
         }
       }
 
-      // Step 2.6: Standard capitalization
+      // Step 2.7: Standard capitalization
       return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
     });
 
@@ -1572,7 +1650,6 @@ function earlyCompoundSplit(domain) {
   for (const [abbr, expansion] of Object.entries(ABBREVIATION_EXPANSIONS)) {
     const regex = new RegExp(`\\b${abbr}\\b`, "gi");
     if (remaining.match(regex)) {
-      // Expand specific abbreviations to full names
       const fullExpansion = {
         "bhm": "birmingham",
         "okc": "oklahoma city",
@@ -1595,14 +1672,26 @@ function earlyCompoundSplit(domain) {
     .flatMap(token => token.match(/[a-zA-Z]+/g) || [token])
     .filter(Boolean);
 
-  // Step 4: Enhanced compound splitting using known lists
+  // Step 4: Enhanced compound splitting using known lists and common compounds
+  const commonCompounds = {
+    "townandcountry": ["town", "and", "country"],
+    "beckmasten": ["beck", "masten"],
+    "stephenwade": ["stephen", "wade"],
+    "redmac": ["red", "mac"],
+    "vwsouthtowne": ["vw", "southtowne"],
+    "allamerican": ["all", "american"],
+    "sunnyking": ["sunny", "king"],
+    "acdealergroup": ["ac", "dealer", "group"]
+  };
+
   const knownWords = [
     ...CAR_BRANDS,
     ...KNOWN_CITIES_SET,
     ...KNOWN_FIRST_NAMES,
     ...KNOWN_LAST_NAMES,
-    ...KNOWN_PROPER_NOUNS
-  ].map(word => word.toLowerCase()).sort((a, b) => b.length - a.length); // Sort by length for longer matches first
+    ...KNOWN_PROPER_NOUNS,
+    ...Object.keys(commonCompounds)
+  ].map(word => word.toLowerCase()).sort((a, b) => b.length - a.length);
 
   const fuzzyTokens = [];
   for (let token of tokens) {
@@ -1611,7 +1700,14 @@ function earlyCompoundSplit(domain) {
       continue;
     }
     let split = false;
-    if (token.length >= 4) {
+    // Check for known compounds
+    if (commonCompounds[token]) {
+      fuzzyTokens.push(...commonCompounds[token]);
+      split = true;
+      log("debug", "Known compound split applied", { token, split: commonCompounds[token] });
+    }
+    // Check for first/last name pairs
+    if (!split && token.length >= 4) {
       let current = token;
       const subTokens = [];
       while (current.length > 0) {
@@ -1625,16 +1721,29 @@ function earlyCompoundSplit(domain) {
           }
         }
         if (!matched) {
-          // Fallback: Split by length heuristic (minimum 2 chars)
-          const nextSplit = current.length > 5 ? current.slice(0, Math.min(5, current.length)) : current;
-          subTokens.push(nextSplit);
-          current = current.slice(nextSplit.length);
+          // Try to split first/last name pairs
+          for (let i = 2; i <= current.length - 2; i++) {
+            const firstPart = current.slice(0, i);
+            const secondPart = current.slice(i);
+            if (KNOWN_FIRST_NAMES.has(firstPart) && KNOWN_LAST_NAMES.has(secondPart)) {
+              subTokens.push(firstPart, secondPart);
+              current = "";
+              matched = true;
+              log("debug", "First/last name split applied", { token, split: [firstPart, secondPart] });
+              break;
+            }
+          }
+          if (!matched) {
+            const nextSplit = current.length > 5 ? current.slice(0, Math.min(5, current.length)) : current;
+            subTokens.push(nextSplit);
+            current = current.slice(nextSplit.length);
+          }
         }
       }
       if (subTokens.length > 1) {
-        log("debug", "Enhanced compound split applied", { token, split: subTokens });
         fuzzyTokens.push(...subTokens);
         split = true;
+        log("debug", "Enhanced compound split applied", { token, split: subTokens });
       }
     }
     if (!split) {
@@ -1687,7 +1796,6 @@ function earlyCompoundSplit(domain) {
   const filteredTokens = finalTokens
     .filter(token => {
       const tokenNoSpace = token.replace(/\s+/g, "");
-      // Only remove common words if they aren't part of a valid proper noun, city, or brand
       return token && (!COMMON_WORDS.has(tokenNoSpace.toLowerCase()) || CAR_BRANDS.has(tokenNoSpace) || KNOWN_CITIES_SET.has(token) || properNounsSet.has(tokenNoSpace));
     })
     .slice(0, 3); // Cap at 3 tokens
@@ -1774,7 +1882,6 @@ function extractBrandOfCityFromDomain(domain) {
         for (let len = 1; len <= Math.min(3, tokens.length - i - 1); len++) {
           const cityTokens = tokens.slice(i + 1, i + 1 + len);
           const potentialCity = cityTokens.join(" ").toLowerCase();
-          // Allow cities ending in 's' if followed by a brand
           if (citiesSet.has(potentialCity) || (potentialCity.endsWith("s") && citiesSet.has(potentialCity.slice(0, -1)))) {
             city = capitalizeName(potentialCity.endsWith("s") ? potentialCity.slice(0, -1) : potentialCity).name;
             break;
@@ -1791,7 +1898,6 @@ function extractBrandOfCityFromDomain(domain) {
         for (let len = 1; len <= Math.min(3, tokens.length - i); len++) {
           const cityTokens = tokens.slice(i, i + len);
           const potentialCity = cityTokens.join(" ").toLowerCase();
-          // Allow cities ending in 's' if followed by a brand
           if (citiesSet.has(potentialCity) || (potentialCity.endsWith("s") && citiesSet.has(potentialCity.slice(0, -1)))) {
             city = capitalizeName(potentialCity.endsWith("s") ? potentialCity.slice(0, -1) : potentialCity).name;
 
@@ -1834,6 +1940,12 @@ function extractBrandOfCityFromDomain(domain) {
     // Final validation: Require both brand and city to avoid city-only outputs
     if (!brand || !city) {
       log('warn', 'Missing brand or city, returning empty result', { domain, brand, city, tokens });
+      return { brand: '', city: '', connector: '' };
+    }
+
+    // Additional check: If city-only result, reject it
+    if (!brand && city) {
+      log('warn', 'City-only result rejected', { domain, city, tokens });
       return { brand: '', city: '', connector: '' };
     }
 
@@ -2098,6 +2210,7 @@ function tryBrandCityPattern(tokens) {
       }
     }
 
+    // Strict validation: Require both brand and city
     if (!brand || !city) {
       log("debug", "No brand + city pattern found", { tokens, brand, city });
       return null;
@@ -2119,19 +2232,27 @@ function tryBrandCityPattern(tokens) {
     }
 
     // Ensure the company name includes the brand component
-    if (!companyName.includes(brand)) {
+    if (!companyName.toLowerCase().includes(brand.toLowerCase())) {
       log("warn", "Company name missing brand component", { companyName, brand, city });
       return null;
     }
 
-    // Only block if the result is solely a brand or city
+    // Strict validation: Reject city-only results
     const nameTokens = companyName.split(" ").filter(Boolean);
-    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS.has(companyName.toLowerCase());
     const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET.has(companyName.toLowerCase());
-    if (isBrandOnly || isCityOnly) {
-      flags.push("brandOrCityOnlyBlocked");
+    if (isCityOnly) {
+      flags.push("cityOnlyBlocked");
       confidenceScore = 0;
-      log("warn", "Blocked due to brand-only or city-only result", { companyName, tokens });
+      log("warn", "Blocked due to city-only result", { companyName, tokens });
+      return null;
+    }
+
+    // Check for brand-only results
+    const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS.has(companyName.toLowerCase());
+    if (isBrandOnly) {
+      flags.push("brandOnlyBlocked");
+      confidenceScore = 0;
+      log("warn", "Blocked due to brand-only result", { companyName, tokens });
       return null;
     }
 
