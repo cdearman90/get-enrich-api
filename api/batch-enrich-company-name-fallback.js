@@ -1309,6 +1309,11 @@ function extractTokens(domain) {
   try {
     // Use earlyCompoundSplit for tokenization
     let tokens = earlyCompoundSplit(domain);
+    if (!Array.isArray(tokens) || tokens.some(t => typeof t !== 'string')) {
+      log('error', 'earlyCompoundSplit returned invalid tokens', { domain, tokens });
+      flags.push('InvalidTokens');
+      return { tokens: [], confidenceScore: 0, flags };
+    }
 
     // Validate tokens
     if (tokens.length === 0) {
