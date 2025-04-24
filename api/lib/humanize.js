@@ -1392,28 +1392,78 @@ function capitalizeName(name) {
     let flags = [];
     let result = trimmedName;
 
-    if (trimmedName.includes(".")) {
-      const parts = trimmedName.split(" ").filter(Boolean);
-      result = parts
+    // Patch A: Use abbreviation expansion if known (ChatGPT suggestion)
+    const lowerName = trimmedName.toLowerCase();
+    const abbrFixed = ABBREVIATION_EXPANSIONS[lowerName];
+    if (abbrFixed) {
+      result = abbrFixed
+        .split(" ")
         .map(word => {
-          if (!word) return word;
+          // Preserve acronyms (e.g., "GY", "JCR")
+          if (/^[A-Z]{1,4}$/.test(word)) return word.toUpperCase();
+          // Title case for non-acronyms (e.g., "M.B.")
+          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+        })
+        .join(" ");
+      flags.push("AbbreviationExpanded");
+      return { name: result, flags };
+    }
+
+    // Split on camelCase boundaries and spaces
+    result = trimmedName.replace(/([a-z])([A-Z])/g, "$1 $2");
+    let tokens = result.split(" ").filter(Boolean);
+
+    // Process each token
+    result = tokens
+      .map(word => {
+        if (!word) return word;
+
+        // Check for abbreviations in individual tokens (e.g., "mb" in "mbofbrooklyn")
+        const lowerWord = word.toLowerCase();
+        const tokenAbbr = ABBREVIATION_EXPANSIONS[lowerWord];
+        if (tokenAbbr) {
+          flags.push("AbbreviationExpanded");
+          return tokenAbbr
+            .split(" ")
+            .map(subWord => {
+              if (/^[A-Z]{1,4}$/.test(subWord)) return subWord.toUpperCase();
+              return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
+            })
+            .join(" ");
+        }
+
+        // Patch B: Ensure acronyms (≤4 chars, all caps) are preserved (ChatGPT suggestion)
+        if (/^[a-z]{1,4}$/.test(word)) {
+          const upper = word.toUpperCase();
+          if (upper.length <= 4 && (KNOWN_PROPER_NOUNS.has(upper.toLowerCase()) || upper === upper.toUpperCase())) {
+            return upper;
+          }
+        }
+
+        // Check BRAND_MAPPING for specific brand formatting
+        const brandMapped = BRAND_MAPPING.get(lowerWord);
+        if (brandMapped) {
+          flags.push("BrandMapped");
+          return brandMapped;
+        }
+
+        // Default title casing
+        if (word.includes(".")) {
           if (/^[A-Z]\.[A-Z]\.$/.test(word)) return word; // Preserve "M.B."
           if (word.length <= 5 && word === word.toUpperCase()) return word; // Preserve acronyms
-          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-        })
-        .join(" ");
-      flags.push("AbbreviationPreserved");
-    } else {
-      result = trimmedName.replace(/([a-z])([A-Z])/g, "$1 $2");
-      result = result
-        .split(" ")
-        .filter(Boolean)
-        .map(word => {
-          if (!word) return word;
-          if (word.length <= 5 && word === word.toUpperCase()) return word;
-          return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-        })
-        .join(" ");
+        }
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      })
+      .join(" ");
+
+    // Patch C: Final formatting pass (ChatGPT suggestion)
+    result = result.replace(/\b(\w)/g, char => char.toUpperCase());
+
+    // Ensure proper spacing and token count
+    tokens = result.split(" ").filter(Boolean);
+    if (tokens.length > 3) {
+      result = tokens.slice(0, 3).join(" ");
+      flags.push("TokenCountAdjusted");
     }
 
     return { name: result, flags };
