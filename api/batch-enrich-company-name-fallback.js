@@ -1728,8 +1728,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     // Extract brand and city
     let cleanDomain = normalizedDomain.replace(/(\.com|\.net|\.org|\.biz|\.ca|\.co\.uk)$/g, '');
     let brandCityResult = extractBrandOfCityFromDomain(cleanDomain) || { brand: '', city: '' };
- Venues and transitions are handled asynchronously with `await` when calling the API.
-
     let domainBrand = brandCityResult.brand;
     let city = brandCityResult.city;
 
@@ -1740,9 +1738,11 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     flags.add(...extractedTokensResult.flags);
     confidenceScore = Math.max(confidenceScore, extractedTokensResult.confidenceScore);
 
-    extractedTokens = extractedTokens
+    // Fixed token filtering block (retyped to eliminate Unicode issues)
+    const filteredTokens = extractedTokens
       .map(t => t.toLowerCase())
       .filter(t => !SPAMMY_TOKENS.includes(t) && t !== 'of');
+    extractedTokens = filteredTokens;
 
     // Meta-title extraction (prioritize metadata)
     if (meta.title) {
