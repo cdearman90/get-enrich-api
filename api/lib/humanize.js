@@ -1459,7 +1459,15 @@ function earlyCompoundSplit(domain) {
     'subaruofgwinnett': ['subaru', 'gwinnett'],
     'kalidykia': ['kalidy', 'kia'],
     'mbofbrooklyn': ['m.b.', 'brooklyn'],
-    'toyotaofslidell': ['toyota', 'slidell']
+    'toyotaofslidell': ['toyota', 'slidell'],
+    'duvalford': ['duval', 'ford'],
+    'athensford': ['athens', 'ford'],
+    'patmillikenford': ['pat', 'milliken', 'ford'],
+    'townandcountryford': ['town', 'country', 'ford'],
+    'teamford': ['team', 'ford'],
+    'sanleandroford': ['san', 'leandro', 'ford'],
+    'gusmachadoford': ['gus', 'machado', 'ford'],
+    'donhindsford': ['don', 'hinds', 'ford']
   };
 
   // Check for overrides and blob fixes
@@ -1544,9 +1552,9 @@ function earlyCompoundSplit(domain) {
     }
   }
 
-  // Filter tokens: remove common words unless part of brands or cities, cap at 3
+  // Filter tokens: relax COMMON_WORDS filtering to preserve valid tokens
   const filteredTokens = finalTokens
-    .filter(token => token && (!COMMON_WORDS.has(token.toLowerCase()) || CAR_BRANDS.has(token) || KNOWN_CITIES_SET.has(token)))
+    .filter(token => token && (!COMMON_WORDS.has(token.toLowerCase()) || CAR_BRANDS.has(token) || KNOWN_CITIES_SET.has(token) || properNounsSet.has(token)))
     .slice(0, 3);
 
   // Deduplicate tokens
