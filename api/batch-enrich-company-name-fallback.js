@@ -1456,29 +1456,33 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
   let validatedName = result.name?.trim();
   let currentConfidenceScore = confidenceScore;
 
-  log('info', 'validateFallbackName started', { domain, result });
+  const logger = require('winston');
+  const { CAR_BRANDS, KNOWN_CITIES_SET, BRAND_MAPPING, BLOCKLIST, SPAMMY_TOKENS } = require('./constants');
+  const properNounsSet = new Set([...KNOWN_FIRST_NAMES, ...KNOWN_LAST_NAMES, ...SORTED_CITY_LIST, ...KNOWN_PROPER_NOUNS].map(n => n.toLowerCase()));
+
+  logger.info('validateFallbackName started', { domain, result });
 
   try {
     // Initial validation: Ensure result is valid
     if (!result || !validatedName || typeof validatedName !== 'string') {
-      log('warn', 'Invalid OpenAI result', { domain, result });
+      logger.warn('Invalid OpenAI result', { domain, result });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    // Convert CAR_BRANDS to Set for consistency with existence guard
+    // Convert CAR_BRANDS to Set for consistency
     const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
 
-    // Define regex pattern for name validation (e.g., "Chicago Auto")
-    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)?)(?: [A-Z][a-z]+)?$/;
+    // Relaxed pattern for 1–3 capitalized tokens
+    const pattern = /^([A-Z][a-z]+(?: [A-Z][a-z]+)*)$/;
 
     // Step 1: Split merged tokens if necessary
     if (validatedName.split(' ').length === 1) {
       const splitName = splitMergedTokens(validatedName);
       if (splitName !== validatedName) {
         validatedName = splitName;
-        log('info', 'Merged tokens split', { domain, validatedName });
+        logger.info('Merged tokens split', { domain, validatedName });
         flags.add('TokenSplitApplied');
         currentConfidenceScore = Math.min(currentConfidenceScore, 95);
       } else {
@@ -1490,10 +1494,10 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     // Step 2: Handle blob-like names
     if (validatedName && validatedName.length > 12 && !/\s/.test(validatedName)) {
       const lowerName = validatedName.toLowerCase();
-      if (properNounsSet instanceof Set && properNounsSet.has(lowerName)) {
+      if (properNounsSet.has(lowerName)) {
         const capResult = capitalizeName(validatedName) || { name: validatedName };
         validatedName = capResult.name;
-        log('info', 'Blob-like name recovered as proper noun', { domain, validatedName });
+        logger.info('Blob-like name recovered as proper noun', { domain, validatedName });
         flags.add('BlobLikeRecovered');
       } else {
         const splitAttempt = validatedName
@@ -1507,11 +1511,11 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
           .join(' ');
         if (splitAttempt.split(' ').length > 1 && pattern.test(splitAttempt)) {
           validatedName = splitAttempt;
-          log('info', 'Blob-like name split', { domain, validatedName });
+          logger.info('Blob-like name split', { domain, validatedName });
           flags.add('BlobLikeSplit');
           currentConfidenceScore = Math.min(currentConfidenceScore, 95);
         } else {
-          log('warn', 'Blob-like name detected', { domain, validatedName });
+          logger.warn('Blob-like name detected', { domain, validatedName });
           flags.add('BlobLikeFallback');
           flags.add('ReviewNeeded');
           currentConfidenceScore = Math.min(currentConfidenceScore, 80);
@@ -1525,31 +1529,31 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    // Step 3: Validate against pattern (ensure proper capitalization)
-    if (!pattern.test(validatedName)) {
-      log('warn', 'Uncapitalized or malformed output', { domain, validatedName });
+    // Step 3: Validate against pattern and token count
+    const tokens = validatedName.split(' ');
+    if (!pattern.test(validatedName) || tokens.length < 1 || tokens.length > 3) {
+      logger.warn('Uncapitalized, malformed, or invalid token count', { domain, validatedName, tokenCount: tokens.length });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
     // Step 4: Check for city-only or brand-only outputs
-    const tokens = validatedName.split(' ');
-    const isBrand = carBrandsSet instanceof Set && carBrandsSet.has(validatedName.toLowerCase());
-    const isProper = properNounsSet instanceof Set && properNounsSet.has(validatedName.toLowerCase());
-    const hasCity = KNOWN_CITIES_SET instanceof Set && tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
+    const isBrand = carBrandsSet.has(validatedName.toLowerCase());
+    const isProper = properNounsSet.has(validatedName.toLowerCase());
+    const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase()));
     const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
     const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
 
     if (!isProper) {
       if (isBrand) {
-        log('warn', 'Brand-only output detected', { domain, validatedName });
+        logger.warn('Brand-only output detected', { domain, validatedName });
         flags.add('BrandOnlyFallback');
         flags.add('ReviewNeeded');
         return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
       }
       if (hasCity && !hasGeneric && tokens.length === 1) {
-        log('warn', 'City-only output detected', { domain, validatedName });
+        logger.warn('City-only output detected', { domain, validatedName });
         flags.add('CityOnlyFallback');
         flags.add('ReviewNeeded');
         return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
@@ -1558,14 +1562,14 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
 
     // Step 5: Handle brand mismatch
     if (result.brand && domainBrand && result.brand.toLowerCase() !== domainBrand.toLowerCase()) {
-      log('warn', 'OpenAI brand mismatch, prioritizing domain brand', { domain, openAIBrand: result.brand, domainBrand });
+      logger.warn('OpenAI brand mismatch, prioritizing domain brand', { domain, openAIBrand: result.brand, domainBrand });
       flags.add('BrandMismatchPenalty');
       currentConfidenceScore = Math.max(currentConfidenceScore - 5, 50);
-      if (tokens.some(w => carBrandsSet instanceof Set && carBrandsSet.has(w.toLowerCase()))) {
+      if (tokens.some(w => carBrandsSet.has(w.toLowerCase()))) {
         validatedName = tokens
           .map(w =>
-            carBrandsSet instanceof Set && carBrandsSet.has(w.toLowerCase())
-              ? (BRAND_MAPPING instanceof Map && BRAND_MAPPING.has(domainBrand.toLowerCase()) ? BRAND_MAPPING.get(domainBrand.toLowerCase()) : capitalizeName(domainBrand)?.name || domainBrand)
+            carBrandsSet.has(w.toLowerCase())
+              ? (BRAND_MAPPING.has(domainBrand.toLowerCase()) ? BRAND_MAPPING.get(domainBrand.toLowerCase()) : capitalizeName(domainBrand)?.name || domainBrand)
               : w
           )
           .join(' ');
@@ -1574,74 +1578,50 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     }
 
     // Step 6: Validate brand against CAR_BRANDS
-    if (result.brand && !(carBrandsSet instanceof Set && carBrandsSet.has(result.brand.toLowerCase()))) {
-      log('warn', 'OpenAI hallucinated brand', { domain, brand: result.brand });
+    if (result.brand && !carBrandsSet.has(result.brand.toLowerCase())) {
+      logger.warn('OpenAI hallucinated brand', { domain, brand: result.brand });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
     // Step 7: Consolidated validation checks
-    // Check token count (1–3 words)
-    if (tokens.length > 3) {
-      log('warn', 'Output too long', { domain, validatedName });
-      validatedName = tokens.slice(0, 3).join(' ');
-      flags.add('TokenCountAdjusted');
-      currentConfidenceScore = Math.min(currentConfidenceScore, 95);
-    }
-
-    // Check for duplicates
     const words = validatedName.toLowerCase().split(' ');
     const uniqueWords = [...new Set(words)];
     if (uniqueWords.length !== words.length) {
-      log('warn', 'Duplicate tokens in output', { domain, validatedName });
+      logger.warn('Duplicate tokens in output', { domain, validatedName });
       validatedName = uniqueWords
-        .map(t => {
-          const capResult = capitalizeName(t) || { name: t };
-          return capResult.name;
-        })
+        .map(t => capitalizeName(t)?.name || t)
         .join(' ');
       flags.add('DuplicatesRemoved');
       currentConfidenceScore = Math.min(currentConfidenceScore, 95);
     }
 
-    // Check blocklist with existence guard
     if (Array.isArray(BLOCKLIST) && BLOCKLIST.includes(validatedName.toLowerCase())) {
-      log('warn', 'Output in blocklist', { domain, validatedName });
+      logger.warn('Output in blocklist', { domain, validatedName });
       flags.add('FallbackNameError');
       flags.add('ReviewNeeded');
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    // Check spammy tokens (exclude valid generics) with existence guard
     const safeGenerics = ['auto', 'motors', 'dealers', 'group', 'cares', 'cars', 'drive', 'center', 'world'];
     const hasSpammyTokens = Array.isArray(SPAMMY_TOKENS) && SPAMMY_TOKENS.some(
       token => validatedName.toLowerCase().includes(token) && !safeGenerics.includes(token)
     );
     if (hasSpammyTokens) {
-      log('warn', 'Output contains spammy tokens', { domain, validatedName });
+      logger.warn('Output contains spammy tokens', { domain, validatedName });
       flags.add('SpammyTokens');
-      flags.add('ReviewNeeded');
       validatedName = tokens
         .filter(t => !(Array.isArray(SPAMMY_TOKENS) && SPAMMY_TOKENS.includes(t.toLowerCase())) || safeGenerics.includes(t.toLowerCase()))
         .join(' ');
       if (!validatedName || !pattern.test(validatedName)) {
         flags.add('FallbackNameError');
+        flags.add('ReviewNeeded');
         return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
       }
     }
 
-    // Check for 3+ brands
-    const brandCount = tokens.filter(t => carBrandsSet instanceof Set && carBrandsSet.has(t.toLowerCase())).length;
-    if (brandCount >= 3) {
-      log('warn', 'Too many brands in output', { domain, validatedName });
-      flags.add('FallbackNameError');
-      flags.add('ReviewNeeded');
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
-    }
-
-    // Final success logging
-    log('info', 'Output validated successfully', {
+    logger.info('Output validated successfully', {
       domain,
       validatedName,
       confidenceScore: currentConfidenceScore,
@@ -1649,7 +1629,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     });
     return { validatedName, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
   } catch (e) {
-    log('error', 'validateFallbackName failed', { domain, error: e.message, stack: e.stack });
+    logger.error('validateFallbackName failed', { domain, error: e.message, stack: e.stack });
     flags.add('FallbackNameError');
     flags.add('ReviewNeeded');
     return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
@@ -1673,7 +1653,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
   try {
     log('info', 'Starting fallback processing', { domain: normalizedDomain });
 
-    const pattern = /^[A-Z][a-z]+(?: [A-Z][a-z]+){0,2}$/; // Allow 1-3 capitalized tokens
+    const pattern = /^[A-Z][a-z]+(?: [A-Z][a-z]+){0,2}$/;
 
     // Check cache
     const cacheKey = `${normalizedDomain}:${(meta.title || '').toLowerCase().trim()}`;
@@ -1713,7 +1693,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     }
 
     // Check brand-only domains
-    if (BRAND_ONLY_DOMAINS instanceof Set && BRAND_ONLY_DOMAINS.has(`${normalizedDomain}.com`)) {
+    if (BRAND_ONLY_DOMAINS.has(`${normalizedDomain}.com`)) {
       log('info', 'Skipping fallback for brand-only domain', { domain: normalizedDomain });
       flags.add('BrandOnlyDomainSkipped');
       return { companyName, confidenceScore: 0, flags: Array.from(flags), tokens };
@@ -1740,7 +1720,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       confidenceScore = initialResult.confidenceScore || 0;
       tokens = initialResult.tokens?.length || 0;
     } catch (error) {
-      log('error', 'humanizeName failed', { domain: normalizedDomain, error: error.message, stack: err.stack });
+      log('error', 'humanizeName failed', { domain: normalizedDomain, error: error.message, stack: error.stack });
       flags.add('HumanizeNameError');
       initialResult = { companyName: '', confidenceScore: 0, flags: [], tokens: 0 };
     }
@@ -1748,6 +1728,8 @@ async function fallbackName(domain, originalDomain, meta = {}) {
     // Extract brand and city
     let cleanDomain = normalizedDomain.replace(/(\.com|\.net|\.org|\.biz|\.ca|\.co\.uk)$/g, '');
     let brandCityResult = extractBrandOfCityFromDomain(cleanDomain) || { brand: '', city: '' };
+ Venues and transitions are handled asynchronously with `await` when calling the API.
+
     let domainBrand = brandCityResult.brand;
     let city = brandCityResult.city;
 
@@ -1882,7 +1864,6 @@ async function fallbackName(domain, originalDomain, meta = {}) {
           flags.add('BrandOnlyFallback');
           confidenceScore = 80;
         } else {
-          // Final fallback: use normalized domain (ChatGPT-inspired)
           const fallback = capitalizeName(cleanDomain)?.name;
           companyName = fallback || '';
           flags.add('NoValidTokens');
