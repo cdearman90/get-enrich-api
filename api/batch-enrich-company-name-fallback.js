@@ -1426,30 +1426,61 @@ function extractTokens(domain) {
       return { tokens: [], confidenceScore, flags };
     }
 
-    // Remove suffixes and spammy tokens
-    const suffixes = SUFFIXES_TO_REMOVE instanceof Set ? new Set([...SUFFIXES_TO_REMOVE, 'motors', 'auto', 'group']) : new Set(['motors', 'auto', 'group']);
-    tokens = tokens.filter(token => {
-      const lowerToken = token.toLowerCase();
-      if (suffixes.has(lowerToken)) {
-        flags.push('SuffixRemoved');
-        return false;
-      }
-      if (SPAMMY_TOKENS.includes(lowerToken)) {
-        flags.push('SpammyTokenRemoved');
-        return false;
-      }
-      return true;
-    });
+    // Adjust confidence based on tokenization quality
+    if (tokens.length === 1 && tokens[0].length > 8) {
+      // If earlyCompoundSplit produced a single long token, it likely failed to split properly
+      log('debug', 'Single long token detected, reducing confidence', { domain, token: tokens[0] });
+      confidenceScore = Math.min(confidenceScore, 75);
+      flags.push('PotentialTokenizationFailure');
+    }
 
-    // Deduplicate tokens
+    // Step 1: Deduplicate tokens
     const originalLength = tokens.length;
-    tokens = [...new Set(tokens)];
+    tokens = [...new Set(tokens.map(token => token.toLowerCase()))];
     if (tokens.length < originalLength) {
+      log('debug', 'Duplicate tokens removed', { domain, originalCount: originalLength, newCount: tokens.length });
       flags.push('DuplicateTokensRemoved');
       confidenceScore = Math.min(confidenceScore, 95);
     }
 
-    // Cap at 3 tokens
+    // Step 2: Context-aware removal of suffixes and spammy tokens
+    const suffixes = SUFFIXES_TO_REMOVE instanceof Set ? new Set([...SUFFIXES_TO_REMOVE, 'motors', 'auto', 'group']) : new Set(['motors', 'auto', 'group']);
+    const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
+    const originalTokens = [...tokens]; // Keep a copy for fallback
+    const filteredTokens = [];
+
+    for (let i = 0; i < tokens.length; i++) {
+      const token = tokens[i];
+      const lowerToken = token.toLowerCase();
+      const isSuffix = suffixes.has(lowerToken);
+      const isSpammy = SPAMMY_TOKENS.includes(lowerToken);
+
+      // Check if the token is part of a multi-word proper noun, city, or brand
+      let isPartOfMultiWord = false;
+      for (let len = Math.min(3, tokens.length - i); len >= 2; len--) {
+        const segment = tokens.slice(i, i + len).join("");
+        if (
+          properNounsSet.has(segment) ||
+          KNOWN_CITIES_SET.has(segment) ||
+          carBrandsSet.has(segment)
+        ) {
+          isPartOfMultiWord = true;
+          break;
+        }
+      }
+
+      if ((isSuffix || isSpammy) && !isPartOfMultiWord) {
+        log('debug', 'Token removed', { domain, token, reason: isSuffix ? 'Suffix' : 'SpammyToken' });
+        if (isSuffix) flags.push('SuffixRemoved');
+        if (isSpammy) flags.push('SpammyTokenRemoved');
+      } else {
+        filteredTokens.push(token);
+      }
+    }
+
+    tokens = filteredTokens;
+
+    // Step 3: Cap at 3 tokens
     if (tokens.length > 3) {
       log('debug', 'Token count exceeds limit, truncating', { domain, originalCount: tokens.length });
       flags.push('TokenCountAdjusted');
@@ -1457,10 +1488,12 @@ function extractTokens(domain) {
       tokens = tokens.slice(0, 3);
     }
 
+    // Step 4: Handle edge case where all tokens are removed
     if (tokens.length === 0) {
-      log('warn', 'No tokens remain after filtering', { domain });
+      log('warn', 'No tokens remain after filtering, using fallback', { domain });
       flags.push('AllTokensFiltered');
-      confidenceScore = 0;
+      confidenceScore = Math.min(confidenceScore, 50);
+      tokens = originalTokens.slice(0, 3); // Fallback to original tokens, capped at 3
     }
 
     log('debug', 'Extracted tokens', {
