@@ -1096,7 +1096,7 @@ const SORTED_CITY_LIST = [
 const KNOWN_CITIES_SET = new Set(SORTED_CITY_LIST.map(c => c.toLowerCase()));
 
 const SUFFIXES_TO_REMOVE = new Set([
-  "inc", "llc", "corp", "co", "ltd", "group", "dealership", "motors"
+  "inc", "llc", "corp", "co", "ltd", "group", "dealership", "motors", "auto"
 ]);
 
      // Define known first and last names for human name splitting
