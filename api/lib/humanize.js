@@ -2459,10 +2459,11 @@ function tryBrandGenericPattern(tokens) {
 // Matches patterns with a proper noun and generic term (e.g., 'sunsetauto' → 'Sunset Auto')
 function tryGenericPattern(tokens, properNounsSet, meta = {}) {
   try {
-if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t => typeof t === "string")) {
-  log("error", "Invalid tokens in tryGenericPattern", { tokens });
-  return null;
-}
+    // Input validation
+    if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t => typeof t === "string")) {
+      log("error", "Invalid tokens in tryGenericPattern", { tokens });
+      return null;
+    }
 
     if (!(properNounsSet instanceof Set) || !(CAR_BRANDS instanceof Set) || !(KNOWN_CITIES_SET instanceof Set)) {
       log("error", "Invalid dependencies in tryGenericPattern", {
@@ -2476,64 +2477,107 @@ if (!tokens || !Array.isArray(tokens) || tokens.length < 1 || !tokens.every(t =>
     const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
     let properNoun = null;
     let generic = null;
+    let brand = null;
     let confidenceScore = 95;
     const flags = ["genericPattern"];
     const confidenceOrigin = "genericPattern";
 
+    // Step 1: Identify proper noun, generic term, and brand from tokens
     for (const token of tokens) {
       const lowerToken = token.toLowerCase();
+      // Look for a proper noun (not a brand or city)
       if (!properNoun && properNounsSet.has(lowerToken) && !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken)) {
         const nameResult = capitalizeName(token) || { name: "" };
         properNoun = nameResult.name;
         confidenceScore = 100;
         flags.push("knownProperNoun");
       }
+      // Look for a generic term
       if (!generic && genericTerms.includes(lowerToken)) {
         const nameResult = capitalizeName(token) || { name: "" };
         generic = nameResult.name;
       }
-      if (properNoun && generic) break;
+      // Look for a brand
+      if (!brand && CAR_BRANDS.has(lowerToken)) {
+        brand = BRAND_MAPPING.get(lowerToken) || capitalizeName(token).name;
+      }
+      if (properNoun && (generic || brand)) break;
     }
 
-    // Use metadata to find a brand if not present in tokens
-    if (!generic) {
+    // Step 2: Use metadata to find a brand if not present in tokens
+    if (!brand && !generic) {
       const metaBrand = getMetaTitleBrand(meta);
       if (metaBrand && CAR_BRANDS.has(metaBrand.toLowerCase())) {
-        generic = metaBrand;
+        brand = metaBrand;
         flags.push("metaBrandAppended");
       }
     }
 
-    if (!properNoun || !generic) {
-      log("debug", "No proper noun + generic pattern found", { tokens });
+    // Step 3: If no proper noun is found, use the first non-brand, non-city token
+    if (!properNoun) {
+      const firstValidToken = tokens.find(t => {
+        const lowerToken = t.toLowerCase();
+        return !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken);
+      });
+      if (firstValidToken) {
+        properNoun = capitalizeName(firstValidToken).name;
+        confidenceScore = 80;
+        flags.push("fallbackProperNoun");
+      }
+    }
+
+    // Step 4: Ensure we have a proper noun and either a generic term or brand
+    if (!properNoun || (!generic && !brand)) {
+      log("debug", "No proper noun + generic/brand pattern found", { tokens });
       return null;
     }
 
+    // Step 5: Construct company name
     let companyName = properNoun;
     const isPossessiveFriendly = properNoun.toLowerCase().endsWith("s") || !/^[aeiou]$/i.test(properNoun.slice(-1));
-    if (isPossessiveFriendly && !companyName.toLowerCase().includes(generic.toLowerCase())) {
+    
+    // Prefer brand over generic term if both are present
+    if (brand && isPossessiveFriendly && !companyName.toLowerCase().includes(brand.toLowerCase())) {
+      companyName = `${properNoun} ${brand}`;
+      confidenceScore = 125;
+      flags.push("brandAppended");
+    } else if (generic && isPossessiveFriendly && !companyName.toLowerCase().includes(generic.toLowerCase())) {
       companyName = `${properNoun} ${generic}`;
+      confidenceScore = Math.max(confidenceScore, 95);
+      flags.push("genericAppended");
     }
 
+    // Step 6: Validate against brand-only and city-only outputs
     const nameTokens = companyName.split(" ").filter(Boolean);
     const isBrandOnly = nameTokens.length === 1 && CAR_BRANDS.has(companyName.toLowerCase());
     const isCityOnly = nameTokens.length === 1 && KNOWN_CITIES_SET.has(companyName.toLowerCase());
     if (isBrandOnly || isCityOnly) {
       flags.push("brandOrCityOnlyBlocked");
-      confidenceScore = 0;
+      confidenceScore = 50;
       log("warn", "Blocked due to brand-only or city-only result", { companyName, tokens });
-      return null;
+      return {
+        companyName: "",
+        confidenceScore,
+        confidenceOrigin,
+        flags: [...flags, "ManualReviewRecommended"],
+        tokens: nameTokens.map(t => t.toLowerCase())
+      };
     }
 
+    // Step 7: Check for duplicates and token limits
     const uniqueTokens = new Set(nameTokens.map(t => t.toLowerCase()));
     if (uniqueTokens.size !== nameTokens.length) {
       flags.push("duplicateTokens");
       confidenceScore = Math.min(confidenceScore, 90);
+      companyName = [...uniqueTokens]
+        .map(t => nameTokens.find(nt => nt.toLowerCase() === t))
+        .join(" ");
     }
 
     if (nameTokens.length > 4) {
       flags.push("tokenLimitExceeded");
       confidenceScore = Math.min(confidenceScore, 85);
+      companyName = nameTokens.slice(0, 4).join(" ");
     }
 
     log("info", "Generic pattern matched", { companyName, tokens });
