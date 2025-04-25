@@ -1581,14 +1581,6 @@ function splitMergedTokens(name) {
   }
 }
 
-/**
- * Validates OpenAI fallback name to ensure it meets cold-email-safe criteria.
- * @param {Object} result - OpenAI result { name: string, brand: string | null, flagged: boolean }.
- * @param {string} domain - The input domain (e.g., "chevyofcolumbuschevrolet.com").
- * @param {string | null} domainBrand - Brand detected from domain (e.g., "Chevrolet").
- * @param {number} confidenceScore - Initial confidence score.
- * @returns {Object} - { validatedName: string | null, flags: string[], confidenceScore: number }.
- */
 function validateFallbackName(result, domain, domainBrand, confidenceScore = 80) {
   const flags = new Set();
   let validatedName = result.name?.trim();
@@ -1792,14 +1784,6 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
   }
 }
 
-// JSDoc comment moved to the correct position (before fallbackName function)
-/**
- * Fallback logic for low-confidence or failed humanize results
- * @param {string} domain - Domain to enrich
- * @param {string} originalDomain - Original domain for override lookup
- * @param {Object} meta - Meta data
- * @returns {{companyName: string, confidenceScore: number, flags: string[], tokens: number}} - Enriched result
- */
 async function fallbackName(domain, originalDomain, meta = {}) {
   const normalizedDomain = normalizeDomain(domain);
   let companyName = '';
