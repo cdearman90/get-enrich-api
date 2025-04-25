@@ -2026,186 +2026,64 @@ function extractBrandOfCityFromDomain(domain) {
     // Validate input
     if (!domain || typeof domain !== 'string' || !domain.trim()) {
       log('error', 'Invalid domain in extractBrandOfCityFromDomain', { domain });
-      return { brand: '', city: '', connector: '', flags: ['InvalidInput'] };
+      return null;
     }
 
     // Normalize the domain
     const normalized = normalizeDomain(domain);
     if (!normalized || typeof normalized !== 'string') {
       log('error', 'normalizeDomain returned invalid result', { domain, normalized });
-      return { brand: '', city: '', connector: '', flags: ['NormalizationFailed'] };
+      return null;
     }
 
     // Check brand-only domains
     if (BRAND_ONLY_DOMAINS_CACHE.has(`${normalized}.com`)) {
       log('info', 'Skipping brand-only domain', { domain: normalized });
-      return { brand: '', city: '', connector: '', flags: ['BrandOnlyDomain'] };
+      return null;
     }
 
     // Split into tokens
     let tokens = earlyCompoundSplit(normalized);
     if (!Array.isArray(tokens) || !tokens.every(token => typeof token === 'string') || tokens.length === 0) {
       log('warn', 'earlyCompoundSplit returned invalid or empty tokens', { domain, tokens });
-      return { brand: '', city: '', connector: '', flags: ['TokenizationFailed'] };
+      return null;
     }
 
     // Validate dependencies
-    if (!CAR_BRANDS_CACHE.size || !KNOWN_CITIES_SET_CACHE.size) {
-      log('error', 'Invalid dependencies in extractBrandOfCityFromDomain', {
-        CAR_BRANDS: CAR_BRANDS_CACHE.size,
-        KNOWN_CITIES_SET: KNOWN_CITIES_SET_CACHE.size,
-        BRAND_MAPPING: BRAND_MAPPING instanceof Map
-      });
-      return { brand: '', city: '', connector: '', flags: ['InvalidDependencies'] };
+    if (!CAR_BRANDS_CACHE.size) {
+      log('error', 'Invalid CAR_BRANDS_CACHE in extractBrandOfCityFromDomain', { CAR_BRANDS_CACHE_size: CAR_BRANDS_CACHE.size });
+      return null;
     }
 
-    let brand = '';
-    let city = '';
-    let humanName = '';
+    let brand = null;
     let flags = [];
 
-    // First pass: Look for brand followed by city or human name (including multi-word cities)
-    for (let i = 0; i < tokens.length; i++) {
-      const token = tokens[i];
+    // Look for brand in tokens
+    for (const token of tokens) {
       if (typeof token !== 'string' || !token.trim()) continue;
       const lowerToken = token.toLowerCase();
-
-      // Check for brand
       if (CAR_BRANDS_CACHE.has(lowerToken)) {
-        brand = BRAND_MAPPING_CACHE.has(lowerToken)
-          ? BRAND_MAPPING_CACHE.get(lowerToken)
-          : capitalizeName(token).name;
-
-        // Look for multi-word city after brand
-        for (let len = 1; len <= Math.min(3, tokens.length - i - 1); len++) {
-          const cityTokens = tokens.slice(i + 1, i + 1 + len);
-          const potentialCity = cityTokens.join(" ").toLowerCase();
-          if (MULTI_WORD_CITIES.has(potentialCity) || KNOWN_CITIES_SET_CACHE.has(potentialCity)) {
-            city = capitalizeName(potentialCity).name;
-            break;
-          }
-          // Check for human name if no city is found
-          if (!city && len === 1) {
-            const potentialHumanName = cityTokens[0].toLowerCase();
-            if (KNOWN_FIRST_NAMES_CACHE.has(potentialHumanName) || KNOWN_LAST_NAMES_CACHE.has(potentialHumanName)) {
-              humanName = capitalizeName(potentialHumanName).name;
-              flags.push('HumanNameDetected');
-            }
-          }
+        brand = CAR_BRANDS_CACHE.get(lowerToken);
+        if (typeof brand !== 'string') {
+          log('warn', 'Non-string brand in CAR_BRANDS_CACHE', { token, brand });
+          brand = null;
+          flags.push('InvalidBrandType');
+          continue;
         }
-        if (city || humanName) break;
+        // Prefer BRAND_MAPPING_CACHE for standardized brand names
+        brand = BRAND_MAPPING_CACHE.has(lowerToken) ? BRAND_MAPPING_CACHE.get(lowerToken) : capitalizeName(brand).name;
+        flags.push('BrandDetected');
+        break;
       }
     }
 
-    // Second pass: Look for city or human name followed by brand
-    if (!brand || (!city && !humanName)) {
-      for (let i = 0; i < tokens.length; i++) {
-        for (let len = 1; len <= Math.min(3, tokens.length - i); len++) {
-          const cityTokens = tokens.slice(i, i + len);
-          const potentialCity = cityTokens.join(" ").toLowerCase();
-          let foundCity = false;
-          let foundHumanName = false;
+    // Log result
+    log('info', 'Brand extraction result', { domain, brand: brand || 'null', tokens, flags });
 
-          if (MULTI_WORD_CITIES.has(potentialCity) || KNOWN_CITIES_SET_CACHE.has(potentialCity)) {
-            city = capitalizeName(potentialCity).name;
-            foundCity = true;
-          } else if (len === 1) {
-            const potentialHumanName = cityTokens[0].toLowerCase();
-            if (KNOWN_FIRST_NAMES_CACHE.has(potentialHumanName) || KNOWN_LAST_NAMES_CACHE.has(potentialHumanName)) {
-              humanName = capitalizeName(potentialHumanName).name;
-              foundHumanName = true;
-              flags.push('HumanNameDetected');
-            }
-          }
-
-          if (foundCity || foundHumanName) {
-            // Look for brand after city or human name
-            for (let j = i + len; j < tokens.length; j++) {
-              const nextToken = tokens[j];
-              if (typeof nextToken !== 'string' || !nextToken.trim()) continue;
-              const lowerNextToken = nextToken.toLowerCase();
-              if (CAR_BRANDS_CACHE.has(lowerNextToken)) {
-                brand = BRAND_MAPPING_CACHE.has(lowerNextToken)
-                  ? BRAND_MAPPING_CACHE.get(lowerNextToken)
-                  : capitalizeName(nextToken).name;
-                break;
-              }
-            }
-            if (brand) break;
-          }
-        }
-        if (brand) break;
-      }
-    }
-
-    // Third pass: Check all tokens if no match found, prioritize brand inclusion
-    if (!brand || (!city && !humanName)) {
-      for (const token of tokens) {
-        if (typeof token !== 'string' || !token.trim()) continue;
-        const lowerToken = token.toLowerCase();
-        if (!brand && CAR_BRANDS_CACHE.has(lowerToken)) {
-          brand = BRAND_MAPPING_CACHE.has(lowerToken)
-            ? BRAND_MAPPING_CACHE.get(lowerToken)
-            : capitalizeName(token).name;
-        }
-        if (brand && !city && !humanName) {
-          if (KNOWN_CITIES_SET_CACHE.has(lowerToken)) {
-            city = capitalizeName(lowerToken).name;
-          } else if (KNOWN_FIRST_NAMES_CACHE.has(lowerToken) || KNOWN_LAST_NAMES_CACHE.has(lowerToken)) {
-            humanName = capitalizeName(lowerToken).name;
-            flags.push('HumanNameDetected');
-          }
-        }
-      }
-    }
-
-    // Safeguard for truncation (e.g., "Nanue" → "Nanuet")
-    if (city) {
-      for (const [knownToken, original] of [...KNOWN_CITIES_SET_CACHE, ...PROPER_NOUNS_CACHE]) {
-        const knownLower = knownToken.toLowerCase();
-        const cityLower = city.toLowerCase();
-        if (knownLower.startsWith(cityLower) && knownLower.length <= cityLower.length + 2 && knownLower.length > cityLower.length) {
-          if (logLevel === "debug") {
-            log("debug", "Restored truncated city", { originalCity: city, restored: original });
-          }
-          city = original;
-          flags.push('TruncationRestored');
-          break;
-        }
-      }
-    }
-    if (humanName) {
-      for (const [knownToken, original] of [...KNOWN_FIRST_NAMES_CACHE, ...KNOWN_LAST_NAMES_CACHE]) {
-        const knownLower = knownToken.toLowerCase();
-        const humanNameLower = humanName.toLowerCase();
-        if (knownLower.startsWith(humanNameLower) && knownLower.length <= humanNameLower.length + 2 && knownLower.length > humanNameLower.length) {
-          if (logLevel === "debug") {
-            log("debug", "Restored truncated human name", { originalHumanName: humanName, restored: original });
-          }
-          humanName = original;
-          flags.push('TruncationRestored');
-          break;
-        }
-      }
-    }
-
-    // Final validation: Require brand and either city or human name
-    if (!brand || (!city && !humanName)) {
-      log('warn', 'Missing brand or city/human name, returning empty result', { domain, brand, city, humanName, tokens });
-      return { brand: '', city: '', connector: '', flags: ['MissingBrandOrCity'] };
-    }
-
-    // Use human name as the city if no city is found
-    const finalCity = city || humanName;
-    if (humanName && !city) {
-      flags.push('HumanNameUsedAsCity');
-    }
-
-    log('info', 'Brand-city extraction result', { domain, brand, city: finalCity, tokens, flags });
-    return { brand, city: finalCity, connector: '', flags };
+    return brand || null;
   } catch (err) {
     log('error', 'extractBrandOfCityFromDomain failed', { domain, error: err.message, stack: err.stack });
-    return { brand: '', city: '', connector: '', flags: ['ExtractBrandOfCityError'] };
+    return null;
   }
 }
       
@@ -2869,78 +2747,83 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
 // Main function to humanize domain names
 async function humanizeName(domain) {
   try {
-    if (!domain || typeof domain !== "string" || !domain.trim()) {
-      log("error", "Invalid domain input", { domain });
-      return { companyName: "", confidenceScore: 0, flags: ["invalidInput"], tokens: [], confidenceOrigin: "invalidInput", rawTokenCount: 0 };
+    if (!domain || typeof domain !== 'string' || !domain.trim()) {
+      log('error', 'Invalid domain input', { domain });
+      return { companyName: '', confidenceScore: 0, flags: ['invalidInput'], tokens: [], confidenceOrigin: 'invalidInput', rawTokenCount: 0 };
     }
 
     const normalizedDomain = normalizeDomain(domain);
-    if (!normalizedDomain || typeof normalizedDomain !== "string") {
-      log("error", "normalizeDomain returned invalid result", { domain, normalizedDomain });
-      return { companyName: "", confidenceScore: 0, flags: ["normalizeDomainFailed"], tokens: [], confidenceOrigin: "normalizeDomainFailed", rawTokenCount: 0 };
+    if (!normalizedDomain || typeof normalizedDomain !== 'string') {
+      log('error', 'normalizeDomain returned invalid result', { domain, normalizedDomain });
+      return { companyName: '', confidenceScore: 0, flags: ['normalizeDomainFailed'], tokens: [], confidenceOrigin: 'normalizeDomainFailed', rawTokenCount: 0 };
     }
 
     // Step 1: Check overrides
-    const overrideKey = normalizedDomain + ".com";
+    const overrideKey = normalizedDomain + '.com';
     if (TEST_CASE_OVERRIDES[overrideKey]) {
       const companyName = TEST_CASE_OVERRIDES[overrideKey];
-      log("info", `Override applied for domain: ${normalizedDomain}`, { companyName });
+      log('info', `Override applied for domain: ${normalizedDomain}`, { companyName });
       return {
         companyName,
         confidenceScore: 125,
-        flags: ["overrideApplied"],
-        tokens: companyName.toLowerCase().split(" ").filter(Boolean),
-        confidenceOrigin: "override",
-        rawTokenCount: companyName.split(" ").length
+        flags: ['overrideApplied'],
+        tokens: companyName.toLowerCase().split(' ').filter(Boolean),
+        confidenceOrigin: 'override',
+        rawTokenCount: companyName.split(' ').length
       };
     }
 
     // Step 2: Check brand-only domains
     if (!BRAND_ONLY_DOMAINS_CACHE.size) {
-      log("error", "BRAND_ONLY_DOMAINS is not a Set", { BRAND_ONLY_DOMAINS });
-      return { companyName: "", confidenceScore: 0, flags: ["invalidDependency"], tokens: [], confidenceOrigin: "invalidDependency", rawTokenCount: 0 };
+      log('error', 'BRAND_ONLY_DOMAINS is not a Set', { BRAND_ONLY_DOMAINS });
+      return { companyName: '', confidenceScore: 0, flags: ['invalidDependency'], tokens: [], confidenceOrigin: 'invalidDependency', rawTokenCount: 0 };
     }
     if (BRAND_ONLY_DOMAINS_CACHE.has(overrideKey)) {
-      log("info", `Brand-only domain detected: ${normalizedDomain}`);
+      log('info', `Brand-only domain detected: ${normalizedDomain}`);
       return {
-        companyName: "",
+        companyName: '',
         confidenceScore: 0,
-        flags: ["brandOnly"],
+        flags: ['brandOnly'],
         tokens: [],
-        confidenceOrigin: "brandOnly",
+        confidenceOrigin: 'brandOnly',
         rawTokenCount: 0
       };
     }
 
     // Step 3: Extract domain brand early
     const domainBrand = extractBrandOfCityFromDomain(normalizedDomain);
-    log("debug", `Extracted domain brand: ${domainBrand}`, { domain, normalizedDomain });
+    if (domainBrand && typeof domainBrand !== 'string') {
+      log('error', 'Invalid domain brand type', { domain: normalizedDomain, domainBrand });
+      return { companyName: '', confidenceScore: 0, flags: ['invalidBrandType'], tokens: [], confidenceOrigin: 'invalidBrandType', rawTokenCount: 0 };
+    }
+    log('debug', `Extracted domain brand: ${domainBrand || 'null'} for domain: ${normalizedDomain}`);
 
     // Step 4: Parallelize tokenization and metadata fetch
     const [tokensResult, metaResult] = await Promise.all([
       earlyCompoundSplit(normalizedDomain),
       fetchMetaData(domain).catch(err => {
-        log("error", "fetchMetaData failed", { domain, error: err.message, stack: err.stack });
+        log('error', 'fetchMetaData failed', { domain: normalizedDomain, error: err.message, stack: err.stack });
         return {};
       })
     ]);
 
     let tokens = tokensResult;
-    if (!Array.isArray(tokens) || !tokens.every(token => typeof token === "string")) {
-      log("error", "earlyCompoundSplit returned invalid tokens", { domain, tokens });
-      return { companyName: "", confidenceScore: 0, flags: ["earlyCompoundSplitFailed"], tokens: [], confidenceOrigin: "earlyCompoundSplitFailed", rawTokenCount: 0 };
+    if (!Array.isArray(tokens) || !tokens.every(token => typeof token === 'string')) {
+      log('error', 'earlyCompoundSplit returned invalid tokens', { domain: normalizedDomain, tokens });
+      return { companyName: '', confidenceScore: 0, flags: ['earlyCompoundSplitFailed'], tokens: [], confidenceOrigin: 'earlyCompoundSplitFailed', rawTokenCount: 0 };
     }
 
     const rawTokenCount = tokens.length;
 
     // Step 5: Check for unsplit long tokens
-    const hasLongUnsplitToken = tokens.some(token => 
-      token.length > 10 && !token.includes(" ") && 
-      !CAR_BRANDS_CACHE.has(token.toLowerCase()) && 
-      !KNOWN_CITIES_SET_CACHE.has(token.toLowerCase()) && 
+    const hasLongUnsplitToken = tokens.some(token =>
+      token.length > 10 &&
+      !token.includes(' ') &&
+      !CAR_BRANDS_CACHE.has(token.toLowerCase()) &&
+      !KNOWN_CITIES_SET_CACHE.has(token.toLowerCase()) &&
       !PROPER_NOUNS_CACHE.has(token.toLowerCase())
     );
-    const longTokenFlags = hasLongUnsplitToken ? ["PotentialUnsplitToken"] : [];
+    const longTokenFlags = hasLongUnsplitToken ? ['PotentialUnsplitToken'] : [];
 
     // Step 6: Handle weak token sets
     if (tokens.length < 2 || tokens.every(t => COMMON_WORDS_CACHE.has(t.toLowerCase()))) {
@@ -2950,46 +2833,46 @@ async function humanizeName(domain) {
         const result = {
           companyName,
           confidenceScore: 80 - (hasLongUnsplitToken ? 5 : 0),
-          flags: ["singleTokenFallback", ...longTokenFlags, ...capitalized.flags],
-          tokens: companyName.toLowerCase().split(" ").filter(Boolean),
-          confidenceOrigin: "singleTokenFallback",
+          flags: ['singleTokenFallback', ...longTokenFlags, ...capitalized.flags],
+          tokens: companyName.toLowerCase().split(' ').filter(Boolean),
+          confidenceOrigin: 'singleTokenFallback',
           rawTokenCount
         };
-        log("info", "Single token fallback applied", { companyName, tokens, domain });
+        log('info', 'Single token fallback applied', { companyName, tokens, domain: normalizedDomain });
         return result;
       }
       const result = {
-        companyName: "",
+        companyName: '',
         confidenceScore: 0,
-        flags: ["tokenSetTooWeak", ...longTokenFlags],
+        flags: ['tokenSetTooWeak', ...longTokenFlags],
         tokens: [],
-        confidenceOrigin: "tokenSanityCheck",
+        confidenceOrigin: 'tokenSanityCheck',
         rawTokenCount
       };
-      log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore, domain });
+      log('debug', 'Final result confidence', { companyName: result.companyName, confidenceScore: result.confidenceScore, domain: normalizedDomain });
       return result;
     }
 
     // Step 7: Parallelize pattern-matching functions
     const patternPromises = [
       tryHumanNamePattern(tokens, domainBrand).catch(e => {
-        log("error", "tryHumanNamePattern failed", { domain, tokens, error: e.message, stack: e.stack });
+        log('error', 'tryHumanNamePattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
         return null;
       }),
       tryProperNounPattern(tokens, domainBrand).catch(e => {
-        log("error", "tryProperNounPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+        log('error', 'tryProperNounPattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
         return null;
       }),
       tryBrandCityPattern(tokens, domainBrand).catch(e => {
-        log("error", "tryBrandCityPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+        log('error', 'tryBrandCityPattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
         return null;
       }),
       tryBrandGenericPattern(tokens, domainBrand).catch(e => {
-        log("error", "tryBrandGenericPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+        log('error', 'tryBrandGenericPattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
         return null;
       }),
       tryGenericPattern(tokens, properNounsSet, metaResult, domainBrand).catch(e => {
-        log("error", "tryGenericPattern failed", { domain, tokens, error: e.message, stack: e.stack });
+        log('error', 'tryGenericPattern failed', { domain: normalizedDomain, tokens, error: e.message, stack: e.stack });
         return null;
       })
     ];
@@ -3000,35 +2883,37 @@ async function humanizeName(domain) {
     // Step 8: Prioritize result based on confidence score and token count
     let bestResult = null;
     for (const result of validResults) {
-      const tokenCount = result.companyName.split(" ").filter(Boolean).length;
-      const hasCriticalFlags = result.flags.some(flag => 
-        ["brandOrCityOnlyBlocked", "cityOnlyBlocked", "brandOnlyBlocked"].includes(flag)
+      const tokenCount = result.companyName.split(' ').filter(Boolean).length;
+      const hasCriticalFlags = result.flags.some(flag =>
+        ['brandOrCityOnlyBlocked', 'cityOnlyBlocked', 'brandOnlyBlocked'].includes(flag)
       );
 
       if (hasCriticalFlags) continue;
 
-      if (!bestResult || 
-          result.confidenceScore > bestResult.confidenceScore || 
-          (result.confidenceScore === bestResult.confidenceScore && tokenCount > bestResult.companyName.split(" ").length)) {
+      if (
+        !bestResult ||
+        result.confidenceScore > bestResult.confidenceScore ||
+        (result.confidenceScore === bestResult.confidenceScore && tokenCount > bestResult.companyName.split(' ').length)
+      ) {
         bestResult = result;
       }
     }
 
     if (!bestResult) {
-      const singleTokenResult = results.find(result => result && result.flags.includes("singleTokenFallback"));
+      const singleTokenResult = results.find(result => result && result.flags.includes('singleTokenFallback'));
       if (singleTokenResult) {
         bestResult = singleTokenResult;
       } else {
         bestResult = {
-          companyName: "",
+          companyName: '',
           confidenceScore: 0,
-          flags: ["noPatternMatch", ...longTokenFlags],
+          flags: ['noPatternMatch', ...longTokenFlags],
           tokens: [],
-          confidenceOrigin: "noPatternMatch",
+          confidenceOrigin: 'noPatternMatch',
           rawTokenCount
         };
       }
-      log("debug", "Final result confidence", { companyName: bestResult.companyName, confidenceScore: bestResult.confidenceScore, domain });
+      log('debug', 'Final result confidence', { companyName: bestResult.companyName, confidenceScore: bestResult.confidenceScore, domain: normalizedDomain });
       return bestResult;
     }
 
@@ -3036,22 +2921,18 @@ async function humanizeName(domain) {
     const capitalized = capitalizeName(bestResult.companyName, domainBrand, domain);
     bestResult.companyName = cleanCompanyName(capitalized.name, domainBrand, domain);
     bestResult.flags = [...bestResult.flags, ...capitalized.flags];
-    bestResult.tokens = bestResult.companyName.toLowerCase().split(" ").filter(Boolean);
+    bestResult.tokens = bestResult.companyName.toLowerCase().split(' ').filter(Boolean);
 
     // Step 10: Validate the company name
-    const validationResult = validateCompanyName(
-      bestResult.companyName,
-      domain,
-      domainBrand,
-      bestResult.confidenceScore,
-      bestResult.flags
-    );
+    const validationResult = validateCompanyName(bestResult.companyName, domain, domainBrand, bestResult.confidenceScore, bestResult.flags);
 
     let finalResult = bestResult;
-    if (!validationResult.validatedName && validationResult.flags.some(flag => 
-        ["brandOnly", "cityOnly", "invalidName"].includes(flag))) {
+    if (
+      !validationResult.validatedName &&
+      validationResult.flags.some(flag => ['brandOnly', 'cityOnly', 'invalidName'].includes(flag))
+    ) {
       finalResult = {
-        companyName: "",
+        companyName: '',
         confidenceScore: validationResult.confidenceScore,
         flags: [...validationResult.flags, ...longTokenFlags],
         tokens: [],
@@ -3065,22 +2946,25 @@ async function humanizeName(domain) {
     }
 
     // Step 11: Relax single-token rejection
-    const finalTokenCount = finalResult.companyName.split(" ").filter(Boolean).length;
-    if (finalTokenCount === 1 && !TEST_CASE_OVERRIDES[overrideKey] && 
-        !KNOWN_PROPER_NOUNS_CACHE.has(finalResult.companyName.toLowerCase())) {
-      finalResult.flags.push("singleTokenWarning");
+    const finalTokenCount = finalResult.companyName.split(' ').filter(Boolean).length;
+    if (
+      finalTokenCount === 1 &&
+      !TEST_CASE_OVERRIDES[overrideKey] &&
+      !KNOWN_PROPER_NOUNS_CACHE.has(finalResult.companyName.toLowerCase())
+    ) {
+      finalResult.flags.push('singleTokenWarning');
       finalResult.confidenceScore = Math.min(finalResult.confidenceScore, 80);
     }
 
     // Step 12: Final logging and token truncation
     finalResult.rawTokenCount = rawTokenCount;
-    log("info", `Processed domain: ${normalizedDomain}`, { result: finalResult });
-    log("debug", "Final result confidence", { companyName: finalResult.companyName, confidenceScore: finalResult.confidenceScore, domain });
+    log('info', `Processed domain: ${normalizedDomain}`, { result: finalResult });
+    log('debug', 'Final result confidence', { companyName: finalResult.companyName, confidenceScore: finalResult.confidenceScore, domain: normalizedDomain });
     finalResult.tokens = finalResult.tokens.slice(0, 3);
     return finalResult;
   } catch (e) {
-    log("error", "humanizeName failed", { domain, error: e.message, stack: e.stack });
-    return { companyName: "", confidenceScore: 0, flags: ["humanizeNameError"], tokens: [], confidenceOrigin: "humanizeNameError", rawTokenCount: 0 };
+    log('error', 'humanizeName failed', { domain, error: e.message, stack: e.stack });
+    return { companyName: '', confidenceScore: 0, flags: ['humanizeNameError'], tokens: [], confidenceOrigin: 'humanizeNameError', rawTokenCount: 0 };
   }
 }
 
