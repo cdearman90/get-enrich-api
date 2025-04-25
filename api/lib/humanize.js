@@ -1399,7 +1399,7 @@ const WHITESPACE_REGEX = /\s+/g;
 
 // Cache known lists for performance
 const KNOWN_WORDS_CACHE = new Map(knownWords.map(word => [word, true]));
-const SORTED_CITY_LIST_CACHE = new Map(sortedCities.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
+const SORTED_CITIES_CACHE = new Map(SORTED_CITY_LIST.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
 const CAR_BRANDS_CACHE = new Map(CAR_BRANDS.map(brand => [brand.toLowerCase(), brand]));
 const KNOWN_CITIES_SET_CACHE = new Map(Array.from(KNOWN_CITIES_SET).map(city => [city.toLowerCase(), city]));
 const PROPER_NOUNS_CACHE = new Map(properNounsSet.map(noun => [noun.toLowerCase(), noun]));
