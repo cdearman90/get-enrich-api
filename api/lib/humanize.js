@@ -1407,6 +1407,9 @@ const COMMON_WORDS_CACHE = new Map(Array.from(COMMON_WORDS).map(word => [word.to
 const KNOWN_FIRST_NAMES_CACHE = new Map(Array.from(KNOWN_FIRST_NAMES).map(name => [name.toLowerCase(), name]));
 const KNOWN_LAST_NAMES_CACHE = new Map(Array.from(KNOWN_LAST_NAMES).map(name => [name.toLowerCase(), name]));
 const BRAND_MAPPING_CACHE = new Map(Object.entries(BRAND_MAPPING || {}));
+const BRAND_ONLY_DOMAINS_CACHE = new Map(BRAND_ONLY_DOMAINS.map(domain => [domain, true]));
+
+const logLevel = process.env.LOG_LEVEL || "info";
 
 // Pre-compute multi-word cities
 const MULTI_WORD_CITIES = new Map();
