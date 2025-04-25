@@ -1383,6 +1383,20 @@ const SUFFIXES_TO_REMOVE = new Set([
 // Pre-compile regex for splitting
 const SPLIT_REGEX = /(?=[A-Z])|[-_\s]|of|(?<=\D)(?=\d)/;
 
+// Define knownWords as a derived list from existing sets
+const knownWords = [
+  ...Array.from(CAR_BRANDS),
+  ...Array.from(KNOWN_CITIES_SET),
+  ...Array.from(KNOWN_FIRST_NAMES),
+  ...Array.from(KNOWN_LAST_NAMES),
+  ...Array.from(COMMON_WORDS),
+  ...Array.from(KNOWN_PROPER_NOUNS),
+  ...Array.from(CONTEXTUAL_WORDS)
+].map(word => word.toLowerCase());
+
+// Pre-compile WHITESPACE_REGEX
+const WHITESPACE_REGEX = /\s+/g;
+
 // Cache known lists for performance
 const KNOWN_WORDS_CACHE = new Map(knownWords.map(word => [word, true]));
 const SORTED_CITIES_CACHE = new Map(sortedCities.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
