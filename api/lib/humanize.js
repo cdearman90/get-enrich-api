@@ -563,8 +563,11 @@ const KNOWN_PROPER_NOUNS = new Set([
     "falls", "antonino", "exchange", "arrow", "arrowhead", "applegate", "arceneaux", "trust", "atzenhoffer",
     "bayou", "bayway", "blossom", "billholt", "bill", "brand", "kay", "billingsley", "bachman", "bettenbaker",
     "motorcity", "Trust", "Andrew", "Andy", "Mohr", "Voss", "Akins", "Biddle", "Weaver", "Haasza", "Hanania",
-    "Rising", "Fast", "Deluca"
-  ]);
+    "Rising", "Fast", "Deluca", "milnes", "strong", "beaty", "birdnow", "reedlallier", "oxmoor", "haley", 
+    "rivera", "nfwauto", "totaloffroad", "ingersoll", "caruso", "maita", "victory", "hilltop", "shottenkirk", 
+    "mabry", "bertogden", "teddy", "jet", "raceway", "mcdaniel", "newsmyrna", "destination", "armen", "bond",
+    "livermore", "alsop", "lakeside", "pape"
+]);
 
 const SORTED_CITY_LIST = [
     // Alabama (top 50)
@@ -1093,7 +1096,7 @@ const SORTED_CITY_LIST = [
 const KNOWN_CITIES_SET = new Set(SORTED_CITY_LIST.map(c => c.toLowerCase()));
 
 const SUFFIXES_TO_REMOVE = new Set([
-  "inc", "llc", "corp", "co", "ltd", "group", "dealership", "motors", "auto"
+  "inc", "llc", "corp", "co", "ltd", "group", "dealership", "motors"
 ]);
 
      // Define known first and last names for human name splitting
@@ -1425,19 +1428,25 @@ function cleanCompanyName(companyName) {
       return "";
     }
 
+    // Step 0: Strip URL prefixes (e.g., "http://", "https://", "www.")
+    let cleanedName = companyName.replace(/^(https?:\/\/)?(www\.)?/i, "");
+    if (cleanedName !== companyName) {
+      log("debug", "URL prefix stripped", { original: companyName, cleaned: cleanedName });
+    }
+
     // Validate dependencies
     if (!(COMMON_WORDS instanceof Set) || !(SUFFIXES_TO_REMOVE instanceof Set)) {
       log("error", "Invalid dependencies in cleanCompanyName", {
         COMMON_WORDS: COMMON_WORDS instanceof Set,
         SUFFIXES_TO_REMOVE: SUFFIXES_TO_REMOVE instanceof Set
       });
-      return companyName.trim();
+      return cleanedName.trim();
     }
 
-    let tokens = companyName.trim().split(/\s+/).filter(Boolean);
+    let tokens = cleanedName.trim().split(/\s+/).filter(Boolean);
     if (!tokens.every(token => typeof token === "string")) {
       log("error", "Invalid tokens in cleanCompanyName", { companyName, tokens });
-      return companyName.trim();
+      return cleanedName.trim();
     }
 
     // Step 1: Deduplicate tokens while preserving case
@@ -1492,7 +1501,7 @@ function cleanCompanyName(companyName) {
     // Step 3: Handle edge case where all tokens are removed
     if (tokens.length === 0) {
       log("warn", "All tokens removed, using fallback", { companyName });
-      return companyName.trim(); // Fallback to original trimmed input
+      return cleanedName.trim(); // Fallback to cleaned input
     }
 
     // Step 4: Join tokens and final trim
@@ -1525,21 +1534,21 @@ function capitalizeName(name) {
 
       const lowerWord = word.toLowerCase();
 
-      // Step 2.1: Apply brand abbreviation mapping
-      if (BRAND_ABBREVIATIONS[lowerWord]) {
-        flags.push("BrandAbbreviationFormatted");
-        return BRAND_ABBREVIATIONS[lowerWord];
+      // Step 2.1: Apply BRAND_MAPPING first for exact brand matches
+      if (BRAND_MAPPING.has(lowerWord)) {
+        flags.push("BrandMapped");
+        return BRAND_MAPPING.get(lowerWord);
       }
 
-      // Step 2.2: Apply abbreviation expansions with full names
+      // Step 2.2: Apply ABBREVIATION_EXPANSIONS for abbreviations
       const fullExpansion = {
-        "bhm": "Birmingham",
-        "okc": "Oklahoma City",
-        "dfw": "Dallas Fort Worth",
-        "kc": "Kansas City",
-        "la": "Los Angeles",
-        "sf": "San Francisco",
-        "sj": "San Jose",
+        "bhm": "BHM",
+        "okc": "OKC",
+        "dfw": "DFW",
+        "kc": "KC",
+        "la": "LA",
+        "sf": "SF",
+        "sj": "SJ",
         "mb": "M.B."
       }[lowerWord] || ABBREVIATION_EXPANSIONS[lowerWord];
       if (fullExpansion) {
@@ -1551,11 +1560,10 @@ function capitalizeName(name) {
         return expandedTokens.join(" ");
       }
 
-      // Step 2.3: Apply brand mapping
-      const brandMapped = BRAND_MAPPING.get(lowerWord);
-      if (brandMapped) {
-        flags.push("BrandMapped");
-        return brandMapped;
+      // Step 2.3: Apply BRAND_ABBREVIATIONS (fallback, less priority)
+      if (BRAND_ABBREVIATIONS[lowerWord]) {
+        flags.push("BrandAbbreviationFormatted");
+        return BRAND_ABBREVIATIONS[lowerWord];
       }
 
       // Step 2.4: Preserve known proper nouns and cities in their original or proper case
@@ -1660,14 +1668,14 @@ function earlyCompoundSplit(domain) {
     const regex = new RegExp(`\\b${abbr}\\b`, "gi");
     if (remaining.match(regex)) {
       const fullExpansion = {
-        "bhm": "birmingham",
-        "okc": "oklahoma city",
-        "dfw": "dallas fort worth",
-        "kc": "kansas city",
-        "la": "los angeles",
-        "sf": "san francisco",
-        "sj": "san jose",
-        "mb": "m.b."
+        "bhm": "BHM",
+        "okc": "OKC",
+        "dfw": "DFW",
+        "kc": "KC",
+        "la": "LA",
+        "sf": "SF",
+        "sj": "SJ",
+        "mb": "M.B."
       }[abbr.toLowerCase()] || expansion.toLowerCase().replace(/\s+/g, "");
       remaining = remaining.replace(regex, fullExpansion);
       log("debug", `Abbreviation expanded: ${abbr} → ${fullExpansion}`, { domain: normalized });
@@ -1690,7 +1698,22 @@ function earlyCompoundSplit(domain) {
     "vwsouthtowne": ["vw", "southtowne"],
     "allamerican": ["all", "american"],
     "sunnyking": ["sunny", "king"],
-    "acdealergroup": ["ac", "dealer", "group"]
+    "acdealergroup": ["ac", "dealer", "group"],
+    "mattblatt": ["matt", "blatt"],
+    "tomkadlec": ["tom", "kadlec"],
+    "joeperillo": ["joe", "perillo"],
+    "parkwayfamily": ["parkway", "family"],
+    "johnthornton": ["john", "thornton"],
+    "gregleblanc": ["greg", "leblanc"],
+    // Added new compounds identified from logs
+    "fivestar": ["five", "star"],
+    "gatewayclassic": ["gateway", "classic"],
+    "northbakersfield": ["north", "bakersfield"],
+    "northcharleston": ["north", "charleston"],
+    "neworlean": ["new", "orlean"],
+    "eastside": ["east", "side"],
+    "murfreesboro": ["murfrees", "boro"],
+    "northwest": ["north", "west"]
   };
 
   const knownWords = [
@@ -1709,52 +1732,84 @@ function earlyCompoundSplit(domain) {
       continue;
     }
     let split = false;
+
     // Check for known compounds
     if (commonCompounds[token]) {
       fuzzyTokens.push(...commonCompounds[token]);
       split = true;
       log("debug", "Known compound split applied", { token, split: commonCompounds[token] });
     }
-    // Check for first/last name pairs
+
+    // Enhanced splitting for first/last name pairs and proper nouns
     if (!split && token.length >= 4) {
       let current = token;
       const subTokens = [];
-      while (current.length > 0) {
-        let matched = false;
-        for (let word of knownWords) {
-          if (current.startsWith(word)) {
-            subTokens.push(word);
-            current = current.slice(word.length);
-            matched = true;
-            break;
-          }
+      let namePairFound = false;
+
+      // Try to split into first/last name pairs
+      for (let i = 2; i <= current.length - 2; i++) {
+        const firstPart = current.slice(0, i);
+        const secondPart = current.slice(i);
+        if (KNOWN_FIRST_NAMES.has(firstPart) && KNOWN_LAST_NAMES.has(secondPart)) {
+          subTokens.push(firstPart, secondPart);
+          namePairFound = true;
+          log("debug", "First/last name split applied", { token, split: [firstPart, secondPart] });
+          break;
         }
-        if (!matched) {
-          // Try to split first/last name pairs
-          for (let i = 2; i <= current.length - 2; i++) {
-            const firstPart = current.slice(0, i);
-            const secondPart = current.slice(i);
-            if (KNOWN_FIRST_NAMES.has(firstPart) && KNOWN_LAST_NAMES.has(secondPart)) {
-              subTokens.push(firstPart, secondPart);
-              current = "";
+      }
+
+      // Dynamic splitting using COMMON_WORDS (e.g., "and", "of")
+      if (!namePairFound) {
+        let temp = current;
+        const dynamicTokens = [];
+        while (temp.length > 0) {
+          let matched = false;
+          // Check for common words within the token
+          for (const commonWord of Array.from(COMMON_WORDS)) {
+            const index = temp.indexOf(commonWord);
+            if (index !== -1 && index > 0 && index + commonWord.length < temp.length) {
+              const before = temp.slice(0, index);
+              const after = temp.slice(index + commonWord.length);
+              dynamicTokens.push(before, commonWord, after);
+              temp = "";
               matched = true;
-              log("debug", "First/last name split applied", { token, split: [firstPart, secondPart] });
+              log("debug", "Dynamic split using common word", { token, commonWord, split: [before, commonWord, after] });
               break;
             }
           }
           if (!matched) {
-            const nextSplit = current.length > 5 ? current.slice(0, Math.min(5, current.length)) : current;
-            subTokens.push(nextSplit);
-            current = current.slice(nextSplit.length);
+            // Try to split using known words
+            for (let word of knownWords) {
+              if (temp.startsWith(word)) {
+                dynamicTokens.push(word);
+                temp = temp.slice(word.length);
+                matched = true;
+                break;
+              }
+            }
+          }
+          if (!matched) {
+            const nextSplit = temp.length > 5 ? temp.slice(0, Math.min(5, temp.length)) : temp;
+            dynamicTokens.push(nextSplit);
+            temp = temp.slice(nextSplit.length);
           }
         }
+        if (dynamicTokens.length > 1) {
+          subTokens.push(...dynamicTokens);
+          split = true;
+          log("debug", "Dynamic compound split applied", { token, split: dynamicTokens });
+        } else {
+          subTokens.push(current);
+        }
       }
+
       if (subTokens.length > 1) {
         fuzzyTokens.push(...subTokens);
         split = true;
         log("debug", "Enhanced compound split applied", { token, split: subTokens });
       }
     }
+
     if (!split) {
       fuzzyTokens.push(token);
     }
@@ -1786,6 +1841,16 @@ function earlyCompoundSplit(domain) {
         i += len;
         matched = true;
         break;
+      }
+      if (len === 2) {
+        const first = tokens[i].toLowerCase();
+        const last = tokens[i + 1].toLowerCase();
+        if (KNOWN_FIRST_NAMES.has(first) && KNOWN_LAST_NAMES.has(last)) {
+          finalTokens.push(`${first} ${last}`);
+          i += 2;
+          matched = true;
+          break;
+        }
       }
     }
     if (!matched) {
@@ -2006,13 +2071,14 @@ function tryHumanNamePattern(tokens) {
       return null;
     }
 
-    // Look for a brand after the last name
+    // Apply confidence boost for confirmed first/last name pair
+    confidenceScore = 110; // Base confidence for human name
     for (let i = tokens.indexOf(lastName) + 1; i < tokens.length; i++) {
       const token = tokens[i].toLowerCase();
       if (CAR_BRANDS.has(token)) {
         brand = Object.hasOwn(BRAND_MAPPING, token) ? BRAND_MAPPING[token] : capitalizeName(token).name;
         flags.push("brandIncluded");
-        confidenceScore = 125; // Boost confidence for human name + brand, regardless of last name ending
+        confidenceScore = 135; // Boost for human name + brand
         break;
       }
     }
@@ -2053,9 +2119,6 @@ function tryHumanNamePattern(tokens) {
       confidenceScore = Math.min(confidenceScore, 85);
       flags.push("tokenLimitExceeded");
     }
-
-    // Remove overly strict regex validation to allow for abbreviations and brands (e.g., "M.B.", "CDJR")
-    // Instead, rely on capitalizeName() to ensure proper formatting
 
     log("info", "Human name pattern matched", { companyName, tokens });
 
@@ -2228,6 +2291,12 @@ function tryBrandCityPattern(tokens) {
     let confidenceScore = 100;
     const flags = ["brandCityPattern"];
     const confidenceOrigin = "brandCityPattern";
+
+    // Apply confidence boost for abbreviation expansion
+    if (brandCityResult.brand && ABBREVIATION_EXPANSIONS[brand.toLowerCase()] || (city && ABBREVIATION_EXPANSIONS[city.toLowerCase()])) {
+      confidenceScore += 5; // Boost for abbreviation expansion
+      flags.push("AbbreviationConfidenceBoost");
+    }
 
     // Always include both city and brand in the name
     const nameParts = [city, brand]; // e.g., "Huntington Beach Ford"
@@ -2526,44 +2595,43 @@ async function humanizeName(domain) {
     }
 
     let tokens = earlyCompoundSplit(normalizedDomain);
-    if (!Array.isArray(tokens) || !tokens.every(token => typeof token === "string")) {
-      log("error", "earlyCompoundSplit returned invalid tokens", { domain, tokens });
-      return { companyName: "", confidenceScore: 0, flags: ["earlyCompoundSplitFailed"], tokens: [], confidenceOrigin: "earlyCompoundSplitFailed", rawTokenCount: 0 };
-    }
+if (!Array.isArray(tokens) || !tokens.every(token => typeof token === "string")) {
+  log("error", "earlyCompoundSplit returned invalid tokens", { domain, tokens });
+  return { companyName: "", confidenceScore: 0, flags: ["earlyCompoundSplitFailed"], tokens: [], confidenceOrigin: "earlyCompoundSplitFailed", rawTokenCount: 0 };
+}
 
-    const rawTokenCount = tokens.length;
+const rawTokenCount = tokens.length;
 
-    if (!(COMMON_WORDS instanceof Set)) {
-      log("error", "COMMON_WORDS is not a Set", { COMMON_WORDS });
-      return { companyName: "", confidenceScore: 0, flags: ["invalidDependency"], tokens: [], confidenceOrigin: "invalidDependency", rawTokenCount };
-    }
+// Check for unsplit long tokens
+const hasLongUnsplitToken = tokens.some(token => token.length > 10 && !token.includes(" ") && !CAR_BRANDS.has(token) && !KNOWN_CITIES_SET.has(token) && !properNounsSet.has(token));
+const longTokenFlags = hasLongUnsplitToken ? ["PotentialUnsplitToken"] : [];
 
-    if (tokens.length < 2 || tokens.every(t => COMMON_WORDS.has(t.toLowerCase()))) {
-      if (tokens.length === 1 && !CAR_BRANDS.has(tokens[0].toLowerCase()) && !KNOWN_CITIES_SET.has(tokens[0].toLowerCase())) {
-        const companyName = capitalizeName(tokens[0]).name;
-        const result = {
-          companyName: cleanCompanyName(companyName), // Use cleanCompanyName
-          confidenceScore: 80,
-          flags: ["singleTokenFallback"],
-          tokens: [tokens[0].toLowerCase()],
-          confidenceOrigin: "singleTokenFallback",
-          rawTokenCount
-        };
-        log("info", "Single token fallback applied", { companyName, tokens });
-        return result;
-      }
-      const result = {
-        companyName: "",
-        confidenceScore: 0,
-        flags: ["tokenSetTooWeak"],
-        tokens,
-        confidenceOrigin: "tokenSanityCheck",
-        rawTokenCount
-      };
-      log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
-      result.tokens = result.tokens.slice(0, 3);
-      return result;
-    }
+if (tokens.length < 2 || tokens.every(t => COMMON_WORDS.has(t.toLowerCase()))) {
+  if (tokens.length === 1 && !CAR_BRANDS.has(tokens[0].toLowerCase()) && !KNOWN_CITIES_SET.has(tokens[0].toLowerCase())) {
+    const companyName = capitalizeName(tokens[0]).name;
+    const result = {
+      companyName: cleanCompanyName(companyName),
+      confidenceScore: 80 - (hasLongUnsplitToken ? 5 : 0), // Deduct 5 if long unsplit token
+      flags: ["singleTokenFallback", ...longTokenFlags],
+      tokens: [tokens[0].toLowerCase()],
+      confidenceOrigin: "singleTokenFallback",
+      rawTokenCount
+    };
+    log("info", "Single token fallback applied", { companyName, tokens });
+    return result;
+  }
+  const result = {
+    companyName: "",
+    confidenceScore: 0,
+    flags: ["tokenSetTooWeak", ...longTokenFlags],
+    tokens: [],
+    confidenceOrigin: "tokenSanityCheck",
+    rawTokenCount
+  };
+  log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
+  result.tokens = result.tokens.slice(0, 3);
+  return result;
+}
 
     let meta = {};
     try {
