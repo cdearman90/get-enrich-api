@@ -2,11 +2,11 @@
 // Shared constant sets and mappings for domain enrichment
 
 const log = globalThis.log || ((level, message, meta) => {
-    if (level === 'error') console.error(`[${new Date().toISOString()}] ERROR: ${message}`, meta);
-    else if (level === 'warn') console.warn(`[${new Date().toISOString()}] WARN: ${message}`, meta);
+    if (level === "error") console.error(`[${new Date().toISOString()}] ERROR: ${message}`, meta);
+    else if (level === "warn") console.warn(`[${new Date().toISOString()}] WARN: ${message}`, meta);
     else console.log(`[${new Date().toISOString()}] INFO: ${message}`, meta);
   });
-  
+
   // Comprehensive list of car brands
   const CAR_BRANDS = new Set([
       "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
@@ -37,7 +37,7 @@ const log = globalThis.log || ((level, message, meta) => {
     ["smart", "Smart"], ["subaru", "Subaru"], ["subie", "Subaru"], ["suzuki", "Suzuki"], ["tesla", "Tesla"], ["toyota", "Toyota"],
     ["volkswagen", "VW"], ["volvo", "Volvo"], ["vw", "VW"], ["chevy", "Chevy"], ["jcd", "Jeep"]
   ]);
-  
+
     // Revised ABBREVIATION_EXPANSIONS in api/lib/humanize.js
   const ABBREVIATION_EXPANSIONS = {
       "audiof": "Audi",
@@ -125,11 +125,11 @@ const log = globalThis.log || ((level, message, meta) => {
       "gm": "GM",
       "tea": "Stead"
     };
-  
+
   const COMMON_WORDS = new Set([
     "to", "of", "and", "the", "for", "in", "on", "at", "inc", "llc", "corp", "co"
   ]);
-  
+
   const TEST_CASE_OVERRIDES = {
       "athensford.com": "Athens Ford",
       "patmilliken.com": "Pat Milliken",
@@ -420,7 +420,7 @@ const log = globalThis.log || ((level, message, meta) => {
       "elwaydealers.net": "Elway",
       "chapmanchoice.com": "Chapman"
   };
-  
+
   const BRAND_ONLY_DOMAINS = new Set([
       "chevy.com", "ford.com", "cadillac.com", "buick.com", "gmc.com", "chrysler.com",
       "dodge.com", "ramtrucks.com", "jeep.com", "lincoln.com", "toyota.com", "honda.com",
@@ -430,7 +430,7 @@ const log = globalThis.log || ((level, message, meta) => {
       "porsche.com", "miniusa.com", "fiatusa.com", "alfa-romeo.com", "landroverusa.com",
       "jaguarusa.com", "tesla.com", "lucidmotors.com", "rivian.com", "volvocars.com"
     ]);
-  
+
   const KNOWN_PROPER_NOUNS = new Set([
       "rt128", "abbots", "dealer", "ac", "airport", "all", "american", "anderson", "art", "moehn", "atamian", "fox", "avis", "barnett", "beaty", "beck", "masten",
       "bentley", "berman", "bert", "smith", "bespoke", "motor", "bill", "dube", "bird", "now", "bob", "walk", "bob", "johnson", "boch", "south", "bulluck",
@@ -497,7 +497,7 @@ const log = globalThis.log || ((level, message, meta) => {
       "motorcity", "Trust", "Andrew", "Andy", "Mohr", "Voss", "Akins", "Biddle", "Weaver", "Haasza", "Hanania",
       "Rising", "Fast", "Deluca"
     ]);
-  
+
   const SORTED_CITY_LIST = [
       // Alabama (top 50)
         "birmingham", "montgomery", "huntsville", "mobile", "tuscaloosa", "bayshore", "la fontaine", "big bend", "walnut creek", "beverly hills", "boerne", "berlin city", "el cajon", "turner", "ocean", "siousx falls", "treasure coast", "stone mountain", "melbourne", "rallye", "north shore", "red river", "hawaii", "north cutt", "northpoint", "danberry", "st charles", "white plains", "dife", "el cajon", "lake charles", "queens", "lake geneva", "chester springs", "watertown", "west chester", "inver grove", "tucson", "san marcos", "habberstead", "vacaville", "san rafeal", "south charlotte", "hoover", "dothan", "auburn", "decatur", "madison",
@@ -817,213 +817,213 @@ const log = globalThis.log || ((level, message, meta) => {
         "lakewood", "brookhaven", "caldwell", "manhattan", "lagrange", "beachwood", "bedford", "cookeville", "freehold", "newton",
         "northborough", "bloomington", "bristol", "cuyahoga", "dalton", "elyria", "midland", "milwaukee", "pinehurst", "st. petersburg", "tuscaloosa",
         "waco", "woodland hills", "fort myers", "livermore", "lakeside", "inver grove", "southtown", "akins",
-  
+
           // Alabama (20 new, focusing on smaller cities with dealerships)
         "andalusia", "attalla", "bay minette", "brewton", "clanton", "demopolis", "dothan", "evergreen", "fayette", "fort rucker",
         "geneva", "greenville", "guntersville", "haleyville", "luverne", "monroeville", "roanoke", "russellville", "tuscumbia", "valley",
-  
+
         // Alaska (10 new, smaller communities with auto sales)
         "anchorage", "bethel island", "eagle river", "fairbanks north star", "kenai peninsula", "ketchikan gateway", "matanuska-susitna", "palmer", "sitka city", "skagway-hoonah-angoon",
-  
+
         // Arizona (25 new, mid-sized cities and auto hubs)
         "avondale estates", "bisbee", "casa blanca", "chandler heights", "eloy", "fort mohave", "gilbertown", "goodyear village", "green valley", "litchfield park",
         "maricopa wells", "oro valley", "paradise", "peoria heights", "phoenixville", "prescott south", "safford valley", "santa cruz", "scottsdale north", "sierra vista southeast",
         "sun city", "surprise valley", "tempe junction", "tuba city", "yuma foothills",
-  
+
         // Arkansas (15 new, smaller cities with dealership presence)
         "ash flat", "batesville", "blytheville", "camden south", "conway west", "crossett south", "dumas", "el dorado south", "helena-west helena", "malvern",
         "monticello", "newport", "pine bluff south", "sheridan", "wynne",
-  
+
         // California (50 new, covering Central Valley, Inland Empire, and smaller coastal cities)
         "aliso viejo", "antioch", "apple valley", "arcadia", "arroyo grande", "atascadero", "baldwin park", "banning", "bellflower", "brea",
         "buena park", "burbank", "carlsbad", "cathedral city", "cerritos hills", "chico", "chino", "clovis", "compton", "costa mesa",
         "covina", "culver city", "daly city", "del mar", "downey", "el centro", "el monte", "encinitas", "escondido hills", "fairfield",
         "folsom", "gilroy", "hawthorne", "hemet valley", "indio", "la mesa", "lake forest", "livermore", "lodi", "manteca",
         "murrieta", "norco", "palo alto", "pittsburg", "redondo beach", "san clemente", "san mateo", "santa barbara", "santa monica", "tustin",
-  
+
         // Colorado (20 new, focusing on Front Range and Western Slope)
         "alamosa", "brighton south", "broomfield west", "brush", "cortez", "craig", "eatonton", "fort morgan", "fountain", "fruita",
         "glenwood springs", "grand lake", "gunnison", "la junta", "lamar", "littleton west", "longmont east", "loveland north", "pueblo west", "vail",
-  
+
         // Connecticut (15 new, smaller towns with dealerships)
         "branford", "cheshire", "colchester", "east lyme", "groton", "madison", "milford city", "monroe", "new canaan", "north branford",
         "old saybrook", "orange", "stonington", "westbrook", "wilton",
-  
+
         // Delaware (10 new, smaller communities)
         "bear", "brookside", "glasgow", "hockessin", "middletown crossing", "milford crossing", "newark south", "pike creek", "seaford west", "wilmington manor",
-  
+
         // Florida (30 new, focusing on Central and South Florida)
         "altamonte springs", "aventura", "belle glade", "boca del mar", "bonita springs", "brandon", "cape canaveral", "casselberry", "coconut grove", "coral gables",
         "crestview", "cutler bay", "dania beach", "deland", "destin", "fernandina beach", "fort myers", "fort pierce", "greenacres", "hialeah gardens",
         "jensen beach", "key west", "lake worth", "melbourne", "merritt island", "miami beach", "north lauderdale", "palmetto", "punta gorda", "vero beach",
-  
+
         // Georgia (25 new, covering South and Central Georgia)
         "bainbridge", "barnesville", "blakely", "brunswick", "cairo", "calhoun", "cartersville", "cedartown", "commerce", "cordele",
         "dublin", "fitzgerald", "forsyth", "hawkinsville", "jesup", "mcdonough", "milledgeville", "moultrie", "sandersville", "swainsboro",
         "thomasville", "tifton", "vidalia", "waycross", "west point",
-  
+
         // Hawaii (10 new, smaller communities)
         "ewa beach", "hanamaulu", "kapalua", "lahaina west", "lihue", "makaha", "mililani town", "pearl harbor", "wahiawa heights", "waimanalo",
-  
+
         // Idaho (15 new, rural and mid-sized cities)
         "bliss", "burley south", "challis", "driggs", "fort hall", "gooding", "idaho city", "jerome north", "kamiah", "kellogg",
         "malad city", "osburn", "parma", "priest river", "saint anthony",
-  
+
         // Illinois (25 new, covering Chicagoland and Central Illinois)
         "algonquin", "alsip", "batavia", "bloomingdale", "blue island", "bridgeview", "calumet city", "cary", "crest hill", "crystal lake",
         "deerfield", "dixon", "elmwood park", "frankfort", "geneva", "grayslake", "homer glen", "lake zurich", "lisle", "lockport",
         "mchenry", "niles", "north aurora", "romeoville", "streamwood",
-  
+
         // Indiana (20 new, focusing on Northern and Central Indiana)
         "angola", "auburn", "bedford", "bluffton", "columbia city", "crawfordsville", "decatur", "frankfort", "greensburg", "huntingburg",
         "jasper", "kendallville", "lafayette west", "madison", "monticello", "peru", "portland", "princeton", "rochester", "warsaw",
-  
+
         // Iowa (15 new, smaller cities with dealerships)
         "algona", "anamosa", "chariton", "clarinda", "creston", "estonia", "forest city", "guttenberg", "hampton", "humboldt",
         "maquoketa", "monticello", "red oak", "sioux center", "vinton",
-  
+
         // Kansas (15 new, rural and mid-sized cities)
         "belleville", "colby", "concordia", "ellsworth", "eureka", "fredonia", "goodland", "hillsboro", "hugoton", "kingman",
         "lyons", "marysville", "pratt", "russell", "wellington",
-  
+
         // Kentucky (20 new, covering Eastern and Central Kentucky)
         "ashland", "barbourville", "berea", "cynthiana", "flemingsburg", "georgetown", "grayson", "harlan", "hazard", "hyden",
         "jackson", "london", "louisa", "manchester", "monticello", "morehead", "paintsville", "pikeville", "prestonburg", "somerset",
-  
+
         // Louisiana (15 new, smaller cities with dealerships)
         "amite", "bunkie", "dequincy", "franklin", "homer", "jonesboro", "kinder", "leesville", "many", "marksville",
         "new roads", "oak grove", "rayville", "vidalia", "winnsboro",
-  
+
         // Maine (10 new, smaller towns)
         "bar harbor", "bethel", "calais", "caribou", "dexter", "houlton", "limestone", "madawaska", "presque isle", "van buren",
-  
+
         // Maryland (15 new, covering Eastern Shore and Western Maryland)
         "beltsville", "cheverly", "chestertown", "easton", "edgewood", "elkton", "emmitsburg", "frostburg", "fruitland", "havre de grace",
         "la plata", "mount airy", "ocean city", "pocomoke city", "salisbury",
-  
+
         // Massachusetts (20 new, smaller cities and towns)
         "amherst", "andover", "ayer", "belmont", "burlington", "dedham", "dracut", "foxborough", "greenfield", "holbrook",
         "hudson", "ipswich", "melrose", "milton", "north adams", "north reading", "stoneham", "swampscott", "westborough", "winthrop",
-  
+
         // Michigan (25 new, covering Upper Peninsula and Lower Peninsula)
         "adrian", "alma", "alpena", "big rapids", "cadillac", "charlevoix", "cheboygan", "coldwater", "escanaba", "gaylord",
         "hancock", "hillsdale", "houghton", "ionia", "iron mountain", "ishpeming", "ludington", "manistee", "marquette", "menominee",
         "owosso", "petoskey", "sault ste. marie", "sturgis", "three rivers",
-  
+
         // Minnesota (20 new, covering Twin Cities suburbs and Greater Minnesota)
         "albert lea", "alexandria", "bemidji", "brainerd", "buffalo", "cambridge", "detroit lakes", "fairmont", "fergus falls", "grand rapids",
         "hibbing", "hutchinson", "marshall", "monticello", "morris", "new ulm", "north branch", "owatonna", "thief river falls", "willmar",
-  
+
         // Mississippi (15 new, smaller cities with dealerships)
         "batesville", "brookhaven", "carthage", "clarksdale", "cleveland", "columbia", "forest", "hazlehurst", "houston", "kosciusko",
         "louisville", "magee", "philadelphia", "pontotoc", "west point",
-  
+
         // Missouri (20 new, covering Ozarks and Northern Missouri)
         "bolivar", "branson", "carthage", "chillicothe", "clinton", "excelsior springs", "festus", "fulton", "jackson", "kennett",
         "lebanon", "macon", "maryville", "mexico", "nevada", "perryville", "poplar bluff", "saint robert", "union", "west plains",
-  
+
         // Montana (10 new, rural communities)
         "anaconda-deer lodge", "bigfork", "cut bank", "deer lodge", "glasgow", "libby", "livingston", "polson", "sidney", "whitefish",
-  
+
         // Nebraska (15 new, smaller cities)
         "albion", "aurora", "blair", "chadron", "falls city", "geneva", "gothenburg", "hastings", "kearney", "lexington",
         "mccook", "norfolk", "plattsmouth", "seward", "york",
-  
+
         // Nevada (10 new, smaller cities and towns)
         "boulder", "carson", "elko", "fallon", "fernley", "mesquite", "reno south", "sparks east", "winnemucca", "yerington",
-  
+
         // New Hampshire (10 new, smaller towns)
         "barrington", "belmont", "colebrook", "gorham", "hillsborough", "lisbon", "new ipswich", "newport", "northwood", "tamworth",
-  
+
         // New Jersey (25 new, covering North and Central Jersey)
         "asbury park", "bayville", "bloomfield", "bound brook", "carteret", "closter", "dover", "dumont", "elmwood park", "englewood",
         "fort lee", "hoboken", "keyport", "lodi", "lyndhurst", "mahwah", "maplewood", "montclair", "morristown", "point pleasant", "ridgewood",
         "rutherford", "summit", "union", "westwood",
-  
+
         // New Mexico (15 new, smaller cities)
         "alamo", "artesia", "bloomfield", "carlsbad", "clovis east", "deming", "espanola", "gallup", "grants", "hobbs",
         "lovington", "portales", "roswell", "ruidoso", "silver city",
-  
+
         // New York (25 new, covering Upstate and Long Island)
         "amityville", "baldwinsville", "batavia", "beacon", "canandaigua", "cortland", "endicott", "geneva", "hornell", "horseheads",
         "jamestown", "johnstown", "malone", "massena", "medina", "new paltz", "north syracuse", "ogdensburg", "oneida", "oneonta",
         "oswego", "port jervis", "rochester hills", "saratoga", "watertown",
-  
+
         // North Carolina (20 new, covering Piedmont and Coastal regions)
         "ahoskie", "belmont", "brevard", "dunn", "elizabeth city", "farmville", "graham", "hamlet", "haverford", "hendersonville",
         "laurinburg", "lenoir", "lillington", "lincolnton", "lumberton", "mocksville", "mount airy", "reidsville", "roxboro", "siler city",
-  
+
         // North Dakota (10 new, smaller communities)
         "belcourt", "cavalier", "devils lake", "grafton", "harvey", "larimore", "lisbon", "new rockford", "rugby", "valley city",
-  
+
         // Ohio (25 new, covering Northeast and Central Ohio)
         "alliance", "ashland", "ashtabula", "athens", "barberton", "berea", "chardon", "coshocton", "defiance", "dover",
         "eastlake", "fostoria", "galion", "greenville", "kent", "marietta", "medina", "painesville", "portsmouth", "sandusky",
         "sidney", "tiffin", "wadsworth", "willoughby", "zanesville",
-  
+
         // Oklahoma (15 new, smaller cities)
         "anadarko", "blackwell", "bristow", "chandler", "cushing", "frederick", "henryetta", "hobart", "holdenville", "idabel",
         "pauls valley", "perry", "purcell", "sulphur", "vinita",
-  
+
         // Oregon (15 new, covering Willamette Valley and Eastern Oregon)
         "astoria", "baker city", "coquille", "florence", "hood river", "junction city", "la pine", "lincoln city", "madras", "milton-freewater",
         "north bend", "seaside", "sutherlin", "tillamook", "umatilla",
-  
+
         // Pennsylvania (25 new, covering Western and Central Pennsylvania)
         "ambridge", "beaver", "bellefonte", "blairsville", "bloomsburg", "clarion", "clearfield", "coraopolis", "corry", "doylestown",
         "du bois", "east stroudsburg", "edensburg", "gettysburg", "hollidaysburg", "huntingdon", "kittanning", "kutzton", "lewisburg", "lock haven",
         "milton", "monroeville", "new kensington", "punxsutawney", "selinsgrove",
-  
+
         // Rhode Island (10 new, smaller communities)
         "barrington", "bristol", "central falls", "coventry", "exeter", "narragansett", "newport", "tiverton", "westerly", "woonsocket",
-  
+
         // South Carolina (15 new, covering Upstate and Lowcountry)
         "abbeville", "anderson", "bennettsville", "cheraw", "chester", "clover", "gaffney", "lake city", "marion", "mullins",
         "newberry", "pageland", "union", "walterboro", "williamston",
-  
+
         // South Dakota (10 new, smaller communities)
         "beresford", "brookings", "canton", "chamberlain", "dell rapids", "hot springs", "lead", "mobridge", "sturgis", "vermillion",
-  
+
         // Tennessee (20 new, covering East and Middle Tennessee)
         "alcoa", "bristol", "crossville", "dayton", "elizabethton", "fayetteville", "gallatin", "harriman", "hohenwald", "jackson",
         "lafayette", "lafollette", "loudon", "manchester", "mcminnville", "milan", "paris", "pigeon forge", "ripley", "sweetwater",
-  
+
         // Texas (30 new, covering Panhandle, Hill Country, and South Texas)
         "alvin", "angleton", "bastrop", "bay city", "boerne", "brenham", "brownwood", "burleson", "canyon", "cleburne",
         "conroe", "corsicana", "del rio", "eagle pass", "ennis", "fredericksburg", "galveston", "georgetown", "huntsville", "kerrville",
         "kingsville", "lampasas", "lufkin", "marshall", "nacogdoches", "palestine", "port arthur", "seguin", "sherman", "weatherford",
-  
+
         // Utah (15 new, covering Wasatch Front and Southern Utah)
         "blanding", "brigham", "cedar hills", "delta", "ephraim", "fillmore", "moab", "morgan", "nephi", "park city",
         "price", "richfield", "roosevelt", "tremonton", "vernal",
-  
+
         // Vermont (10 new, smaller towns)
         "barre", "bellows falls", "bethel", "brandon", "enosburg", "fair haven", "lyndon", "newport", "stowe", "vergennes",
-  
+
         // Virginia (20 new, covering Shenandoah Valley and Tidewater)
         "blackstone", "bridgewater", "chincoteague", "colonial beach", "dumfries", "emporia", "falmouth", "front royal", "luray", "marion",
         "norton", "orange", "pulaski", "south boston", "south hill", "tappahannock", "vinton", "warrenton", "wise", "wytheville",
-  
+
         // Washington (15 new, covering Puget Sound and Eastern Washington)
         "anacortes", "arlington", "battle ground", "bonney lake", "chehalis", "cheney", "colville", "ellensburg", "enumclaw", "ferndale",
         "gig harbor", "monroe", "port orchard", "sequim", "shelton",
-  
+
         // West Virginia (10 new, smaller communities)
         "beckley", "clendenin", "fayetteville", "lewisburg", "moorefield", "oak hill", "parsons", "petersburg", "romney", "summersville",
-  
+
         // Wisconsin (20 new, covering Southeast and Central Wisconsin)
         "baraboo", "cedarburg", "chippewa falls", "delafield", "delavan", "fort atkinson", "grafton", "hartford", "lake geneva", "menomonie",
         "merrill", "monroe", "oconto", "pewaukee", "portage", "reedsburg", "rice lake", "river falls", "stoughton", "sturgeon bay",
-  
+
         // Wyoming (10 new, smaller communities)
         "afton", "evanston", "glenrock", "green river", "jackson hole", "kemmerer", "lander", "powell", "riverton", "sheridan", "birmingham", "montgomery",
         "hunstville", "lakeland", "wilsonville", "palm coast", "morristown", "palm coast", "morristown", "roseville", "novato", "jacksonville", "richmond",
         "san leandro"
     ];
-  
+
   // Construct KNOWN_CITIES_SET from SORTED_CITY_LIST
   const KNOWN_CITIES_SET = new Set(SORTED_CITY_LIST.map(c => c.toLowerCase()));
-  
+
        // Define known first and last names for human name splitting
       const KNOWN_FIRST_NAMES = new Set([
         "aaron", "abel", "al", "abraham", "adam", "arnie", "adrian", "al", "alan", "allan", "allen", "albert", "alden", "alex",
@@ -1145,7 +1145,7 @@ const log = globalThis.log || ((level, message, meta) => {
         "wilbur", "wilder", "wilfred", "willard", "willis", "winfield", "winston",
         "woodrow", "wyatt", "zachariah", "zephaniah", "scott"
       ]);
-  
+
          // Place immediately after KNOWN_FIRST_NAMES in api/lib/humanize.js
       const KNOWN_LAST_NAMES = new Set([
         // Existing last names (~600, summarized from humanize.js lines 299–368)
@@ -1304,9 +1304,9 @@ const log = globalThis.log || ((level, message, meta) => {
         "woodruff", "woods", "woodward", "woolsey", "worthington", "wright", "wyatt", "yates", "yeager", "york",
         "young", "youngblood", "zimmerman", "kadlac", "clark", "caruso", "perillo", "stoops", "weaver"
       ]);
-  
+
   const SUFFIXES_TO_REMOVE = ["llc", "inc", "corp", "co", "ltd", "group", "auto", "motors"];
-  
+
   const KNOWN_GENERIC_BLOBS = {
       "capitalbpg": "BPG Auto",
       "hmtrs": "HMTR Auto",
@@ -1316,7 +1316,7 @@ const log = globalThis.log || ((level, message, meta) => {
       "rbm": "RBM Auto",
       "sth": "STH Auto"
   };
-  
+
   // Overrides for specific domains
   const OVERRIDES = {
       "acdealergroup.com": "AC Dealer",
@@ -1598,13 +1598,13 @@ const log = globalThis.log || ((level, message, meta) => {
       "williamssubarucharlotte.com": "Williams Subaru",
       "yorkautomotive.com": "York Auto"
   };
-  
+
   // Blocklist for spammy patterns
   const BLOCKLIST = ["auto auto", "group group", "cars cars", "sales sales"];
-  
+
   // Spammy tokens to filter out
   const SPAMMY_TOKENS = ["sales", "autogroup", "cars"];
-  
+
   // Precompute proper nouns set for performance (only proper nouns)
   const properNounsSet = new Set([
       ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
@@ -1612,21 +1612,21 @@ const log = globalThis.log || ((level, message, meta) => {
       ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
       ...(Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS : []).map(n => n.toLowerCase())
   ]);
-  
+
   // Log warnings if critical constants are empty or undefined
   if (!KNOWN_CITIES_SET.size) {
-      log('warn', 'KNOWN_CITIES_SET is empty or undefined', {});
+      log("warn", "KNOWN_CITIES_SET is empty or undefined", {});
   }
   if (!properNounsSet.size) {
-      log('warn', 'properNounsSet is empty or undefined', {});
+      log("warn", "properNounsSet is empty or undefined", {});
   }
   if (!Object.keys(OVERRIDES).length) {
-      log('warn', 'OVERRIDES is empty or undefined', {});
+      log("warn", "OVERRIDES is empty or undefined", {});
   }
   if (!Object.keys(KNOWN_GENERIC_BLOBS).length) {
-      log('warn', 'KNOWN_GENERIC_BLOBS is empty or undefined', {});
+      log("warn", "KNOWN_GENERIC_BLOBS is empty or undefined", {});
   }
-  
+
   export {
       CAR_BRANDS,
       BRAND_MAPPING,
