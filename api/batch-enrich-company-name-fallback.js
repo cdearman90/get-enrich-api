@@ -111,8 +111,11 @@ const KNOWN_PROPER_NOUNS = new Set([
     "falls", "antonino", "exchange", "arrow", "arrowhead", "applegate", "arceneaux", "trust", "atzenhoffer",
     "bayou", "bayway", "blossom", "billholt", "bill", "brand", "kay", "billingsley", "bachman", "bettenbaker",
     "motorcity", "Trust", "Andrew", "Andy", "Mohr", "Voss", "Akins", "Biddle", "Weaver", "Haasza", "Hanania",
-    "Rising", "Fast", "Deluca"
-  ]);
+    "Rising", "Fast", "Deluca", "milnes", "strong", "beaty", "birdnow", "reedlallier", "oxmoor", "haley", 
+    "rivera", "nfwauto", "totaloffroad", "ingersoll", "caruso", "maita", "victory", "hilltop", "shottenkirk", 
+    "mabry", "bertogden", "teddy", "jet", "raceway", "mcdaniel", "newsmyrna", "destination", "armen", "bond",
+    "livermore", "alsop", "lakeside", "pape"
+]);
 
 const SORTED_CITY_LIST = [
     // Alabama (top 50)
