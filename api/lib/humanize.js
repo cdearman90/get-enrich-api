@@ -1402,7 +1402,7 @@ const BRAND_ONLY_DOMAINS_CACHE = new Map(Array.from(BRAND_ONLY_DOMAINS).map(doma
 const BRAND_ABBREVIATIONS_CACHE = new Map(Object.entries(BRAND_ABBREVIATIONS || {}));
 const SUFFIXES_TO_REMOVE_CACHE = new Map(SUFFIXES_TO_REMOVE instanceof Set ? Array.from(SUFFIXES_TO_REMOVE).map(suffix => [suffix.toLowerCase(), true]) : []);
 const logLevel = process.env.LOG_LEVEL || "info";
-const KNOWN_PROPER_NOUNS_CACHE = new Map(Array.from(KNOWN_PROPER_NOUNS).map(noun => [noun.toLowerCase(), noun])); // Fixed: Use Array.from
+const KNOWN_PROPER_NOUNS_CACHE = new Map(Array.from(KNOWN_PROPER_NOUNS).map(noun => [noun.toLowerCase(), noun]));
 
 // Define contextual words to retain for better name construction
 const CONTEXTUAL_WORDS = new Set(["cars", "auto", "motors", "group", "dealership"].map(word => word.toLowerCase()));
@@ -1420,7 +1420,7 @@ const knownWords = [
 
 const KNOWN_WORDS_CACHE = new Map(knownWords.map(word => [word, true]));
 const SORTED_CITIES_CACHE = new Map(SORTED_CITY_LIST.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
-const CAR_BRANDS_CACHE = new Map(CAR_BRANDS.map(brand => [brand.toLowerCase(), brand]));
+const CAR_BRANDS_CACHE = new Map(Array.from(CAR_BRANDS).map(brand => [brand.toLowerCase(), brand])); // Fixed: Use Array.from
 
 // Pre-compile WHITESPACE_REGEX
 const WHITESPACE_REGEX = /\s+/g;
