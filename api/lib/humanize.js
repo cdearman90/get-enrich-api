@@ -1383,10 +1383,15 @@ const SUFFIXES_TO_REMOVE = new Set([
 // Pre-compile regex for splitting
 const SPLIT_REGEX = /(?=[A-Z])|[-_\s]|of|(?<=\D)(?=\d)/;
 
+// Precompute proper nouns set for performance (only proper nouns)
+const properNounsSet = new Set([
+    ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
+    ...(Array.isArray(KNOWN_LAST_NAMES) ? KNOWN_LAST_NAMES : []).map(n => n.toLowerCase()),
+    ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
+    ...(Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS : []).map(n => n.toLowerCase())
+]);
+
 // Cache known lists for performance
-const KNOWN_WORDS_CACHE = new Map(knownWords.map(word => [word, true]));
-const SORTED_CITIES_CACHE = new Map(SORTED_CITY_LIST.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
-const CAR_BRANDS_CACHE = new Map(CAR_BRANDS.map(brand => [brand.toLowerCase(), brand]));
 const KNOWN_CITIES_SET_CACHE = new Map(Array.from(KNOWN_CITIES_SET).map(city => [city.toLowerCase(), city]));
 const PROPER_NOUNS_CACHE = new Map(properNounsSet.map(noun => [noun.toLowerCase(), noun]));
 const COMMON_WORDS_CACHE = new Map(Array.from(COMMON_WORDS).map(word => [word.toLowerCase(), true]));
@@ -1395,7 +1400,8 @@ const KNOWN_LAST_NAMES_CACHE = new Map(Array.from(KNOWN_LAST_NAMES).map(name => 
 const BRAND_MAPPING_CACHE = new Map(Object.entries(BRAND_MAPPING || {}));
 const BRAND_ONLY_DOMAINS_CACHE = new Map(BRAND_ONLY_DOMAINS.map(domain => [domain, true]));
 const BRAND_ABBREVIATIONS_CACHE = new Map(Object.entries(BRAND_ABBREVIATIONS || {}));
-const SUFFIXES_TO_REMOVE_CACHE = new Map(SUFFIXES_TO_REMOVE instanceof Set ? Array.from(SUFFIXES_TO_REMOVE).map(suffix => [suffix.toLowerCase(), true]) : []);const logLevel = process.env.LOG_LEVEL || "info";
+const SUFFIXES_TO_REMOVE_CACHE = new Map(SUFFIXES_TO_REMOVE instanceof Set ? Array.from(SUFFIXES_TO_REMOVE).map(suffix => [suffix.toLowerCase(), true]) : []);
+const logLevel = process.env.LOG_LEVEL || "info";
 const KNOWN_PROPER_NOUNS_CACHE = new Map(KNOWN_PROPER_NOUNS.map(noun => [noun.toLowerCase(), noun]));
 
 // Define contextual words to retain for better name construction
@@ -1403,14 +1409,18 @@ const CONTEXTUAL_WORDS = new Set(["cars", "auto", "motors", "group", "dealership
 
 // Define knownWords as a derived list from existing sets
 const knownWords = [
-  ...Array.from(CAR_BRANDS),
-  ...Array.from(KNOWN_CITIES_SET),
-  ...Array.from(KNOWN_FIRST_NAMES),
-  ...Array.from(KNOWN_LAST_NAMES),
-  ...Array.from(COMMON_WORDS),
-  ...Array.from(KNOWN_PROPER_NOUNS),
-  ...Array.from(CONTEXTUAL_WORDS)
+    ...Array.from(CAR_BRANDS),
+    ...Array.from(KNOWN_CITIES_SET),
+    ...Array.from(KNOWN_FIRST_NAMES),
+    ...Array.from(KNOWN_LAST_NAMES),
+    ...Array.from(COMMON_WORDS),
+    ...Array.from(KNOWN_PROPER_NOUNS),
+    ...Array.from(CONTEXTUAL_WORDS)
 ].map(word => word.toLowerCase());
+
+const KNOWN_WORDS_CACHE = new Map(knownWords.map(word => [word, true]));
+const SORTED_CITIES_CACHE = new Map(SORTED_CITY_LIST.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
+const CAR_BRANDS_CACHE = new Map(CAR_BRANDS.map(brand => [brand.toLowerCase(), brand]));
 
 // Pre-compile WHITESPACE_REGEX
 const WHITESPACE_REGEX = /\s+/g;
@@ -1418,24 +1428,16 @@ const WHITESPACE_REGEX = /\s+/g;
 // Pre-compute multi-word cities
 const MULTI_WORD_CITIES = new Map();
 for (const city of KNOWN_CITIES_SET_CACHE.keys()) {
-  const cityTokens = city.split(" ");
-  if (cityTokens.length > 1) {
-    MULTI_WORD_CITIES.set(cityTokens.join(" ").toLowerCase(), city);
-  }
+    const cityTokens = city.split(" ");
+    if (cityTokens.length > 1) {
+        MULTI_WORD_CITIES.set(cityTokens.join(" ").toLowerCase(), city);
+    }
 }
 
 // Pre-compile regex for URL stripping
 const URL_PREFIX_REGEX = /^(https?:\/\/)?(www\.)?/i;
 
 const TITLE_CLEANUP_REGEX = /[^a-z0-9\s]/gi;
-
-// Precompute proper nouns set for performance (only proper nouns)
-const properNounsSet = new Set([
-    ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
-    ...(Array.isArray(KNOWN_LAST_NAMES) ? KNOWN_LAST_NAMES : []).map(n => n.toLowerCase()),
-    ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
-    ...(Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS : []).map(n => n.toLowerCase())
-]);
 
 const logger = winston.createLogger({
   level: "debug",
