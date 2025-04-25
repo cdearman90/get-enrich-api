@@ -1383,20 +1383,6 @@ const SUFFIXES_TO_REMOVE = new Set([
 // Pre-compile regex for splitting
 const SPLIT_REGEX = /(?=[A-Z])|[-_\s]|of|(?<=\D)(?=\d)/;
 
-// Define knownWords as a derived list from existing sets
-const knownWords = [
-  ...Array.from(CAR_BRANDS),
-  ...Array.from(KNOWN_CITIES_SET),
-  ...Array.from(KNOWN_FIRST_NAMES),
-  ...Array.from(KNOWN_LAST_NAMES),
-  ...Array.from(COMMON_WORDS),
-  ...Array.from(KNOWN_PROPER_NOUNS),
-  ...Array.from(CONTEXTUAL_WORDS)
-].map(word => word.toLowerCase());
-
-// Pre-compile WHITESPACE_REGEX
-const WHITESPACE_REGEX = /\s+/g;
-
 // Cache known lists for performance
 const KNOWN_WORDS_CACHE = new Map(knownWords.map(word => [word, true]));
 const SORTED_CITIES_CACHE = new Map(SORTED_CITY_LIST.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
@@ -1412,6 +1398,23 @@ const BRAND_ABBREVIATIONS_CACHE = new Map(Object.entries(BRAND_ABBREVIATIONS || 
 const SUFFIXES_TO_REMOVE_CACHE = new Map(SUFFIXES_TO_REMOVE instanceof Set ? Array.from(SUFFIXES_TO_REMOVE).map(suffix => [suffix.toLowerCase(), true]) : []);const logLevel = process.env.LOG_LEVEL || "info";
 const KNOWN_PROPER_NOUNS_CACHE = new Map(KNOWN_PROPER_NOUNS.map(noun => [noun.toLowerCase(), noun]));
 
+// Define contextual words to retain for better name construction
+const CONTEXTUAL_WORDS = new Set(["cars", "auto", "motors", "group", "dealership"].map(word => word.toLowerCase()));
+
+// Define knownWords as a derived list from existing sets
+const knownWords = [
+  ...Array.from(CAR_BRANDS),
+  ...Array.from(KNOWN_CITIES_SET),
+  ...Array.from(KNOWN_FIRST_NAMES),
+  ...Array.from(KNOWN_LAST_NAMES),
+  ...Array.from(COMMON_WORDS),
+  ...Array.from(KNOWN_PROPER_NOUNS),
+  ...Array.from(CONTEXTUAL_WORDS)
+].map(word => word.toLowerCase());
+
+// Pre-compile WHITESPACE_REGEX
+const WHITESPACE_REGEX = /\s+/g;
+
 // Pre-compute multi-word cities
 const MULTI_WORD_CITIES = new Map();
 for (const city of KNOWN_CITIES_SET_CACHE.keys()) {
@@ -1425,9 +1428,6 @@ for (const city of KNOWN_CITIES_SET_CACHE.keys()) {
 const URL_PREFIX_REGEX = /^(https?:\/\/)?(www\.)?/i;
 
 const TITLE_CLEANUP_REGEX = /[^a-z0-9\s]/gi;
-
-// Define contextual words to retain for better name construction
-const CONTEXTUAL_WORDS = new Set(["cars", "auto", "motors", "group", "dealership"].map(word => word.toLowerCase()));
 
 // Precompute proper nouns set for performance (only proper nouns)
 const properNounsSet = new Set([
