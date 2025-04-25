@@ -1792,6 +1792,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
   }
 }
 
+// JSDoc comment moved to the correct position (before fallbackName function)
 /**
  * Fallback logic for low-confidence or failed humanize results
  * @param {string} domain - Domain to enrich
@@ -1799,7 +1800,6 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
  * @param {Object} meta - Meta data
  * @returns {{companyName: string, confidenceScore: number, flags: string[], tokens: number}} - Enriched result
  */
-// Location: /api/batch-enrich-company-name-fallback.js, replace fallbackName function
 async function fallbackName(domain, originalDomain, meta = {}) {
   const normalizedDomain = normalizeDomain(domain);
   let companyName = '';
