@@ -9,9 +9,7 @@ import {
   earlyCompoundSplit
 } from "./lib/humanize.js";
 
-import { fallbackName, clearOpenAICache } from "./batch-enrich-company-name-fallback.js";
-
-import BRAND_ONLY_DOMAINS from "./lib/constants.js";
+import { fallbackName, clearOpenAICache, BRAND_ONLY_DOMAINS } from "./batch-enrich-company-name-fallback.js";
 
 import winston from "winston";
 import path from "path";
