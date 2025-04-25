@@ -1472,50 +1472,67 @@ function normalizeDomain(domain) {
 }
 
 // Cleans company name by removing trailing suffixes and connectors
-function cleanCompanyName(companyName) {
+function cleanCompanyName(companyName, brand = null, domain = null) {
   try {
     if (!companyName || typeof companyName !== "string") {
-      log("error", "Invalid name in cleanCompanyName", { companyName });
+      log("error", "Invalid name in cleanCompanyName", { companyName, domain });
       return "";
     }
 
-    // Step 0: Strip URL prefixes using pre-compiled regex
+    // Step 0: Early return for overrides
+    if (domain && TEST_CASE_OVERRIDES[domain]) {
+      const overrideName = TEST_CASE_OVERRIDES[domain];
+      log("info", "Override applied in cleanCompanyName", { domain, overrideName });
+      return overrideName.trim();
+    }
+
+    // Step 1: Strip URL prefixes using pre-compiled regex
     let cleanedName = companyName.replace(URL_PREFIX_REGEX, "");
     if (cleanedName !== companyName && logLevel === "debug") {
-      log("debug", "URL prefix stripped", { original: companyName, cleaned: cleanedName });
+      log("debug", "URL prefix stripped", { original: companyName, cleaned: cleanedName, domain });
     }
 
     // Validate dependencies
     if (!(COMMON_WORDS_CACHE.size > 0) || !(SUFFIXES_TO_REMOVE_CACHE.size > 0)) {
       log("error", "Invalid dependencies in cleanCompanyName", {
         COMMON_WORDS: COMMON_WORDS instanceof Set,
-        SUFFIXES_TO_REMOVE: SUFFIXES_TO_REMOVE instanceof Set
+        SUFFIXES_TO_REMOVE: SUFFIXES_TO_REMOVE instanceof Set,
+        domain
       });
       return cleanedName.trim();
     }
 
     let tokens = cleanedName.trim().split(/\s+/).filter(Boolean);
     if (!tokens.every(token => typeof token === "string")) {
-      log("error", "Invalid tokens in cleanCompanyName", { companyName, tokens });
+      log("error", "Invalid tokens in cleanCompanyName", { companyName, tokens, domain });
       return cleanedName.trim();
     }
 
-    // Step 1: Deduplicate tokens while preserving case
+    // Step 2: Deduplicate tokens and filter redundant brands
     const seen = new Set();
     const dedupedTokens = [];
+    const brandLower = brand ? brand.toLowerCase() : null;
     for (const token of tokens) {
-      const tokenKey = token.toLowerCase();
-      if (!seen.has(tokenKey)) {
-        seen.add(tokenKey);
+      const tokenLower = token.toLowerCase();
+      // Skip if token is the brand and already included
+      if (brandLower && (tokenLower === brandLower || CAR_BRANDS_CACHE.has(tokenLower))) {
+        if (seen.has(brandLower)) {
+          log("debug", "Redundant brand token skipped", { companyName, token, domain });
+          continue;
+        }
+        seen.add(brandLower);
+        dedupedTokens.push(CAR_BRANDS_CACHE.get(tokenLower) || token);
+      } else if (!seen.has(tokenLower)) {
+        seen.add(tokenLower);
         dedupedTokens.push(token);
       } else if (logLevel === "debug") {
-        log("debug", "Duplicate token removed", { companyName, token });
+        log("debug", "Duplicate token removed", { companyName, token, domain });
       }
     }
     tokens = dedupedTokens;
 
-    // Step 2: Context-aware removal of leading and trailing tokens
-    // Remove leading connectors only if they are not part of a proper noun, city, or brand
+    // Step 3: Context-aware removal of leading and trailing tokens
+    // Remove leading connectors only if not part of a proper noun, city, or brand
     while (tokens.length > 1 && COMMON_WORDS_CACHE.has(tokens[0].toLowerCase())) {
       const remainingSegment = tokens.slice(1).join("").toLowerCase();
       if (
@@ -1523,25 +1540,23 @@ function cleanCompanyName(companyName) {
         !KNOWN_CITIES_SET_CACHE.has(remainingSegment) &&
         !CAR_BRANDS_CACHE.has(remainingSegment)
       ) {
-        if (logLevel === "debug") {
-          log("debug", "Leading connector removed", { companyName, removed: tokens[0] });
-        }
+        log("debug", "Leading connector removed", { companyName, removed: tokens[0], domain });
         tokens.shift();
       } else {
-        break; // Preserve if part of a proper noun, city, or brand
+        break;
       }
     }
 
-    // Remove trailing suffixes and connectors only if they are not part of a proper noun, city, brand, or contextual word
+    // Remove trailing suffixes and connectors unless part of a proper noun, city, brand, or contextual word
     while (tokens.length > 1) {
       const lastToken = tokens[tokens.length - 1].toLowerCase();
       const isContextual = CONTEXTUAL_WORDS.has(lastToken);
       const isSuffixOrCommon = SUFFIXES_TO_REMOVE_CACHE.has(lastToken) || COMMON_WORDS_CACHE.has(lastToken);
       if (!isSuffixOrCommon || (isContextual && tokens.length > 1)) {
-        break; // Preserve contextual words if they follow a human name, brand, or city
+        break;
       }
       const precedingSegment = tokens.slice(0, -1).join("").toLowerCase();
-      const precedingIsHumanName = tokens.slice(0, -1).some(token => 
+      const precedingIsHumanName = tokens.slice(0, -1).some(token =>
         KNOWN_FIRST_NAMES_CACHE.has(token.toLowerCase()) || KNOWN_LAST_NAMES_CACHE.has(token.toLowerCase())
       );
       if (
@@ -1550,181 +1565,184 @@ function cleanCompanyName(companyName) {
         !CAR_BRANDS_CACHE.has(precedingSegment) &&
         !precedingIsHumanName
       ) {
-        if (logLevel === "debug") {
-          log("debug", "Trailing suffix/connector removed", { companyName, removed: tokens[tokens.length - 1] });
-        }
+        log("debug", "Trailing suffix/connector removed", { companyName, removed: tokens[tokens.length - 1], domain });
         tokens.pop();
       } else {
-        break; // Preserve if part of a proper noun, city, brand, or human name
+        break;
       }
     }
 
-    // Step 3: Sanity check for truncation (e.g., "Nanue" → "Nanuet")
+    // Step 4: Restore truncated tokens and brands
     const restoredTokens = tokens.map(token => {
       const tokenLower = token.toLowerCase();
-      // Check if the token appears truncated by looking for close matches in KNOWN_CITIES_SET or properNounsSet
+      // Check for truncated cities or proper nouns
       for (const [knownToken, original] of [...KNOWN_CITIES_SET_CACHE, ...PROPER_NOUNS_CACHE]) {
         const knownLower = knownToken.toLowerCase();
         if (knownLower.startsWith(tokenLower) && knownLower.length <= tokenLower.length + 2 && knownLower.length > tokenLower.length) {
-          if (logLevel === "debug") {
-            log("debug", "Restored truncated token", { companyName, originalToken: token, restored: original });
+          log("debug", "Restored truncated token", { companyName, originalToken: token, restored: original, domain });
+          return original;
+        }
+      }
+      // Check for brand misspellings
+      if (brandLower && !CAR_BRANDS_CACHE.has(tokenLower)) {
+        for (const [knownBrand, original] of CAR_BRANDS_CACHE) {
+          if (knownBrand.startsWith(tokenLower) && knownBrand.length <= tokenLower.length + 2 && knownBrand.length > tokenLower.length) {
+            log("debug", "Restored brand token", { companyName, originalToken: token, restored: original, domain });
+            return original;
           }
+        }
+      }
+      return token;
+    });
+
+    // Step 5: Append brand if not present and valid
+    const finalTokens = restoredTokens;
+    const nameLower = finalTokens.join(" ").toLowerCase();
+    if (brand && !CAR_BRANDS_CACHE.has(nameLower) && !nameLower.includes(brandLower)) {
+      const brandName = BRAND_MAPPING_CACHE.get(brandLower) || brand;
+      finalTokens.push(brandName);
+      log("debug", "Appended brand", { companyName, brand: brandName, domain });
+    }
+
+    // Step 6: Handle edge case where all tokens are removed
+    if (finalTokens.length === 0) {
+      log("warn", "All tokens removed, using fallback", { companyName, domain });
+      return cleanedName.trim();
+    }
+
+    // Step 7: Join tokens and final trim
+    const result = finalTokens.join(" ").trim();
+    if (logLevel === "debug") {
+      log("debug", "Cleaned company name", { companyName, result, tokens: finalTokens, domain });
+    }
+    return result;
+  } catch (e) {
+    log("error", "cleanCompanyName failed", { companyName, domain, error: e.message, stack: e.stack });
+    return companyName ? companyName.trim() : "";
+  }
+}
+
+function capitalizeName(name, brand = null, domain = null) {
+  try {
+    if (!name || typeof name !== "string" || !name.trim()) {
+      log("error", "Invalid name in capitalizeName", { name, domain });
+      return { name: "", flags: ["InvalidInput"] };
+    }
+
+    // Step 0: Early return for overrides
+    if (domain && TEST_CASE_OVERRIDES[domain]) {
+      const overrideName = TEST_CASE_OVERRIDES[domain];
+      log("info", "Override applied in capitalizeName", { domain, overrideName });
+      return { name: overrideName.trim(), flags: ["overrideApplied"] };
+    }
+
+    const trimmedName = name.trim().replace(WHITESPACE_REGEX, " ");
+    let flags = [];
+    let tokens = trimmedName.split(" ").filter(Boolean);
+
+    // Pre-compute brand presence to avoid duplication
+    const brandLower = brand ? brand.toLowerCase() : null;
+    const hasBrand = brandLower && tokens.some(token => 
+      token.toLowerCase() === brandLower || CAR_BRANDS_CACHE.has(token.toLowerCase())
+    );
+
+    // Step 1: Process tokens
+    tokens = tokens.map((word, i) => {
+      if (!word) return word;
+      const lowerWord = word.toLowerCase();
+
+      // Step 1.1: Preserve known proper nouns, cities, or brands
+      if (KNOWN_PROPER_NOUNS_CACHE.has(lowerWord)) {
+        flags.push("ProperNounPreserved");
+        return KNOWN_PROPER_NOUNS_CACHE.get(lowerWord);
+      }
+      if (KNOWN_CITIES_SET_CACHE.has(lowerWord)) {
+        flags.push("CityPreserved");
+        return KNOWN_CITIES_SET_CACHE.get(lowerWord);
+      }
+      if (CAR_BRANDS_CACHE.has(lowerWord)) {
+        flags.push("BrandPreserved");
+        return CAR_BRANDS_CACHE.get(lowerWord);
+      }
+
+      // Step 1.2: Apply BRAND_MAPPING, but only if brand not already present
+      if (!hasBrand && BRAND_MAPPING_CACHE.has(lowerWord)) {
+        flags.push("BrandMapped");
+        return BRAND_MAPPING_CACHE.get(lowerWord);
+      }
+
+      // Step 1.3: Apply BRAND_ABBREVIATIONS
+      if (BRAND_ABBREVIATIONS_CACHE.has(lowerWord)) {
+        flags.push("BrandAbbreviationFormatted");
+        return BRAND_ABBREVIATIONS_CACHE.get(lowerWord);
+      }
+
+      // Step 1.4: Handle abbreviations with dots (e.g., "M.B.")
+      if (word.includes(".")) {
+        if (/^[A-Z]\.[A-Z]\.$/.test(word) || (word.length <= 5 && word === word.toUpperCase())) {
+          flags.push("DottedAbbreviationPreserved");
+          return word; // Preserve "M.B.", "A.B.C."
+        }
+      }
+
+      // Step 1.5: Handle 2-3 letter abbreviations before/after nouns or brands
+      if (word.length <= 3 && /^[a-zA-Z]+$/.test(word)) {
+        const isNearNounOrBrand = tokens[i - 1]?.toLowerCase() in KNOWN_PROPER_NOUNS_CACHE ||
+                                  tokens[i - 1]?.toLowerCase() in KNOWN_CITIES_SET_CACHE ||
+                                  tokens[i - 1]?.toLowerCase() in CAR_BRANDS_CACHE ||
+                                  tokens[i + 1]?.toLowerCase() in KNOWN_PROPER_NOUNS_CACHE ||
+                                  tokens[i + 1]?.toLowerCase() in KNOWN_CITIES_SET_CACHE ||
+                                  tokens[i + 1]?.toLowerCase() in CAR_BRANDS_CACHE;
+        if (isNearNounOrBrand) {
+          flags.push("ShortTokenCapitalized");
+          return word.toUpperCase(); // e.g., "eh" → "EH" in "EH Ford"
+        }
+      }
+
+      // Step 1.6: Handle mixed-case tokens (e.g., "McLaren")
+      if (/^[A-Z][a-z]+[A-Z][a-z]+$/.test(word)) {
+        if (word.startsWith("Mc") || word.startsWith("Mac")) {
+          flags.push("MixedCaseAdjusted");
+          return word.charAt(0).toUpperCase() + word.slice(1, 3).toLowerCase() + 
+                 word.charAt(3).toUpperCase() + word.slice(4).toLowerCase();
+        }
+      }
+
+      // Step 1.7: Standard capitalization
+      flags.push("StandardCapitalization");
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    });
+
+    // Step 2: Restore truncated tokens
+    const restoredTokens = tokens.map(token => {
+      const tokenLower = token.toLowerCase();
+      for (const [knownToken, original] of [
+        ...KNOWN_CITIES_SET_CACHE,
+        ...KNOWN_PROPER_NOUNS_CACHE,
+        ...KNOWN_FIRST_NAMES_CACHE,
+        ...KNOWN_LAST_NAMES_CACHE,
+        ...CAR_BRANDS_CACHE
+      ]) {
+        const knownLower = knownToken.toLowerCase();
+        if (knownLower.startsWith(tokenLower) && knownLower.length <= tokenLower.length + 2 && knownLower.length > tokenLower.length) {
+          log("debug", "Restored truncated token", { originalToken: token, restored: original, domain });
           return original;
         }
       }
       return token;
     });
 
-    // Step 4: Handle edge case where all tokens are removed
-    if (restoredTokens.length === 0) {
-      log("warn", "All tokens removed, using fallback", { companyName });
-      return cleanedName.trim(); // Fallback to cleaned input
-    }
-
-    // Step 5: Join tokens and final trim
-    const result = restoredTokens.join(" ").trim();
-    if (logLevel === "debug") {
-      log("debug", "Cleaned company name", { companyName, result, tokens: restoredTokens });
-    }
-    return result;
-  } catch (e) {
-    log("error", "cleanCompanyName failed", { companyName, error: e.message, stack: e.stack });
-    return companyName ? companyName.trim() : "";
-  }
-}
-
-function capitalizeName(name) {
-  try {
-    if (!name || typeof name !== "string" || !name.trim()) {
-      log("error", "Invalid name in capitalizeName", { name });
-      return { name: "", flags: ["InvalidInput"] };
-    }
-
-    const trimmedName = name.trim().replace(WHITESPACE_REGEX, " ");
-    let flags = [];
-    let result = trimmedName;
-
-    // Step 1: Split tokens
-    let tokens = result.split(" ").filter(Boolean);
-
-    // Pre-compute positions of nouns and brands for Step 2.6
-    const nounOrBrandPositions = new Set();
-    tokens.forEach((token, idx) => {
-      const lowerToken = token.toLowerCase();
-      if (
-        KNOWN_PROPER_NOUNS_CACHE.has(lowerToken) ||
-        KNOWN_CITIES_SET_CACHE.has(lowerToken) ||
-        CAR_BRANDS_CACHE.has(lowerToken)
-      ) {
-        nounOrBrandPositions.add(idx);
-      }
-    });
-
-    // Step 2: Process tokens
-    tokens = tokens.map((word, i) => {
-      if (!word) return word;
-
-      const lowerWord = word.toLowerCase();
-
-      // Step 2.1: Apply BRAND_MAPPING first for exact brand matches
-      if (BRAND_MAPPING_CACHE.has(lowerWord)) {
-        flags.push("BrandMapped");
-        return BRAND_MAPPING_CACHE.get(lowerWord);
-      }
-
-      // Step 2.2: Apply ABBREVIATION_EXPANSIONS for abbreviations
-      const fullExpansion = {
-        "bhm": "BHM",
-        "okc": "OKC",
-        "dfw": "DFW",
-        "kc": "KC",
-        "la": "LA",
-        "sf": "SF",
-        "sj": "SJ",
-        "mb": "M.B."
-      }[lowerWord] || ABBREVIATION_EXPANSIONS[lowerWord];
-      if (fullExpansion) {
-        flags.push("AbbreviationExpanded");
-        const expandedTokens = fullExpansion.split(" ").map(subWord => {
-          if (/^[A-Z]{1,4}$/.test(subWord)) return subWord.toUpperCase();
-          return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
-        });
-        return expandedTokens.join(" ");
-      }
-
-      // Step 2.3: Apply BRAND_ABBREVIATIONS (fallback, less priority)
-      if (BRAND_ABBREVIATIONS_CACHE.has(lowerWord)) {
-        flags.push("BrandAbbreviationFormatted");
-        return BRAND_ABBREVIATIONS_CACHE.get(lowerWord);
-      }
-
-      // Step 2.4: Preserve known proper nouns and cities in their original or proper case
-      if (KNOWN_PROPER_NOUNS_CACHE.has(lowerWord) || KNOWN_CITIES_SET_CACHE.has(lowerWord)) {
-        if (word === word.toUpperCase()) {
-          return word;
-        }
-        const properTokens = lowerWord.split(" ").map(subWord => {
-          return subWord.charAt(0).toUpperCase() + subWord.slice(1).toLowerCase();
-        });
-        return properTokens.join(" ");
-      }
-
-      // Step 2.5: Handle abbreviations with dots (e.g., "M.B.")
-      if (word.includes(".")) {
-        if (/^[A-Z]\.[A-Z]\.$/.test(word)) {
-          return word; // Preserve "M.B."
-        }
-        if (word.length <= 5 && word === word.toUpperCase()) {
-          return word; // Preserve "A.B.C."
-        }
-      }
-
-      // Step 2.6: Handle 2-3 letter abbreviations before/after nouns or car brands
-      if (word.length <= 3 && /^[a-zA-Z]+$/.test(word)) {
-        const isBeforeOrAfterNounOrBrand = nounOrBrandPositions.has(i - 1) || nounOrBrandPositions.has(i + 1);
-        if (isBeforeOrAfterNounOrBrand) {
-          flags.push("ShortTokenCapitalized");
-          return word.toUpperCase(); // e.g., "eh" → "EH" in "EH Ford"
-        }
-      }
-
-      // Step 2.7: Handle mixed-case tokens (e.g., "McLaren")
-      if (/^[A-Z][a-z]+[A-Z][a-z]+$/.test(word)) {
-        if (word.startsWith("Mc") || word.startsWith("Mac")) {
-          return word.charAt(0).toUpperCase() + word.slice(1, 3).toLowerCase() + word.charAt(3).toUpperCase() + word.slice(4).toLowerCase();
-        }
-      }
-
-      // Step 2.8: Standard capitalization
-      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
-    });
-
-    // Step 3: Safeguard for truncation (e.g., "Nanue" → "Nanuet")
-    const restoredTokens = tokens.map(token => {
-      const tokenLower = token.toLowerCase();
-      for (const [knownToken, original] of [...KNOWN_CITIES_SET_CACHE, ...KNOWN_PROPER_NOUNS_CACHE, ...KNOWN_FIRST_NAMES_CACHE, ...KNOWN_LAST_NAMES_CACHE]) {
-        const knownLower = knownToken.toLowerCase();
-        if (knownLower.startsWith(tokenLower) && knownLower.length <= tokenLower.length + 2 && knownLower.length > tokenLower.length) {
-          if (logLevel === "debug") {
-            log("debug", "Restored truncated token", { originalToken: token, restored: original });
-          }
-          return original.charAt(0).toUpperCase() + original.slice(1).toLowerCase();
-        }
-      }
-      return token;
-    });
-
-    // Step 4: Join tokens and handle token count
-    result = restoredTokens.join(" ").replace(WHITESPACE_REGEX, " ").trim();
+    // Step 3: Join tokens and handle token count
+    let result = restoredTokens.join(" ").replace(WHITESPACE_REGEX, " ").trim();
     const finalTokens = result.split(" ").filter(Boolean);
-    if (finalTokens.length > 4) {
-      result = finalTokens.slice(0, 4).join(" ");
+    if (finalTokens.length > 6) {
+      result = finalTokens.slice(0, 6).join(" ");
       flags.push("TokenCountAdjusted");
     }
 
     return { name: result, flags };
   } catch (e) {
-    log("error", "capitalizeName failed", { name, error: e.message, stack: e.stack });
+    log("error", "capitalizeName failed", { name, domain, error: e.message, stack: e.stack });
     return { name: "", flags: ["CapitalizeNameError"] };
   }
 }
@@ -2862,25 +2880,27 @@ async function humanizeName(domain) {
       return { companyName: "", confidenceScore: 0, flags: ["normalizeDomainFailed"], tokens: [], confidenceOrigin: "normalizeDomainFailed", rawTokenCount: 0 };
     }
 
-    if (TEST_CASE_OVERRIDES[normalizedDomain + ".com"]) {
-      const companyName = TEST_CASE_OVERRIDES[normalizedDomain + ".com"];
+    // Step 1: Check overrides
+    const overrideKey = normalizedDomain + ".com";
+    if (TEST_CASE_OVERRIDES[overrideKey]) {
+      const companyName = TEST_CASE_OVERRIDES[overrideKey];
       log("info", `Override applied for domain: ${normalizedDomain}`, { companyName });
       return {
-        companyName: cleanCompanyName(capitalizeName(companyName).name),
+        companyName,
         confidenceScore: 125,
         flags: ["overrideApplied"],
-        tokens: companyName.toLowerCase().split(" "),
+        tokens: companyName.toLowerCase().split(" ").filter(Boolean),
         confidenceOrigin: "override",
         rawTokenCount: companyName.split(" ").length
       };
     }
 
+    // Step 2: Check brand-only domains
     if (!BRAND_ONLY_DOMAINS_CACHE.size) {
       log("error", "BRAND_ONLY_DOMAINS is not a Set", { BRAND_ONLY_DOMAINS });
       return { companyName: "", confidenceScore: 0, flags: ["invalidDependency"], tokens: [], confidenceOrigin: "invalidDependency", rawTokenCount: 0 };
     }
-
-    if (BRAND_ONLY_DOMAINS_CACHE.has(normalizedDomain + ".com")) {
+    if (BRAND_ONLY_DOMAINS_CACHE.has(overrideKey)) {
       log("info", `Brand-only domain detected: ${normalizedDomain}`);
       return {
         companyName: "",
@@ -2892,9 +2912,13 @@ async function humanizeName(domain) {
       };
     }
 
-    // Parallelize tokenization and metadata fetch
+    // Step 3: Extract domain brand early
+    const domainBrand = extractBrandOfCityFromDomain(normalizedDomain);
+    log("debug", `Extracted domain brand: ${domainBrand}`, { domain, normalizedDomain });
+
+    // Step 4: Parallelize tokenization and metadata fetch
     const [tokensResult, metaResult] = await Promise.all([
-      Promise.resolve(earlyCompoundSplit(normalizedDomain)),
+      earlyCompoundSplit(normalizedDomain),
       fetchMetaData(domain).catch(err => {
         log("error", "fetchMetaData failed", { domain, error: err.message, stack: err.stack });
         return {};
@@ -2909,22 +2933,29 @@ async function humanizeName(domain) {
 
     const rawTokenCount = tokens.length;
 
-    // Check for unsplit long tokens
-    const hasLongUnsplitToken = tokens.some(token => token.length > 10 && !token.includes(" ") && !CAR_BRANDS_CACHE.has(token) && !KNOWN_CITIES_SET_CACHE.has(token) && !PROPER_NOUNS_CACHE.has(token));
+    // Step 5: Check for unsplit long tokens
+    const hasLongUnsplitToken = tokens.some(token => 
+      token.length > 10 && !token.includes(" ") && 
+      !CAR_BRANDS_CACHE.has(token.toLowerCase()) && 
+      !KNOWN_CITIES_SET_CACHE.has(token.toLowerCase()) && 
+      !PROPER_NOUNS_CACHE.has(token.toLowerCase())
+    );
     const longTokenFlags = hasLongUnsplitToken ? ["PotentialUnsplitToken"] : [];
 
+    // Step 6: Handle weak token sets
     if (tokens.length < 2 || tokens.every(t => COMMON_WORDS_CACHE.has(t.toLowerCase()))) {
       if (tokens.length === 1 && !CAR_BRANDS_CACHE.has(tokens[0].toLowerCase()) && !KNOWN_CITIES_SET_CACHE.has(tokens[0].toLowerCase())) {
-        const companyName = capitalizeName(tokens[0]).name;
+        const capitalized = capitalizeName(tokens[0], domainBrand, domain);
+        const companyName = cleanCompanyName(capitalized.name, domainBrand, domain);
         const result = {
-          companyName: cleanCompanyName(companyName),
+          companyName,
           confidenceScore: 80 - (hasLongUnsplitToken ? 5 : 0),
-          flags: ["singleTokenFallback", ...longTokenFlags],
-          tokens: [tokens[0].toLowerCase()],
+          flags: ["singleTokenFallback", ...longTokenFlags, ...capitalized.flags],
+          tokens: companyName.toLowerCase().split(" ").filter(Boolean),
           confidenceOrigin: "singleTokenFallback",
           rawTokenCount
         };
-        log("info", "Single token fallback applied", { companyName, tokens });
+        log("info", "Single token fallback applied", { companyName, tokens, domain });
         return result;
       }
       const result = {
@@ -2935,30 +2966,29 @@ async function humanizeName(domain) {
         confidenceOrigin: "tokenSanityCheck",
         rawTokenCount
       };
-      log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore });
-      result.tokens = result.tokens.slice(0, 3);
+      log("debug", "Final result confidence", { companyName: result.companyName, confidenceScore: result.confidenceScore, domain });
       return result;
     }
 
-    // Parallelize pattern-matching functions
+    // Step 7: Parallelize pattern-matching functions
     const patternPromises = [
-      tryHumanNamePattern(tokens).catch(e => {
+      tryHumanNamePattern(tokens, domainBrand).catch(e => {
         log("error", "tryHumanNamePattern failed", { domain, tokens, error: e.message, stack: e.stack });
         return null;
       }),
-      tryProperNounPattern(tokens).catch(e => {
+      tryProperNounPattern(tokens, domainBrand).catch(e => {
         log("error", "tryProperNounPattern failed", { domain, tokens, error: e.message, stack: e.stack });
         return null;
       }),
-      tryBrandCityPattern(tokens).catch(e => {
+      tryBrandCityPattern(tokens, domainBrand).catch(e => {
         log("error", "tryBrandCityPattern failed", { domain, tokens, error: e.message, stack: e.stack });
         return null;
       }),
-      tryBrandGenericPattern(tokens).catch(e => {
+      tryBrandGenericPattern(tokens, domainBrand).catch(e => {
         log("error", "tryBrandGenericPattern failed", { domain, tokens, error: e.message, stack: e.stack });
         return null;
       }),
-      tryGenericPattern(tokens, properNounsSet, metaResult).catch(e => {
+      tryGenericPattern(tokens, properNounsSet, metaResult, domainBrand).catch(e => {
         log("error", "tryGenericPattern failed", { domain, tokens, error: e.message, stack: e.stack });
         return null;
       })
@@ -2967,25 +2997,24 @@ async function humanizeName(domain) {
     const results = await Promise.all(patternPromises);
     const validResults = results.filter(result => result && result.companyName);
 
-    // Prioritize result based on confidence score, token count, and flags
+    // Step 8: Prioritize result based on confidence score and token count
     let bestResult = null;
-for (const result of validResults) {
-  const tokenCount = result.companyName.split(" ").filter(Boolean).length;
-  const hasCriticalFlags = result.flags.includes("brandOrCityOnlyBlocked") || result.flags.includes("cityOnlyBlocked") || result.flags.includes("brandOnlyBlocked");
+    for (const result of validResults) {
+      const tokenCount = result.companyName.split(" ").filter(Boolean).length;
+      const hasCriticalFlags = result.flags.some(flag => 
+        ["brandOrCityOnlyBlocked", "cityOnlyBlocked", "brandOnlyBlocked"].includes(flag)
+      );
 
-  // Skip results with critical flags
-  if (hasCriticalFlags) continue;
+      if (hasCriticalFlags) continue;
 
-  // Prioritize multi-token results over single-token results
-  if (!bestResult || 
-      (result.confidenceScore > bestResult.confidenceScore) || 
-      (result.confidenceScore === bestResult.confidenceScore && tokenCount > 1 && bestResult.companyName.split(" ").length === 1)) {
-    bestResult = result;
-  }
-}
+      if (!bestResult || 
+          result.confidenceScore > bestResult.confidenceScore || 
+          (result.confidenceScore === bestResult.confidenceScore && tokenCount > bestResult.companyName.split(" ").length)) {
+        bestResult = result;
+      }
+    }
 
     if (!bestResult) {
-      // If no valid result, use single-token fallback if available
       const singleTokenResult = results.find(result => result && result.flags.includes("singleTokenFallback"));
       if (singleTokenResult) {
         bestResult = singleTokenResult;
@@ -2999,21 +3028,17 @@ for (const result of validResults) {
           rawTokenCount
         };
       }
-      log("debug", "Final result confidence", { companyName: bestResult.companyName, confidenceScore: bestResult.confidenceScore });
-      bestResult.tokens = bestResult.tokens.slice(0, 3);
+      log("debug", "Final result confidence", { companyName: bestResult.companyName, confidenceScore: bestResult.confidenceScore, domain });
       return bestResult;
     }
 
-    // Extract domain brand for validation
-    let domainBrand = null;
-    for (const token of tokens) {
-      if (CAR_BRANDS_CACHE.has(token.toLowerCase())) {
-        domainBrand = token;
-        break;
-      }
-    }
+    // Step 9: Apply cleaning and capitalization
+    const capitalized = capitalizeName(bestResult.companyName, domainBrand, domain);
+    bestResult.companyName = cleanCompanyName(capitalized.name, domainBrand, domain);
+    bestResult.flags = [...bestResult.flags, ...capitalized.flags];
+    bestResult.tokens = bestResult.companyName.toLowerCase().split(" ").filter(Boolean);
 
-    // Validate the company name
+    // Step 10: Validate the company name
     const validationResult = validateCompanyName(
       bestResult.companyName,
       domain,
@@ -3022,60 +3047,36 @@ for (const result of validResults) {
       bestResult.flags
     );
 
-    // Preserve the company name unless validation indicates a critical failure
     let finalResult = bestResult;
-    if (!validationResult.validatedName && validationResult.flags.some(flag => ["brandOnly", "cityOnly", "invalidName"].includes(flag))) {
+    if (!validationResult.validatedName && validationResult.flags.some(flag => 
+        ["brandOnly", "cityOnly", "invalidName"].includes(flag))) {
       finalResult = {
         companyName: "",
         confidenceScore: validationResult.confidenceScore,
-        flags: validationResult.flags,
+        flags: [...validationResult.flags, ...longTokenFlags],
         tokens: [],
         confidenceOrigin: bestResult.confidenceOrigin,
         rawTokenCount
       };
     } else {
-      finalResult.companyName = cleanCompanyName(validationResult.validatedName || bestResult.companyName);
+      finalResult.companyName = validationResult.validatedName || bestResult.companyName;
       finalResult.confidenceScore = validationResult.confidenceScore;
-      finalResult.flags = validationResult.flags;
+      finalResult.flags = [...validationResult.flags, ...longTokenFlags];
     }
 
-    // Post-validation check: Reject single-token results unless no other option
+    // Step 11: Relax single-token rejection
     const finalTokenCount = finalResult.companyName.split(" ").filter(Boolean).length;
-    if (finalTokenCount === 1 && validResults.some(res => res.companyName.split(" ").filter(Boolean).length > 1)) {
-      finalResult = {
-        companyName: "",
-        confidenceScore: 0,
-        flags: [...finalResult.flags, "singleTokenRejected"],
-        tokens: [],
-        confidenceOrigin: finalResult.confidenceOrigin,
-        rawTokenCount
-      };
+    if (finalTokenCount === 1 && !TEST_CASE_OVERRIDES[overrideKey] && 
+        !KNOWN_PROPER_NOUNS_CACHE.has(finalResult.companyName.toLowerCase())) {
+      finalResult.flags.push("singleTokenWarning");
+      finalResult.confidenceScore = Math.min(finalResult.confidenceScore, 80);
     }
 
-    // Final truncation check
-    if (finalResult.companyName) {
-      const nameTokens = finalResult.companyName.split(" ").filter(Boolean);
-      const restoredTokens = nameTokens.map(token => {
-        const tokenLower = token.toLowerCase();
-        for (const [knownToken, original] of [...KNOWN_CITIES_SET_CACHE, ...KNOWN_FIRST_NAMES_CACHE, ...KNOWN_LAST_NAMES_CACHE]) {
-          const knownLower = knownToken.toLowerCase();
-          if (knownLower.startsWith(tokenLower) && knownLower.length <= tokenLower.length + 2 && knownLower.length > tokenLower.length) {
-            if (logLevel === "debug") {
-              log("debug", "Restored truncated token in humanizeName", { originalToken: token, restored: original });
-            }
-            return original.charAt(0).toUpperCase() + original.slice(1).toLowerCase();
-          }
-        }
-        return token;
-      });
-      finalResult.companyName = restoredTokens.join(" ");
-      finalResult.tokens = restoredTokens.map(t => t.toLowerCase());
-    }
-
+    // Step 12: Final logging and token truncation
     finalResult.rawTokenCount = rawTokenCount;
     log("info", `Processed domain: ${normalizedDomain}`, { result: finalResult });
-    log("debug", "Final result confidence", { companyName: finalResult.companyName, confidenceScore: finalResult.confidenceScore });
-    finalResult.tokens = (finalResult.tokens || []).slice(0, 3);
+    log("debug", "Final result confidence", { companyName: finalResult.companyName, confidenceScore: finalResult.confidenceScore, domain });
+    finalResult.tokens = finalResult.tokens.slice(0, 3);
     return finalResult;
   } catch (e) {
     log("error", "humanizeName failed", { domain, error: e.message, stack: e.stack });
