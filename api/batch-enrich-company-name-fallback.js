@@ -1594,6 +1594,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
   log("info", "validateFallbackName started", { domain, result });
 
   try {
+    // Step 1: Initial validation
     if (!result || !validatedName || typeof validatedName !== "string") {
       log("warn", "Invalid OpenAI result", { domain, result });
       flags.add("FallbackNameError");
@@ -1601,6 +1602,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
+    // Step 2: Split merged tokens and normalize
     let tokens = validatedName.split(" ").filter(Boolean);
     if (tokens.length === 1) {
       const splitName = splitMergedTokens(validatedName);
@@ -1612,6 +1614,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
+    // Step 3: Fix truncation issues
     tokens = validatedName.split(" ").filter(Boolean);
     if (tokens.length > 0) {
       const lastToken = tokens[tokens.length - 1].toLowerCase();
@@ -1626,26 +1629,39 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
+    // Step 4: Capitalize name
     const capResult = capitalizeName(validatedName) || { name: validatedName };
     validatedName = capResult.name;
     tokens = validatedName.split(" ").filter(Boolean);
 
+    // Step 5: Validate capitalization pattern
     const pattern = /^(?:[A-Z]\.[A-Z]\.|(?:[A-Z][a-z]+|[A-Z]+)(?: (?:[A-Z][a-z]+|[A-Z]+))*)$/;
-    const isOverride = TEST_CASE_OVERRIDES[domain.endsWith(".com") ? domain : `${domain}.com`];
-    if (!pattern.test(validatedName) || (tokens.length < 2 && !isOverride) || tokens.length > 4) {
-      if (isOverride && tokens.length === 1 && pattern.test(validatedName)) {
-        log("info", "Single-token override allowed", { domain, validatedName });
-        flags.add("SingleTokenOverride");
+    if (!pattern.test(validatedName)) {
+      const recapped = capitalizeName(validatedName)?.name;
+      if (recapped && pattern.test(recapped)) {
+        validatedName = recapped;
+        flags.add("Recapitalized");
       } else {
-        log("warn", "Uncapitalized, malformed, or invalid token count", { domain, validatedName, tokenCount: tokens.length });
+        log("warn", "Uncapitalized or malformed name", { domain, validatedName });
         flags.add("FallbackNameError");
         flags.add("ReviewNeeded");
         return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
       }
     }
 
+    // Step 6: Reject if more than 3 tokens
+    tokens = validatedName.split(" ").filter(Boolean);
+    if (tokens.length > 3) {
+      log("warn", "Name exceeds 3 tokens", { domain, validatedName, tokenCount: tokens.length });
+      flags.add("TokenLimitExceeded");
+      flags.add("ReviewNeeded");
+      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+    }
+
+    // Step 7: Check for overrides
     const normalizedDomain = domain.endsWith(".com") ? domain : `${domain}.com`;
-    if (TEST_CASE_OVERRIDES[normalizedDomain]) {
+    const isOverride = TEST_CASE_OVERRIDES[normalizedDomain];
+    if (isOverride) {
       const overrideName = TEST_CASE_OVERRIDES[normalizedDomain];
       if (validatedName !== overrideName) {
         log("warn", "OpenAI name does not match override", { domain, validatedName, override: overrideName });
@@ -1655,29 +1671,96 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
-    const isBrand = CAR_BRANDS.has(validatedName.toLowerCase());
+    // Step 8: Apply confidence scoring bonuses and penalties
+    const domainTokens = domain.split('.')[0].toLowerCase().split(/(?=[A-Z])|[-_\s]/).filter(Boolean);
+    const matchesDomain = domainTokens.some(dt => validatedName.toLowerCase().includes(dt));
     const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase())) || KNOWN_CITIES_SET.has(validatedName.toLowerCase());
     const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];
     const hasGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
+    const includesBrand = tokens.some(t => CAR_BRANDS.has(t.toLowerCase()));
+    const isProperNoun = properNounsSet.has(validatedName.toLowerCase());
+    const isBrandOnly = CAR_BRANDS.has(validatedName.toLowerCase()) && tokens.length === 1 && !isOverride;
+    const isCityOnly = hasCity && !hasGeneric && tokens.length <= 2;
 
-    if (hasCity && !hasGeneric && tokens.length <= 2) {
+    // Check for specific patterns
+    let isCityBrand = false;
+    let isFirstLastName = false;
+    let isLastNameBrand = false;
+    let isPossessiveFriendly = false;
+
+    if (tokens.length >= 2) {
+      // City + Brand
+      if (hasCity && includesBrand) {
+        isCityBrand = true;
+        currentConfidenceScore += 10;
+        flags.add("CityBrandPattern");
+      }
+
+      // First Name + Last Name
+      const firstToken = tokens[0].toLowerCase();
+      const secondToken = tokens[1].toLowerCase();
+      if (KNOWN_FIRST_NAMES.has(firstToken) && KNOWN_LAST_NAMES.has(secondToken)) {
+        isFirstLastName = true;
+        currentConfidenceScore += 10;
+        flags.add("FirstLastNamePattern");
+      }
+
+      // Last Name + Brand
+      if (KNOWN_LAST_NAMES.has(firstToken) && CAR_BRANDS.has(secondToken)) {
+        isLastNameBrand = true;
+        currentConfidenceScore += 10;
+        flags.add("LastNameBrandPattern");
+      }
+
+      // Possessive-friendly check (applied to the first part of the name)
+      const firstPart = tokens[0].toLowerCase();
+      isPossessiveFriendly = firstPart.endsWith("s") || !/^[aeiou]$/i.test(firstPart.slice(-1));
+      if (isPossessiveFriendly) {
+        currentConfidenceScore += 5;
+        flags.add("PossessiveFriendly");
+      }
+    }
+
+    // Bonuses
+    if (matchesDomain) {
+      currentConfidenceScore += 10;
+      flags.add("MatchesDomain");
+    }
+    if (isProperNoun) {
+      currentConfidenceScore += 5;
+      flags.add("ProperNounMatch");
+    }
+
+    // Penalties
+    if (!includesBrand && !hasGeneric && !isFirstLastName) {
+      currentConfidenceScore -= 10;
+      flags.add("GenericDomainPenalty");
+    }
+    if (tokens.length === 1 && !isOverride) {
+      currentConfidenceScore -= 5;
+      flags.add("SingleTokenPenalty");
+    }
+
+    // Step 9: Check for city-only or brand-only outputs
+    if (isCityOnly) {
       log("warn", "City-only output detected", { domain, validatedName });
       flags.add("CityOnlyFallback");
       flags.add("ReviewNeeded");
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: 50 };
+      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    if (isBrand && tokens.length === 1 && !isOverride) {
+    if (isBrandOnly) {
       log("warn", "Brand-only output detected", { domain, validatedName });
       flags.add("BrandOnlyFallback");
       flags.add("ReviewNeeded");
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: 50 };
+      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
+    // Step 10: Handle brand mismatch
     if (result.brand && domainBrand && result.brand.toLowerCase() !== domainBrand.toLowerCase()) {
       log("warn", "OpenAI brand mismatch, prioritizing domain brand", { domain, openAIBrand: result.brand, domainBrand });
       flags.add("BrandMismatchPenalty");
-      currentConfidenceScore = Math.max(currentConfidenceScore - 5, 50);
+      currentConfidenceScore -= 5;
       if (tokens.some(w => CAR_BRANDS.has(w.toLowerCase()))) {
         validatedName = tokens
           .map(w => CAR_BRANDS.has(w.toLowerCase()) ? domainBrand : w)
@@ -1686,6 +1769,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
+    // Step 11: Validate brand against CAR_BRANDS
     if (result.brand && !CAR_BRANDS.has(result.brand.toLowerCase())) {
       log("warn", "OpenAI hallucinated brand", { domain, brand: result.brand });
       flags.add("FallbackNameError");
@@ -1693,12 +1777,14 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
+    // Step 12: Remove suffixes and spammy tokens
     tokens = validatedName.split(" ").filter(Boolean);
     const suffixesSet = new Set(SUFFIXES_TO_REMOVE.map(s => s.toLowerCase()));
     const filteredTokens = tokens.filter(token => {
       const lowerToken = token.toLowerCase();
       if (suffixesSet.has(lowerToken)) {
         flags.add("SuffixRemoved");
+        currentConfidenceScore -= 2; // Penalty for suffix removal
         return false;
       }
       if (SPAMMY_TOKENS.includes(lowerToken) && !genericTerms.includes(lowerToken)) {
@@ -1709,20 +1795,36 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     });
 
     if (filteredTokens.length === 0) {
-      log("warn", "All tokens removed during suffix/spammy token filtering", { domain, validatedName });
-      flags.add("AllTokensFiltered");
-      flags.add("ReviewNeeded");
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+      // Preserve at least one token if it matches the domain
+      const remainingToken = tokens.find(t => domainTokens.some(dt => t.toLowerCase().includes(dt)));
+      if (remainingToken) {
+        validatedName = capitalizeName(remainingToken).name;
+        flags.add("PreservedDomainToken");
+      } else {
+        log("warn", "All tokens removed during suffix/spammy token filtering", { domain, validatedName });
+        flags.add("AllTokensFiltered");
+        flags.add("ReviewNeeded");
+        return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+      }
+    } else {
+      validatedName = filteredTokens.join(" ");
     }
 
-    validatedName = filteredTokens.join(" ");
+    // Step 13: Re-check capitalization after filtering
     if (!pattern.test(validatedName)) {
-      log("warn", "Name invalid after suffix/spammy token removal", { domain, validatedName });
-      flags.add("FallbackNameError");
-      flags.add("ReviewNeeded");
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+      const recapped = capitalizeName(validatedName)?.name;
+      if (recapped && pattern.test(recapped)) {
+        validatedName = recapped;
+        flags.add("Recapitalized");
+      } else {
+        log("warn", "Name invalid after suffix/spammy token removal", { domain, validatedName });
+        flags.add("FallbackNameError");
+        flags.add("ReviewNeeded");
+        return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
+      }
     }
 
+    // Step 14: Check for duplicate tokens
     tokens = validatedName.split(" ").filter(Boolean);
     const words = tokens.map(w => w.toLowerCase());
     const uniqueWords = [...new Set(words)];
@@ -1732,32 +1834,37 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
         .map(t => capitalizeName(t)?.name || t)
         .join(" ");
       flags.add("DuplicatesRemoved");
-      currentConfidenceScore = Math.min(currentConfidenceScore, 95);
+      currentConfidenceScore -= 5; // Penalty for duplicates
     }
 
+    // Step 15: Final city-only/brand-only check after filtering
     tokens = validatedName.split(" ").filter(Boolean);
     const isFinalBrand = CAR_BRANDS.has(validatedName.toLowerCase());
     const hasFinalCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase())) || KNOWN_CITIES_SET.has(validatedName.toLowerCase());
     const hasFinalGeneric = tokens.some(t => genericTerms.includes(t.toLowerCase()));
+    const isFinalCityOnly = hasFinalCity && !hasFinalGeneric && tokens.length <= 2;
+    const isFinalBrandOnly = isFinalBrand && tokens.length === 1 && !isOverride;
 
-    if (hasFinalCity && !hasFinalGeneric && tokens.length <= 2) {
+    if (isFinalCityOnly) {
       log("warn", "City-only output after filtering", { domain, validatedName });
       flags.add("CityOnlyFallback");
       flags.add("ReviewNeeded");
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: 50 };
+      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    if (isFinalBrand && tokens.length === 1 && !isOverride) {
+    if (isFinalBrandOnly) {
       log("warn", "Brand-only output after filtering", { domain, validatedName });
       flags.add("BrandOnlyFallback");
       flags.add("ReviewNeeded");
-      return { validatedName: null, flags: Array.from(flags), confidenceScore: 50 };
+      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
-    if (tokens.length === 1 && !isOverride) {
-      currentConfidenceScore = Math.min(currentConfidenceScore, 95);
-    } else if (tokens.length >= 2) {
-      currentConfidenceScore = Math.max(currentConfidenceScore, 125);
+    // Step 16: Final confidence check
+    if (currentConfidenceScore < 75) {
+      log("warn", "Confidence score too low", { domain, validatedName, confidenceScore: currentConfidenceScore });
+      flags.add("LowConfidence");
+      flags.add("ReviewNeeded");
+      return { validatedName: null, flags: Array.from(flags), confidenceScore: currentConfidenceScore };
     }
 
     log("info", "Output validated successfully", {

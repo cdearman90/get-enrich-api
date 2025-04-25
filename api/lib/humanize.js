@@ -2227,7 +2227,6 @@ function tryHumanNamePattern(tokens) {
     const flags = ["humanNamePattern"];
     const confidenceOrigin = "humanNamePattern";
 
-    // Look for first name + last name pattern
     for (let i = 0; i < tokens.length - 1; i++) {
       const currentToken = tokens[i].toLowerCase();
       const nextToken = tokens[i + 1].toLowerCase();
@@ -2243,28 +2242,24 @@ function tryHumanNamePattern(tokens) {
       return null;
     }
 
-    // Apply confidence boost for confirmed first/last name pair
     confidenceScore = 110;
 
-    // Look for a brand in the tokens
     for (let i = 0; i < tokens.length; i++) {
       const token = tokens[i].toLowerCase();
       if (CAR_BRANDS.has(token)) {
         brand = BRAND_MAPPING.get(token) || capitalizeName(token).name;
         flags.push("brandIncluded");
-        confidenceScore = 135; // Boost for human name + brand
+        confidenceScore = 135;
         break;
       }
     }
 
-    // If no brand found, fail the pattern (to enforce brand inclusion)
     if (!brand) {
       log("debug", "No brand found in human name pattern, failing", { tokens });
       return null;
     }
 
-    // Assemble the name
-    const nameParts = [firstName, lastName, brand]; // Always include the brand
+    const nameParts = [firstName, lastName, brand];
     const nameResult = capitalizeName(nameParts.join(" ")) || { name: "", flags: [] };
     const companyName = nameResult.name || "";
     nameResult.flags.forEach(flag => flags.push(flag));
@@ -2647,7 +2642,6 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
     const flags = ["genericPattern"];
     const confidenceOrigin = "genericPattern";
 
-    // Step 1: Identify proper noun, generic term, and brand from tokens
     for (const token of tokens) {
       const lowerToken = token.toLowerCase();
       if (!properNoun && properNounsSet.has(lowerToken) && !CAR_BRANDS.has(lowerToken) && !KNOWN_CITIES_SET.has(lowerToken)) {
@@ -2661,12 +2655,11 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
         generic = nameResult.name;
       }
       if (!brand && CAR_BRANDS.has(lowerToken)) {
-        brand = BRAND_MAPPING.get(lowerToken) || capitalizeName(token).name;
+        brand = BRAND_MAPPING.get(token) || capitalizeName(token).name;
       }
       if (properNoun && (generic || brand)) break;
     }
 
-    // Step 2: Use metadata to find a brand if not present in tokens
     if (!brand && !generic) {
       const metaBrand = getMetaTitleBrand(meta);
       if (metaBrand && CAR_BRANDS.has(metaBrand.toLowerCase())) {
@@ -2675,13 +2668,11 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
       }
     }
 
-    // Step 3: If no brand found, fail the pattern (to enforce brand inclusion)
     if (!brand) {
       log("debug", "No brand found in generic pattern, failing", { tokens });
       return null;
     }
 
-    // Step 4: If no proper noun is found, use the first non-brand, non-city token
     if (!properNoun) {
       const firstValidToken = tokens.find(t => {
         const lowerToken = t.toLowerCase();
@@ -2694,17 +2685,14 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
       }
     }
 
-    // Step 5: Ensure we have a proper noun
     if (!properNoun) {
       log("debug", "No proper noun found in generic pattern", { tokens });
       return null;
     }
 
-    // Step 6: Construct company name
     let companyName = properNoun;
     const isPossessiveFriendly = properNoun.toLowerCase().endsWith("s") || !/^[aeiou]$/i.test(properNoun.slice(-1));
 
-    // Prefer brand over generic term if both are present
     if (brand && isPossessiveFriendly && !companyName.toLowerCase().includes(brand.toLowerCase())) {
       companyName = `${properNoun} ${brand}`;
       confidenceScore = 125;
@@ -2714,11 +2702,9 @@ function tryGenericPattern(tokens, properNounsSet, meta = {}) {
       confidenceScore = Math.max(confidenceScore, 95);
       flags.push("genericAppended");
     } else {
-      // If no generic term and brand already included, return early
       return null;
     }
 
-    // Step 7: Validate token count and duplicates
     const nameTokens = companyName.split(" ").filter(Boolean);
     const uniqueTokens = new Set(nameTokens.map(t => t.toLowerCase()));
     if (uniqueTokens.size !== nameTokens.length) {
@@ -3094,6 +3080,17 @@ function validateCompanyName(name, domain, brand, score, flags) {
       };
     }
 
+    // Check for duplicate tokens (e.g., "Ford Ford")
+    const uniqueTokens = new Set(nameTokens.map(t => t.toLowerCase()));
+    if (uniqueTokens.size !== nameTokens.length) {
+      log("warn", "Duplicate tokens in output", { name, domain });
+      return {
+        validatedName: "",
+        confidenceScore: Math.max(0, score - 20),
+        flags: [...flags, "duplicateTokensBlocked"]
+      };
+    }
+
     // Check for overrides and preserve them
     const normalizedDomain = normalizeDomain(domain);
     const override = TEST_CASE_OVERRIDES[normalizedDomain + ".com"];
@@ -3105,6 +3102,17 @@ function validateCompanyName(name, domain, brand, score, flags) {
         flags: [...flags, "overrideRestored"]
       };
     }
+
+    return {
+      validatedName: name,
+      confidenceScore: score,
+      flags
+    };
+  } catch (e) {
+    log("error", "validateCompanyName failed", { name, domain, error: e.message, stack: e.stack });
+    return { validatedName: "", confidenceScore: 0, flags: [...flags, "ValidationError"] };
+  }
+}
 
     return {
       validatedName: name,
