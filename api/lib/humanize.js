@@ -1402,14 +1402,14 @@ const KNOWN_WORDS_CACHE = new Map(knownWords.map(word => [word, true]));
 const SORTED_CITIES_CACHE = new Map(sortedCities.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
 const CAR_BRANDS_CACHE = new Map(CAR_BRANDS.map(brand => [brand.toLowerCase(), brand]));
 const KNOWN_CITIES_SET_CACHE = new Map(Array.from(KNOWN_CITIES_SET).map(city => [city.toLowerCase(), city]));
-const PROPER_NOUNS_CACHE = new Map(properNounsSet.map(noun => [noun.toLowerCase(), noun]));
+const KNOWN_PROPER_NOUNS_CACHE = new Map(properNounsSet.map(noun => [noun.toLowerCase(), noun]));
 const COMMON_WORDS_CACHE = new Map(Array.from(COMMON_WORDS).map(word => [word.toLowerCase(), true]));
 const KNOWN_FIRST_NAMES_CACHE = new Map(Array.from(KNOWN_FIRST_NAMES).map(name => [name.toLowerCase(), name]));
 const KNOWN_LAST_NAMES_CACHE = new Map(Array.from(KNOWN_LAST_NAMES).map(name => [name.toLowerCase(), name]));
 const BRAND_MAPPING_CACHE = new Map(Object.entries(BRAND_MAPPING || {}));
 const BRAND_ONLY_DOMAINS_CACHE = new Map(BRAND_ONLY_DOMAINS.map(domain => [domain, true]));
-
-const logLevel = process.env.LOG_LEVEL || "info";
+const BRAND_ABBREVIATIONS_CACHE = new Map(Object.entries(BRAND_ABBREVIATIONS || {}));
+const SUFFIXES_TO_REMOVE_CACHE = new Map(SUFFIXES_TO_REMOVE instanceof Set ? Array.from(SUFFIXES_TO_REMOVE).map(suffix => [suffix.toLowerCase(), true]) : []);const logLevel = process.env.LOG_LEVEL || "info";
 
 // Pre-compute multi-word cities
 const MULTI_WORD_CITIES = new Map();
