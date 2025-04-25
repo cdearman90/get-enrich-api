@@ -1398,11 +1398,11 @@ const COMMON_WORDS_CACHE = new Map(Array.from(COMMON_WORDS).map(word => [word.to
 const KNOWN_FIRST_NAMES_CACHE = new Map(Array.from(KNOWN_FIRST_NAMES).map(name => [name.toLowerCase(), name]));
 const KNOWN_LAST_NAMES_CACHE = new Map(Array.from(KNOWN_LAST_NAMES).map(name => [name.toLowerCase(), name]));
 const BRAND_MAPPING_CACHE = new Map(Object.entries(BRAND_MAPPING || {}));
-const BRAND_ONLY_DOMAINS_CACHE = new Map(Array.from(BRAND_ONLY_DOMAINS).map(domain => [domain, true])); // Fixed: Use Array.from
+const BRAND_ONLY_DOMAINS_CACHE = new Map(Array.from(BRAND_ONLY_DOMAINS).map(domain => [domain, true]));
 const BRAND_ABBREVIATIONS_CACHE = new Map(Object.entries(BRAND_ABBREVIATIONS || {}));
 const SUFFIXES_TO_REMOVE_CACHE = new Map(SUFFIXES_TO_REMOVE instanceof Set ? Array.from(SUFFIXES_TO_REMOVE).map(suffix => [suffix.toLowerCase(), true]) : []);
 const logLevel = process.env.LOG_LEVEL || "info";
-const KNOWN_PROPER_NOUNS_CACHE = new Map(KNOWN_PROPER_NOUNS.map(noun => [noun.toLowerCase(), noun]));
+const KNOWN_PROPER_NOUNS_CACHE = new Map(Array.from(KNOWN_PROPER_NOUNS).map(noun => [noun.toLowerCase(), noun])); // Fixed: Use Array.from
 
 // Define contextual words to retain for better name construction
 const CONTEXTUAL_WORDS = new Set(["cars", "auto", "motors", "group", "dealership"].map(word => word.toLowerCase()));
