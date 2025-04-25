@@ -1669,6 +1669,17 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
       }
     }
 
+    // Step 4.5: Strict city-only check for single-token names
+    if (tokens.length === 1 && !isOverride) {
+      const lowerName = validatedName.toLowerCase();
+      if (KNOWN_CITIES_SET.has(lowerName)) {
+        log('warn', 'Single-token city name rejected', { domain, validatedName });
+        flags.add('CityOnlyRejected');
+        flags.add('ReviewNeeded');
+        return { validatedName: null, flags: Array.from(flags), confidenceScore: 0 };
+      }
+    }
+
     // Step 5: Handle brand mismatch
     if (result.brand && domainBrand && result.brand.toLowerCase() !== domainBrand.toLowerCase()) {
       log('warn', 'OpenAI brand mismatch, prioritizing domain brand', { domain, openAIBrand: result.brand, domainBrand });
@@ -1901,6 +1912,9 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       .filter(t => !SPAMMY_TOKENS.includes(t) && t !== 'of');
     extractedTokens = filteredTokens;
 
+    // Keep raw tokens for recovery
+    const rawTokens = extractedTokensResult.tokens;
+
     // Meta-title extraction (prioritize metadata)
     if (meta.title) {
       const metaResult = getMetaTitleBrand(meta);
@@ -1940,7 +1954,7 @@ async function fallbackName(domain, originalDomain, meta = {}) {
       }
     }
 
-    // Single proper noun fallback with city inclusion
+    // Single proper noun fallback with enhanced recovery
     const carBrandsSet = CAR_BRANDS instanceof Set ? CAR_BRANDS : new Set();
     const singleProper = extractedTokens.find(t => properNounsSet.has(t) && !carBrandsSet.has(t) && !KNOWN_CITIES_SET.has(t));
     if (singleProper) {
@@ -1953,28 +1967,71 @@ async function fallbackName(domain, originalDomain, meta = {}) {
         confidenceScore = 95;
         flags.add('SingleProperNoun');
 
-        // Check if there's a city to append (e.g., for potamkinatlanta.com)
-        if (city && !companyName.toLowerCase().includes(city.toLowerCase())) {
+        // Enhanced recovery: Attempt to append brand or city from raw tokens
+        let appended = false;
+        const overrideKey = normalizedDomain.endsWith('.com') ? normalizedDomain : `${normalizedDomain}.com`;
+        const isOverride = OVERRIDES[overrideKey];
+
+        // Try to append a brand
+        if (!isOverride) {
+          let brand = domainBrand || rawTokens.find(t => carBrandsSet.has(t.toLowerCase()));
+          if (brand && !companyName.toLowerCase().includes(brand.toLowerCase())) {
+            const formattedBrand = BRAND_MAPPING.get(brand.toLowerCase()) || capitalizeName(brand).name;
+            const combinedName = `${companyName} ${formattedBrand}`;
+            const validation = validateFallbackName(
+              { name: combinedName, brand: formattedBrand, flagged: false },
+              normalizedDomain,
+              domainBrand,
+              confidenceScore + 10 // Boost for proper noun + brand
+            );
+            if (validation.validatedName) {
+              companyName = validation.validatedName;
+              confidenceScore = validation.confidenceScore;
+              flags.add('BrandAppendedForClarity');
+              appended = true;
+              log('info', 'Appended brand to single proper noun', { domain: normalizedDomain, companyName });
+            }
+          }
+        }
+
+        // Try to append a city if no brand was appended
+        if (!appended && city && !companyName.toLowerCase().includes(city.toLowerCase())) {
           const formattedCity = capitalizeName(city).name;
           const combinedName = `${companyName} ${formattedCity}`;
-          if (pattern.test(combinedName) && combinedName.split(' ').length <= 4) {
-            companyName = combinedName;
+          const validation = validateFallbackName(
+            { name: combinedName, brand: domainBrand, flagged: false },
+            normalizedDomain,
+            domainBrand,
+            confidenceScore + 10 // Boost for proper noun + city
+          );
+          if (validation.validatedName) {
+            companyName = validation.validatedName;
+            confidenceScore = validation.confidenceScore;
             flags.add('CityAppended');
-            confidenceScore = 100;
+            appended = true;
             log('info', 'Appended city to single proper noun', { domain: normalizedDomain, companyName });
           }
         }
 
-        // Skip brand appending for overrides like "Duval"
-        const overrideKey = normalizedDomain.endsWith('.com') ? normalizedDomain : `${normalizedDomain}.com`;
-        const isOverride = OVERRIDES[overrideKey];
-        if (!isOverride && domainBrand && (companyName.length < 5 || companyName.toLowerCase() === 'smith' || companyName.toLowerCase() === 'jones')) {
-          const formattedBrand = BRAND_MAPPING.get(domainBrand.toLowerCase()) || capitalizeName(domainBrand).name;
-          const combinedName = `${companyName} ${formattedBrand}`;
-          if (pattern.test(combinedName) && combinedName.split(' ').length <= 4) {
-            companyName = combinedName;
-            flags.add('BrandAppendedForClarity');
-            confidenceScore = 100;
+        // Fallback to generic term if no brand or city
+        if (!appended && !isOverride) {
+          const genericTerms = ['auto', 'motors', 'dealers', 'group', 'cars', 'drive', 'center', 'world'];
+          const generic = rawTokens.find(t => genericTerms.includes(t.toLowerCase()));
+          if (generic && !companyName.toLowerCase().includes(generic.toLowerCase())) {
+            const formattedGeneric = capitalizeName(generic).name;
+            const combinedName = `${companyName} ${formattedGeneric}`;
+            const validation = validateFallbackName(
+              { name: combinedName, brand: domainBrand, flagged: false },
+              normalizedDomain,
+              domainBrand,
+              confidenceScore
+            );
+            if (validation.validatedName) {
+              companyName = validation.validatedName;
+              confidenceScore = validation.confidenceScore;
+              flags.add('GenericAppended');
+              log('info', 'Appended generic term to single proper noun', { domain: normalizedDomain, companyName });
+            }
           }
         }
       }
