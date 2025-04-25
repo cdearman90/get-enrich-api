@@ -2348,4 +2348,4 @@ async function handler(req, res) {
   }
 }
 
-export { fallbackName, clearOpenAICache, handler, validateFallbackName, cleanCompanyName, validateOverrideFormat, handleOverride, fetchMetaData, getMetaTitleBrand };
+export { fallbackName, clearOpenAICache, BRAND_ONLY_DOMAINS, handler, validateFallbackName, cleanCompanyName, validateOverrideFormat, handleOverride, fetchMetaData, getMetaTitleBrand };
