@@ -26,7 +26,7 @@ const BRAND_MAPPING = new Map([
   ["isuzu", "Isuzu"], ["jaguar", "Jaguar"], ["jeep", "Jeep"], ["jlr", "Jaguar Land Rover"], ["kia", "Kia"],
   ["lamborghini", "Lamborghini"], ["land rover", "Land Rover"], ["landrover", "Land Rover"], ["lexus", "Lexus"],
   ["lincoln", "Ford"], ["lucid", "Lucid"], ["maserati", "Maserati"], ["maz", "Mazda"], ["mazda", "Mazda"],
-  ["mb", "Mercedes"], ["merc", "Mercedes"], ["mercedes", "Mercedes"], ["mercedes-benz", "Mercedes"], ["mercedesbenz", "Mercedes"],
+  ["mb", "M.B."], ["merc", "Mercedes"], ["mercedes", "M.B."], ["mercedes-benz", "M.B."], ["mercedesbenz", "M.B."],
   ["merk", "Mercedes"], ["mini", "Mini"], ["mitsubishi", "Mitsubishi"], ["nissan", "Nissan"], ["oldsmobile", "Oldsmobile"],
   ["plymouth", "Plymouth"], ["polestar", "Polestar"], ["pontiac", "Pontiac"], ["porsche", "Porsche"], ["ram", "Ram"],
   ["rivian", "Rivian"], ["rolls-royce", "Rolls-Royce"], ["saab", "Saab"], ["saturn", "Saturn"], ["scion", "Scion"],
