@@ -1424,6 +1424,8 @@ for (const city of KNOWN_CITIES_SET_CACHE.keys()) {
 // Pre-compile regex for URL stripping
 const URL_PREFIX_REGEX = /^(https?:\/\/)?(www\.)?/i;
 
+const TITLE_CLEANUP_REGEX = /[^a-z0-9\s]/gi;
+
 // Define contextual words to retain for better name construction
 const CONTEXTUAL_WORDS = new Set(["cars", "auto", "motors", "group", "dealership"].map(word => word.toLowerCase()));
 
