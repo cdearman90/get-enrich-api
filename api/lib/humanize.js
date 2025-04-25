@@ -1410,7 +1410,6 @@ const BRAND_MAPPING_CACHE = new Map(Object.entries(BRAND_MAPPING || {}));
 const BRAND_ONLY_DOMAINS_CACHE = new Map(BRAND_ONLY_DOMAINS.map(domain => [domain, true]));
 const BRAND_ABBREVIATIONS_CACHE = new Map(Object.entries(BRAND_ABBREVIATIONS || {}));
 const SUFFIXES_TO_REMOVE_CACHE = new Map(SUFFIXES_TO_REMOVE instanceof Set ? Array.from(SUFFIXES_TO_REMOVE).map(suffix => [suffix.toLowerCase(), true]) : []);const logLevel = process.env.LOG_LEVEL || "info";
-const SORTED_CITIES_CACHE = new Map(sortedCities.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
 
 // Pre-compute multi-word cities
 const MULTI_WORD_CITIES = new Map();
