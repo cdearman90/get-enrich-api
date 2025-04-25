@@ -1410,6 +1410,7 @@ const BRAND_MAPPING_CACHE = new Map(Object.entries(BRAND_MAPPING || {}));
 const BRAND_ONLY_DOMAINS_CACHE = new Map(BRAND_ONLY_DOMAINS.map(domain => [domain, true]));
 const BRAND_ABBREVIATIONS_CACHE = new Map(Object.entries(BRAND_ABBREVIATIONS || {}));
 const SUFFIXES_TO_REMOVE_CACHE = new Map(SUFFIXES_TO_REMOVE instanceof Set ? Array.from(SUFFIXES_TO_REMOVE).map(suffix => [suffix.toLowerCase(), true]) : []);const logLevel = process.env.LOG_LEVEL || "info";
+const SORTED_CITIES_CACHE = new Map(sortedCities.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
 
 // Pre-compute multi-word cities
 const MULTI_WORD_CITIES = new Map();
@@ -2964,21 +2965,20 @@ async function humanizeName(domain) {
 
     // Prioritize result based on confidence score, token count, and flags
     let bestResult = null;
-    for (const result of validResults) {
-      const tokenCount = result.companyName.split(" ").filter(Boolean).length;
-      const isSingleToken = tokenCount === 1;
-      const hasCriticalFlags = result.flags.includes("brandOrCityOnlyBlocked") || result.flags.includes("cityOnlyBlocked") || result.flags.includes("brandOnlyBlocked");
+for (const result of validResults) {
+  const tokenCount = result.companyName.split(" ").filter(Boolean).length;
+  const hasCriticalFlags = result.flags.includes("brandOrCityOnlyBlocked") || result.flags.includes("cityOnlyBlocked") || result.flags.includes("brandOnlyBlocked");
 
-      // Skip results with critical flags
-      if (hasCriticalFlags) continue;
+  // Skip results with critical flags
+  if (hasCriticalFlags) continue;
 
-      // Prioritize multi-token results over single-token results
-      if (!bestResult || 
-          (result.confidenceScore > bestResult.confidenceScore) || 
-          (result.confidenceScore === bestResult.confidenceScore && tokenCount > 1 && bestResult.companyName.split(" ").length === 1)) {
-        bestResult = result;
-      }
-    }
+  // Prioritize multi-token results over single-token results
+  if (!bestResult || 
+      (result.confidenceScore > bestResult.confidenceScore) || 
+      (result.confidenceScore === bestResult.confidenceScore && tokenCount > 1 && bestResult.companyName.split(" ").length === 1)) {
+    bestResult = result;
+  }
+}
 
     if (!bestResult) {
       // If no valid result, use single-token fallback if available
