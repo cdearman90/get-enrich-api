@@ -1672,7 +1672,7 @@ function validateFallbackName(result, domain, domainBrand, confidenceScore = 80)
     }
 
     // Step 8: Apply confidence scoring bonuses and penalties
-    const domainTokens = domain.split('.')[0].toLowerCase().split(/(?=[A-Z])|[-_\s]/).filter(Boolean);
+    const domainTokens = domain.split(".")[0].toLowerCase().split(/(?=[A-Z])|[-_\s]/).filter(Boolean);
     const matchesDomain = domainTokens.some(dt => validatedName.toLowerCase().includes(dt));
     const hasCity = tokens.some(t => KNOWN_CITIES_SET.has(t.toLowerCase())) || KNOWN_CITIES_SET.has(validatedName.toLowerCase());
     const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world"];

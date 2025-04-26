@@ -3114,17 +3114,6 @@ function validateCompanyName(name, domain, brand, score, flags) {
   }
 }
 
-    return {
-      validatedName: name,
-      confidenceScore: score,
-      flags
-    };
-  } catch (e) {
-    log("error", "validateCompanyName failed", { name, domain, error: e.message, stack: e.stack });
-    return { validatedName: "", confidenceScore: 0, flags: [...flags, "ValidationError"] };
-  }
-}
-
 // Export all functions required by batch-enrich.js
 export {
   humanizeName,
