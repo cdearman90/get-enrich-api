@@ -3,8 +3,6 @@
 
 import winston from "winston";
 
-import { callFallbackAPI } from "./batch-enrich.js";
-
 // At the top of humanize.js, after imports
 const tokenizationCache = new Map();
 
@@ -2819,6 +2817,108 @@ function tryGenericPattern(tokens, properNounsSet) {
   }
 }
 
+// Inside humanize.js, add this function
+function localFallbackName(domain, tokens) {
+  try {
+    log("debug", "Using local fallback name generator", { domain, tokens });
+
+    // Step 1: Extract potential proper noun and generic term
+    const genericTerms = ["auto", "motors", "dealers", "group", "cars", "drive", "center", "world", "automotive", "dealership", "mall", "vehicle", "sales"];
+    let properNoun = null;
+    let generic = null;
+    let brand = null;
+
+    const lowerTokens = tokens.map(t => t.toLowerCase());
+    for (let i = 0; i < lowerTokens.length; i++) {
+      const token = lowerTokens[i];
+      if (!properNoun && properNounsSet.has(token) && !CAR_BRANDS.has(token) && !KNOWN_CITIES_SET.has(token)) {
+        properNoun = capitalizeName(tokens[i]).name;
+      }
+      if (!generic && genericTerms.includes(token)) {
+        generic = capitalizeName(tokens[i]).name;
+      }
+      if (!brand && CAR_BRANDS.has(token)) {
+        brand = BRAND_MAPPING.get(token) || capitalizeName(tokens[i]).name;
+      }
+    }
+
+    // Step 2: Fallback proper noun (first non-brand, non-city, non-common token)
+    if (!properNoun) {
+      for (let i = 0; i < lowerTokens.length; i++) {
+        const token = lowerTokens[i];
+        if (!CAR_BRANDS.has(token) && !KNOWN_CITIES_SET.has(token) && !COMMON_WORDS.has(token)) {
+          properNoun = capitalizeName(tokens[i]).name;
+          break;
+        }
+      }
+    }
+
+    // Step 3: If no proper noun, capitalize the first token
+    if (!properNoun && tokens.length > 0) {
+      properNoun = capitalizeName(tokens[0]).name;
+    }
+
+    // Step 4: Construct fallback name
+    let nameParts = [properNoun];
+    let confidenceScore = 75;
+    let flags = ["localFallback"];
+
+    if (brand) {
+      nameParts.push(brand);
+      confidenceScore = 85;
+      flags.push("brandAppended");
+    } else if (generic) {
+      nameParts.push(generic);
+      confidenceScore = 80;
+      flags.push("genericAppended");
+    } else {
+      // Default to "Auto" if no generic term or brand
+      nameParts.push("Auto");
+      confidenceScore = 70;
+      flags.push("defaultGenericAppended");
+    }
+
+    const companyName = nameParts.join(" ");
+    const nameTokens = companyName.split(" ").filter(Boolean);
+    const wordList = nameTokens.map(w => w.toLowerCase());
+    const uniqueWords = new Set(wordList);
+
+    // Step 5: Validate the fallback name
+    if (uniqueWords.size !== wordList.length) {
+      log("warn", "Duplicate tokens in local fallback name", { companyName, tokens });
+      return null;
+    }
+
+    if (nameTokens.length === 1) {
+      if (CAR_BRANDS.has(wordList[0])) {
+        log("warn", "Blocked due to brand-only result in local fallback", { companyName, tokens });
+        return null;
+      }
+      if (KNOWN_CITIES_SET.has(wordList[0])) {
+        log("warn", "Blocked due to city-only result in local fallback", { companyName, tokens });
+        return null;
+      }
+    }
+
+    if (nameTokens.length > 4) {
+      log("warn", "Token limit exceeded in local fallback", { companyName, tokens });
+      return null;
+    }
+
+    log("info", "Local fallback name generated", { companyName, tokens });
+    return {
+      companyName,
+      confidenceScore,
+      flags,
+      confidenceOrigin: "localFallback",
+      tokens: nameTokens.map(t => t.toLowerCase())
+    };
+  } catch (e) {
+    log("error", "localFallbackName failed", { domain, tokens, error: e.message });
+    return null;
+  }
+}
+
 // Main function to humanize domain names
 async function humanizeName(domain) {
   try {
@@ -2837,14 +2937,14 @@ async function humanizeName(domain) {
     if (TEST_CASE_OVERRIDES[normalizedDomain + ".com"]) {
       const overrideName = TEST_CASE_OVERRIDES[normalizedDomain + ".com"];
       log("info", `Override applied for domain: ${normalizedDomain}`, { overrideName });
-      const cleanResult = cleanCompanyName(overrideName, null, normalizedDomain + ".com");
+      const cleanedName = cleanCompanyName(overrideName, null, normalizedDomain + ".com");
       return {
-        companyName: cleanResult.name,
+        companyName: cleanedName,
         confidenceScore: 125,
-        flags: ["overrideApplied", ...cleanResult.flags],
-        tokens: cleanResult.name.toLowerCase().split(" ").filter(Boolean),
+        flags: ["overrideApplied"],
+        tokens: cleanedName.toLowerCase().split(" ").filter(Boolean),
         confidenceOrigin: "override",
-        rawTokenCount: cleanResult.name.split(" ").length
+        rawTokenCount: cleanedName.split(" ").length
       };
     }
 
@@ -2880,22 +2980,23 @@ async function humanizeName(domain) {
     const longTokenFlags = hasLongUnsplitToken ? ["PotentialUnsplitToken"] : [];
 
     // Step 5: Handle weak token sets
+    let result;
     if (tokens.length < 2 || tokens.every(t => COMMON_WORDS.has(t.toLowerCase()))) {
       if (tokens.length === 1 && !CAR_BRANDS.has(tokens[0].toLowerCase()) && !KNOWN_CITIES_SET.has(tokens[0].toLowerCase())) {
         const companyName = capitalizeName(tokens[0]).name;
-        const cleanResult = cleanCompanyName(companyName, null, domain);
-        const result = {
-          companyName: cleanResult.name,
+        const cleanedName = cleanCompanyName(companyName, null, domain);
+        result = {
+          companyName: cleanedName,
           confidenceScore: 80 - (hasLongUnsplitToken ? 5 : 0),
-          flags: ["singleTokenFallback", ...longTokenFlags, ...cleanResult.flags],
-          tokens: cleanResult.name.toLowerCase().split(" ").filter(Boolean),
+          flags: ["singleTokenFallback", ...longTokenFlags],
+          tokens: cleanedName.toLowerCase().split(" ").filter(Boolean),
           confidenceOrigin: "singleTokenFallback",
           rawTokenCount
         };
         log("info", "Single token fallback applied", { companyName: result.companyName, tokens });
         return result;
       }
-      const result = {
+      result = {
         companyName: "",
         confidenceScore: 0,
         flags: ["tokenSetTooWeak", ...longTokenFlags],
@@ -2909,14 +3010,14 @@ async function humanizeName(domain) {
 
     // Step 6: Pattern matching with prioritized order
     const patterns = [
-      { fn: tryBrandCityPattern, name: "brandCity" }, // Prioritize for city-based domains
+      { fn: tryBrandCityPattern, name: "brandCity" },
       { fn: tryHumanNamePattern, name: "humanName" },
       { fn: tryProperNounPattern, name: "properNoun" },
       { fn: tryBrandGenericPattern, name: "brandGeneric" },
       { fn: tryGenericPattern, name: "generic" }
     ];
 
-    let result = null;
+    result = null;
     for (const pattern of patterns) {
       try {
         result = pattern.fn(tokens);
@@ -2929,39 +3030,21 @@ async function humanizeName(domain) {
       }
     }
 
-    // Step 7: Fallback to callFallbackAPI
+    // Step 7: Fallback to localFallbackName
     if (!result) {
-      try {
-        log("debug", "Calling fallback API", { domain });
-        const fallbackResult = await callFallbackAPI(normalizedDomain);
-        if (fallbackResult && fallbackResult.companyName) {
-          const cleanResult = cleanCompanyName(fallbackResult.companyName, null, domain);
-          result = {
-            companyName: cleanResult.name,
-            confidenceScore: fallbackResult.confidenceScore || 85,
-            flags: ["fallbackAPIUsed", ...cleanResult.flags, ...longTokenFlags],
-            tokens: cleanResult.name.toLowerCase().split(" ").filter(Boolean),
-            confidenceOrigin: "fallbackAPI",
-            rawTokenCount
-          };
-          log("info", "Fallback API applied", { companyName: result.companyName, tokens });
-        }
-      } catch (e) {
-        log("error", "callFallbackAPI failed", { domain, error: e.message });
+      result = localFallbackName(normalizedDomain, tokens);
+      if (!result) {
+        result = {
+          companyName: "",
+          confidenceScore: 0,
+          flags: ["noPatternMatch", ...longTokenFlags],
+          tokens: [],
+          confidenceOrigin: "noPatternMatch",
+          rawTokenCount
+        };
+        log("debug", "No pattern or local fallback matched", { domain, confidenceScore: result.confidenceScore });
+        return result;
       }
-    }
-
-    if (!result) {
-      result = {
-        companyName: "",
-        confidenceScore: 0,
-        flags: ["noPatternMatch", ...longTokenFlags],
-        tokens: [],
-        confidenceOrigin: "noPatternMatch",
-        rawTokenCount
-      };
-      log("debug", "No pattern or fallback matched", { domain, confidenceScore: result.confidenceScore });
-      return result;
     }
 
     // Step 8: Extract domain brand for validation
@@ -2974,13 +3057,13 @@ async function humanizeName(domain) {
     }
 
     // Step 9: Validate and clean the company name
-    const cleanResult = cleanCompanyName(result.companyName, domainBrand, domain);
+    const cleanedName = cleanCompanyName(result.companyName, domainBrand, domain);
     const validationResult = validateCompanyName(
-      cleanResult.name,
+      cleanedName,
       domain,
       domainBrand,
       result.confidenceScore,
-      [...result.flags, ...cleanResult.flags]
+      result.flags
     );
 
     if (!validationResult.validatedName) {
