@@ -116,7 +116,7 @@ function checkRateLimit(req) {
  * @param {Object} meta - Meta data
  * @returns {Object} - Fallback result
  */
-async function callFallbackAPI(domain, rowNum, meta = {}) {
+export async function callFallbackAPI(domain, rowNum, meta = {}) {
   logger.debug("callFallbackAPI started", { domain, rowNum });
 
   try {
