@@ -3,7 +3,7 @@
 
 import winston from "winston";
 
-import { callFallbackAPI } from './batch-enrich.js';
+import { callFallbackAPI } from "./batch-enrich.js";
 
 // At the top of humanize.js, after imports
 const tokenizationCache = new Map();
