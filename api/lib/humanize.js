@@ -1394,10 +1394,10 @@ const SPLIT_REGEX = /(?=[A-Z])|[-_\s]|of|(?<=\D)(?=\d)/;
 
 // Precompute proper nouns set for performance (only proper nouns)
 const properNounsSet = new Set([
-    ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
-    ...(Array.isArray(KNOWN_LAST_NAMES) ? KNOWN_LAST_NAMES : []).map(n => n.toLowerCase()),
-    ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
-    ...(Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS : []).map(n => n.toLowerCase())
+  ...(Array.isArray(KNOWN_FIRST_NAMES) ? KNOWN_FIRST_NAMES : []).map(n => n.toLowerCase()),
+  ...(Array.isArray(KNOWN_LAST_NAMES) ? KNOWN_LAST_NAMES : []).map(n => n.toLowerCase()),
+  ...(Array.isArray(SORTED_CITY_LIST) ? SORTED_CITY_LIST : []).map(c => c.toLowerCase()),
+  ...(Array.isArray(KNOWN_PROPER_NOUNS) ? KNOWN_PROPER_NOUNS : []).map(n => n.toLowerCase())
 ]);
 
 // Cache known lists for performance
@@ -1418,18 +1418,18 @@ const CONTEXTUAL_WORDS = new Set(["cars", "auto", "motors", "group", "dealership
 
 // Define knownWords as a derived list from existing sets
 const knownWords = [
-    ...Array.from(CAR_BRANDS),
-    ...Array.from(KNOWN_CITIES_SET),
-    ...Array.from(KNOWN_FIRST_NAMES),
-    ...Array.from(KNOWN_LAST_NAMES),
-    ...Array.from(COMMON_WORDS),
-    ...Array.from(KNOWN_PROPER_NOUNS),
-    ...Array.from(CONTEXTUAL_WORDS)
+  ...Array.from(CAR_BRANDS),
+  ...Array.from(KNOWN_CITIES_SET),
+  ...Array.from(KNOWN_FIRST_NAMES),
+  ...Array.from(KNOWN_LAST_NAMES),
+  ...Array.from(COMMON_WORDS),
+  ...Array.from(KNOWN_PROPER_NOUNS),
+  ...Array.from(CONTEXTUAL_WORDS)
 ].map(word => word.toLowerCase());
 
 const KNOWN_WORDS_CACHE = new Map(knownWords.map(word => [word, true]));
 const SORTED_CITIES_CACHE = new Map(SORTED_CITY_LIST.map(city => [city.toLowerCase().replace(/\s+/g, "").replace(/&/g, "and"), city.toLowerCase().replace(/\s+/g, " ")]));
-const CAR_BRANDS_CACHE = new Map(Array.from(CAR_BRANDS).map(brand => [brand.toLowerCase(), brand])); // Fixed: Use Array.from
+const CAR_BRANDS_CACHE = new Map(Array.from(CAR_BRANDS).map(brand => [brand.toLowerCase(), brand]));
 
 // Pre-compile WHITESPACE_REGEX
 const WHITESPACE_REGEX = /\s+/g;
@@ -1437,10 +1437,10 @@ const WHITESPACE_REGEX = /\s+/g;
 // Pre-compute multi-word cities
 const MULTI_WORD_CITIES = new Map();
 for (const city of KNOWN_CITIES_SET_CACHE.keys()) {
-    const cityTokens = city.split(" ");
-    if (cityTokens.length > 1) {
-        MULTI_WORD_CITIES.set(cityTokens.join(" ").toLowerCase(), city);
-    }
+  const cityTokens = city.split(" ");
+  if (cityTokens.length > 1) {
+    MULTI_WORD_CITIES.set(cityTokens.join(" ").toLowerCase(), city);
+  }
 }
 
 // Pre-compile regex for URL stripping
@@ -1565,7 +1565,7 @@ function validateOverrideFormat(override) {
         log("warn", `Brand-only override: ${trimmedOverride}`);
         return null;
       }
-      if (KNOWN_CITIES_SET_CACHE.has(token) || validateCityWithColumnF({ domain: null, rowNum: null }, token)) {
+      if (KNOWN_CITIES_SET_CACHE.has(token)) { // Simplified: Removed validateCityWithColumnF to reduce API calls
         log("warn", `City-only override: ${trimmedOverride}`);
         return null;
       }
@@ -1639,7 +1639,7 @@ async function cleanCompanyName(companyName, brand = null, domain = null) {
       return { name: "", flags: ["NoValidTokens"] };
     }
 
-    // Process tokens (assume deduplication by upstream functions)
+    // Process tokens (trust earlyCompoundSplit for deduplication)
     const processedTokens = [];
     for (const token of tokens) {
       const lowerToken = token.toLowerCase();
@@ -1664,21 +1664,7 @@ async function cleanCompanyName(companyName, brand = null, domain = null) {
       return { name: "", flags: [...flags, "NoValidTokens"] };
     }
 
-    // Final check: Strip duplicates, keeping first occurrence
-    const seen = new Set();
-    const dedupedTokens = [];
-    for (const token of finalTokens) {
-      const tokenKey = token.toLowerCase();
-      if (seen.has(tokenKey)) {
-        log("debug", `Duplicate token stripped: ${token}`, { companyName, domain });
-        flags.push("DuplicateTokensStripped");
-        continue;
-      }
-      seen.add(tokenKey);
-      dedupedTokens.push(token);
-    }
-
-    let finalName = dedupedTokens.join(" ").trim();
+    let finalName = finalTokens.join(" ").trim();
     const finalTokensCheck = finalName.split(" ").filter(Boolean);
     if (finalTokensCheck.length === 0) {
       log("warn", "No valid tokens after deduplication", { companyName, domain });
@@ -1692,7 +1678,7 @@ async function cleanCompanyName(companyName, brand = null, domain = null) {
         log("warn", `Brand-only output rejected: ${finalName}`, { companyName, domain });
         return { name: "", flags: [...flags, "BrandOnlyBlocked"] };
       }
-      if (KNOWN_CITIES_SET_CACHE.has(singleTokenLower) || (await validateCityWithColumnF({ domain, rowNum: domain?.rowNum || null }, singleTokenLower))) {
+      if (KNOWN_CITIES_SET_CACHE.has(singleTokenLower)) { // Simplified: Removed validateCityWithColumnF to reduce API calls
         log("warn", `City-only output rejected: ${finalName}`, { companyName, domain });
         return { name: "", flags: [...flags, "CityOnlyBlocked"] };
       }
@@ -1720,7 +1706,6 @@ async function cleanCompanyName(companyName, brand = null, domain = null) {
       const isPossessiveFriendlyFlag = isPossessiveFriendly(finalTokensCheck[0]);
       if (!nameLower.includes(brandLower) && !isPossessiveFriendlyFlag && finalTokenCount < 4) {
         const brandName = BRAND_MAPPING_CACHE.get(brandLower) || capitalizeName(brand).name;
-        // Check for duplicates before appending brand
         if (!nameLower.includes(brandName.toLowerCase())) {
           updatedName = `${finalName} ${brandName}`;
           flags.push("BrandAppended");
@@ -1866,7 +1851,6 @@ function expandInitials(token) {
   }
 }
 
-// api/lib/humanize.js
 /**
  * Tokenizes domain into meaningful components
  * @param {string} domain - The domain to tokenize
@@ -1913,7 +1897,7 @@ function earlyCompoundSplit(domain) {
           log("error", `Brand-only override: ${override}`, { domain });
           return [];
         }
-        if (KNOWN_CITIES_SET.has(overrideTokens[0]) || validateCityWithColumnF({ domain, rowNum: domain.rowNum }, overrideTokens[0])) {
+        if (KNOWN_CITIES_SET.has(overrideTokens[0])) { // Simplified: Removed validateCityWithColumnF to reduce API calls
           log("error", `City-only override: ${override}`, { domain });
           return [];
         }
@@ -2133,7 +2117,7 @@ function earlyCompoundSplit(domain) {
     // Step 11: City and brand validation
     if (uniqueTokens.length === 1) {
       const tokenLower = uniqueTokens[0].toLowerCase();
-      if (validateCityWithColumnF({ domain, rowNum: domain.rowNum }, tokenLower) || KNOWN_CITIES_SET.has(tokenLower)) {
+      if (KNOWN_CITIES_SET.has(tokenLower)) { // Simplified: Removed validateCityWithColumnF to reduce API calls
         log("warn", `City-only token rejected: ${tokenLower}`, { domain });
         return [];
       }
@@ -2164,8 +2148,6 @@ function earlyCompoundSplit(domain) {
   }
 }
 
-const axios = require("axios");
-
 const cityValidationCache = new Map();
 
 /**
@@ -2182,13 +2164,14 @@ async function validateCityWithColumnF(domain, cityCandidate, columnName = "City
       log("debug", "Invalid domain or city candidate", { domain, cityCandidate });
       return false;
     }
-    if (!domain.rowNum || domain.rowNum <= 0) {
-      log("debug", "Invalid rowNum", { domain, rowNum: domain.rowNum });
+    const rowNum = domain?.rowNum || null;
+    if (!rowNum || rowNum <= 0) {
+      log("debug", "Invalid rowNum, skipping Column F check", { domain, rowNum });
       return false;
     }
 
     const cityCandidateNormalized = cityCandidate.toLowerCase().trim();
-    const cacheKey = `${domain.rowNum}:${cityCandidateNormalized}:${columnName}`;
+    const cacheKey = `${rowNum}:${cityCandidateNormalized}:${columnName}`;
     if (cityValidationCache.has(cacheKey)) {
       const cachedResult = cityValidationCache.get(cacheKey);
       log("debug", "City validation result (cached)", { domain, cityCandidate: cityCandidateNormalized, result: cachedResult });
@@ -2206,7 +2189,7 @@ async function validateCityWithColumnF(domain, cityCandidate, columnName = "City
         return false;
       }
 
-      const cityValue = sheet.getRange(domain.rowNum, cityCol + 1).getValue()?.toString().toLowerCase().trim();
+      const cityValue = sheet.getRange(rowNum, cityCol + 1).getValue()?.toString().toLowerCase().trim();
       const isMatch = cityValue && cityValue === cityCandidateNormalized;
       log("debug", "City validation result (GAS)", { domain, cityCandidate: cityCandidateNormalized, cityValue, isMatch });
       cityValidationCache.set(cacheKey, isMatch);
@@ -2236,7 +2219,7 @@ async function validateCityWithColumnF(domain, cityCandidate, columnName = "City
       }
     }
   } catch (err) {
-    log("error", `Error validating city with column "${columnName}" for ${domain.domain || domain}: ${err.message}`);
+    log("error", `Error validating city with column "${columnName}" for ${domain?.domain || domain}: ${err.message}`);
     return false;
   }
 }
@@ -2246,7 +2229,6 @@ async function validateCityWithColumnF(domain, cityCandidate, columnName = "City
  * @param {string} domain - Domain to process
  * @returns {{brand: string, city: string, connector: string, name: string, flags: string[], confidence: number}} - Extracted components
  */
-// Extracts brand, city, and name from a domain
 async function extractBrandOfCityFromDomain(domain) {
   try {
     // Input validation
@@ -2293,17 +2275,24 @@ async function extractBrandOfCityFromDomain(domain) {
     }
 
     // Prepare candidates (trust earlyCompoundSplit deduplication)
+    const flags = [];
     const candidates = tokens.map(token => ({
       original: token,
       normalized: token.toLowerCase()
     }));
+
+    // Log deduplication if earlyCompoundSplit removed duplicates
+    const uniqueTokenCount = new Set(candidates.map(c => c.normalized)).size;
+    if (uniqueTokenCount < tokens.length) {
+      log("debug", `Duplicate tokens stripped by earlyCompoundSplit: ${tokens}`, { domain });
+      flags.push("DuplicateTokensStripped");
+    }
 
     // Identify city, proper noun, and brand
     let brand = "";
     let city = "";
     let properNoun = null;
     let isKnownName = false;
-    const flags = [];
     let confidence = 60;
 
     // Check for multi-word cities (up to 2 tokens for efficiency)
@@ -2313,10 +2302,10 @@ async function extractBrandOfCityFromDomain(domain) {
       const cityName = potentialCity.endsWith("s") && KNOWN_CITIES_SET_CACHE.has(potentialCity.slice(0, -1))
         ? potentialCity.slice(0, -1)
         : potentialCity;
-      if (KNOWN_CITIES_SET_CACHE.has(cityName) || (await validateCityWithColumnF({ domain: typeof domain === "string" ? { domain, rowNum: null } : domain }, cityName))) {
+      if (KNOWN_CITIES_SET_CACHE.has(cityName)) { // Simplified: Removed validateCityWithColumnF to reduce API calls
         city = capitalizeName(cityName).name;
         flags.push("CityMatch");
-        confidence += 10; // Align with validateFallbackName
+        confidence += 10;
         i += 1; // Skip the next token
         break;
       }
@@ -2328,14 +2317,14 @@ async function extractBrandOfCityFromDomain(domain) {
       if (CAR_BRANDS_CACHE.has(normalized)) {
         brand = BRAND_MAPPING_CACHE.get(normalized) || capitalizeName(original).name;
         flags.push("BrandMatch");
-        confidence += 5; // Align with validateFallbackName
+        confidence += 5;
         continue;
       }
       if (!properNoun && properNounsSet.has(normalized) && !CAR_BRANDS_CACHE.has(normalized) && !KNOWN_CITIES_SET_CACHE.has(normalized)) {
         properNoun = { original, normalized };
         isKnownName = KNOWN_FIRST_NAMES.has(normalized) || KNOWN_LAST_NAMES.has(normalized);
         flags.push("ProperNounMatch");
-        confidence += 15; // Align with validateFallbackName
+        confidence += 15;
       }
     }
 
@@ -2374,7 +2363,7 @@ async function extractBrandOfCityFromDomain(domain) {
     const isPossessiveFriendlyFlag = isPossessiveFriendly(name);
     if (isPossessiveFriendlyFlag) {
       flags.push("PossessiveFriendly");
-      confidence += 10; // Align with validateFallbackName
+      confidence += 10;
       if (brand) {
         brand = ""; // Strip brand for possessive-friendly names
         flags.push("BrandStripped");
@@ -2396,7 +2385,7 @@ async function extractBrandOfCityFromDomain(domain) {
     const nameTokens = name.split(" ").filter(Boolean);
     if (nameTokens.length === 1) {
       const tokenLower = nameTokens[0].toLowerCase();
-      if (KNOWN_CITIES_SET_CACHE.has(tokenLower) || (await validateCityWithColumnF({ domain: typeof domain === "string" ? { domain, rowNum: null } : domain }, tokenLower))) {
+      if (KNOWN_CITIES_SET_CACHE.has(tokenLower)) { // Simplified: Removed validateCityWithColumnF to reduce API calls
         log("debug", `City-only name rejected: ${name}`, { domain });
         return { brand: "", city: "", connector: "", name: "", flags: ["CityOnly", ...flags], confidence: 50 };
       }
@@ -3594,5 +3583,6 @@ export {
   validateCompanyName,
   calculateConfidenceScore,
   validateCityWithColumnF,
+  isPossessiveFriendly,
   cleanCompanyName
 };
