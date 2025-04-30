@@ -4,6 +4,7 @@
   "version": "1.1.0",
   "description": "ShowRevv Lead Enrichment System API for cleaning and enriching lead data",
   "dependencies": {
+    "axios": "^1.9.0",
     "express-rate-limit": "^7.5.0",
     "micro": "^10.0.1",
     "openai": "4.0.0",
