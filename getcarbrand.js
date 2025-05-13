@@ -1,13 +1,13 @@
 // /api/getCarBrand.js
-const axios = require('axios');
-const { callOpenAI } = require('./lib/openai'); // Import callOpenAI
+const axios = require("axios");
+const { callOpenAI } = require("./lib/openai"); // Import callOpenAI
 
 // List of car brands (same as CAR_BRANDS in constants.gs)
-const CAR_BRANDS = ["toyota", "infiniti", "chevrolet", "ford", "honda", /* add all brands */];
+const CAR_BRANDS = ["toyota", "infiniti", "chevrolet", "ford", "honda" /* add all brands */];
 
 module.exports = async (req, res) => {
-  if (req.method !== 'GET' || !req.query.domain) {
-    return res.status(400).json({ error: 'Invalid request: GET method with domain query parameter required' });
+  if (req.method !== "GET" || !req.query.domain) {
+    return res.status(400).json({ error: "Invalid request: GET method with domain query parameter required" });
   }
 
   const domain = req.query.domain.toLowerCase().trim();
@@ -16,12 +16,12 @@ module.exports = async (req, res) => {
     // Step 1: Vercel Fallback (equivalent to callVercelFallback v2.1)
     const VERCEL_AUTH_TOKEN = process.env.VERCEL_AUTH_TOKEN;
     const VERCEL_AUTOMATION_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
-    
-    const vercelResponse = await axios.get('https://your-vercel-endpoint.com/api/getName', {
+
+    const vercelResponse = await axios.get("https://your-vercel-endpoint.com/api/getName", {
       params: { domain },
       headers: {
-        'Authorization': `Bearer ${VERCEL_AUTH_TOKEN}`,
-        'X-Vercel-Automation-Bypass': VERCEL_AUTOMATION_BYPASS_SECRET
+        "Authorization": `Bearer ${VERCEL_AUTH_TOKEN}`,
+        "X-Vercel-Automation-Bypass": VERCEL_AUTOMATION_BYPASS_SECRET
       }
     });
 
@@ -53,7 +53,7 @@ module.exports = async (req, res) => {
     }
 
     // If both fallbacks fail, return an empty result
-    return res.status(200).json({ brand: '' });
+    return res.status(200).json({ brand: "" });
   } catch (error) {
     // Winston logging is handled by callOpenAI; add additional logging if needed
     console.error(`Error processing domain ${domain}:`, error.message);
