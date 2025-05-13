@@ -22,6 +22,10 @@
     {
       "src": "/public-api/batch-clean-titles-and-locations",
       "dest": "api/batch-clean-titles-and-locations.js"
+    },
+    {
+      "src": "/public-api/getcarbrands",
+      "dest": "api/getcarbrands.js"
     }
   ]
 }
