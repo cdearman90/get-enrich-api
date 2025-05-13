@@ -17,7 +17,7 @@ module.exports = async (req, res) => {
     const VERCEL_AUTH_TOKEN = process.env.VERCEL_AUTH_TOKEN;
     const VERCEL_AUTOMATION_BYPASS_SECRET = process.env.VERCEL_AUTOMATION_BYPASS_SECRET;
 
-    const vercelResponse = await axios.get("https://your-vercel-endpoint.com/api/getName", {
+    const vercelResponse = await axios.get("https://get-enrich-api-show-revv.vercel.app/public-api/getcarbrands", {
       params: { domain },
       headers: {
         "Authorization": `Bearer ${VERCEL_AUTH_TOKEN}`,
