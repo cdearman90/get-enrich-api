@@ -538,7 +538,29 @@ export default async function handler(req, res) {
     // Step 4: OpenAI Fallback if no direct match
     if (!primaryBrand) {
       const knownBrands = context.knownBrands || CAR_BRANDS;
-      const prompt = `Given the domain ${domain} with tokens [${tokens.join(', ')}], identify the primary car brand sold by the dealership. Check the domain tokens for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). If no brand is clear from the domain, use web data or dealership knowledge to identify the brand (e.g., "unionpark.com" is a known Honda dealership, "malouf.com" is a known Ford dealership in New Jersey, "westherr.com" is a known Ford dealership, "sheehy.com" is a known Ford dealership, "frankleta.com" is a known Honda dealership, "towneauto.com" is a known Ford dealership, "lauraautogroup.com" is a known Chrysler dealership, "leblancauto.com" is a known Toyota dealership, "kennedyauto.com" is a known Ford dealership). Negative examples: "lafontaine.com" → unknown, "troncalli.com" → unknown. Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(', ')}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
+      const prompt = `Identify the primary car brand sold by the dealership for the domain "${domain}" with tokens [${domainTokens.join(', ')}] and company name "${companyName}". Follow these steps strictly to ensure accuracy and exhaust all public sources before returning "unknown":
+
+1. **Token Analysis**: Check tokens for explicit brand names or aliases (e.g., "honda" in "unionparkhonda.com" → Honda, "chevy" in "gychevy.com" → Chevy). Use the provided brand aliases: ${JSON.stringify(brandAliases)}. Prioritize exact or alias matches. Ignore generic terms like "auto," "cars," "deal," "group."
+
+2. **Known Dealerships Lookup**: If no brand is found in tokens, check the knownDealerships mapping: ${JSON.stringify(knownDealerships)}. For example, "westherr.com" → Ford, "sheehy.com" → Ford, "frankleta.com" → Honda, "lauraautogroup.com" → Chrysler, "leblancauto.com" → Toyota.
+
+3. **Public Source Verification**: If no match in tokens or knownDealerships, exhaustively check public sources to identify the primary brand:
+   - Visit the dealership's website (e.g., "https://${domain}") and analyze the homepage, inventory, or "About Us" section for the most prominent brand.
+   - Search recent X posts mentioning the dealership (e.g., "@${domain.replace(/\..*$/, '')}") for brand references.
+   - Query industry listings or review sites (e.g., Cars.com, DealerRater) for the dealership’s primary brand.
+   - Cross-reference the company name "${companyName}" for consistency (e.g., "Tasca" → Ford).
+
+4. **Multi-Brand Dealerships**: If the dealership sells multiple brands, select the primary brand based on:
+   - Prominence on the website (e.g., featured in logo, main inventory, or URL).
+   - Frequency in X posts or listings.
+   - Explicit association with the company name (e.g., "Penske Automotive" → Chevy for prominence).
+   Examples: "penskeautomotive.com" → Chevy, "mclartydaniel.com" → Chrysler.
+
+5. **Non-Dealership Check**: If the domain is not a car dealership (e.g., real estate, media), return "unknown". Examples: "exprealty.com" → unknown (real estate), "wickmail.com" → unknown (email service), "centurytrucks.com" → unknown (truck equipment).
+
+6. **Accuracy Requirement**: Only assign a brand if verified through tokens, knownDealerships, or public sources. Do not guess or assume brands (e.g., do not assign "Chevy" to Buick/GMC dealers unless Chevrolet is explicitly primary). If no clear primary brand is found after exhausting all sources, return "unknown".
+
+Respond with only the verified brand name (e.g., Toyota, Chevy) or "unknown". Shorten "Chevrolet" to "Chevy". Ensure the brand is in: ${carBrands.join(', ')}. Use exact capitalization (e.g., "Honda", not "honda").`;
       const openAIResult = await callOpenAI(prompt, {
         model: "gpt-4-turbo",
         max_tokens: 10,
