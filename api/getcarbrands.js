@@ -1,6 +1,6 @@
 // /api/getcarbrands.js
 import { callOpenAI } from "./lib/openai.js";
-import winston from "winston";
+import winston from 'winston';
 
 // List of car brands (aligned with GAS Constants.gs)
 const CAR_BRANDS = [
@@ -52,7 +52,7 @@ const BRAND_MAPPING = {
 
 // Winston logger setup
 const logger = winston.createLogger({
-  level: "info",
+  level: 'info',
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.json()
@@ -62,14 +62,14 @@ const logger = winston.createLogger({
   ]
 });
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
   if (req.method !== "POST" || !req.body.domain) {
     logger.error(`Invalid request: Method=${req.method}, Domain=${req.body.domain}`);
     return res.status(400).json({ error: "Invalid request: POST method with domain in body required" });
   }
 
   const domain = req.body.domain.toLowerCase().trim();
-  const tokens = req.body.tokens || domain.toLowerCase().replace(/^(www\.)/, "").replace(/\..*$/, "").split(/[-_.]/);
+  const tokens = req.body.tokens || domain.toLowerCase().replace(/^(www\.)/, '').replace(/\..*$/, '').split(/[-_.]/);
   const context = req.body.context || {};
   logger.info(`Processing domain: ${domain}`);
 
@@ -89,7 +89,7 @@ module.exports = async (req, res) => {
     // Step 2: OpenAI Fallback if no direct match
     if (!primaryBrand) {
       const knownBrands = context.knownBrands || CAR_BRANDS;
-      const prompt = `Given the domain ${domain}, identify the primary car brand sold by the dealership. Check the domain for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(", ")}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
+      const prompt = `Given the domain ${domain}, identify the primary car brand sold by the dealership. Check the domain for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(', ')}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
       const openAIResult = await callOpenAI(prompt, {
         model: "gpt-4-turbo",
         max_tokens: 10,
@@ -148,4 +148,4 @@ module.exports = async (req, res) => {
     logger.error(`Error processing domain ${domain}: ${error.message}`);
     return res.status(500).json({ error: `Failed to process domain: ${error.message}` });
   }
-};
+}
