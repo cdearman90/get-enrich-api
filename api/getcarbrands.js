@@ -1,6 +1,6 @@
 // /api/getcarbrands.js
-const { callOpenAI } = require("./lib/openai");
-const winston = require('winston');
+import { callOpenAI } from "./lib/openai.js";
+import winston from "winston";
 
 // List of car brands (aligned with GAS Constants.gs)
 const CAR_BRANDS = [
@@ -52,7 +52,7 @@ const BRAND_MAPPING = {
 
 // Winston logger setup
 const logger = winston.createLogger({
-  level: 'info',
+  level: "info",
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.json()
@@ -69,7 +69,7 @@ module.exports = async (req, res) => {
   }
 
   const domain = req.body.domain.toLowerCase().trim();
-  const tokens = req.body.tokens || domain.toLowerCase().replace(/^(www\.)/, '').replace(/\..*$/, '').split(/[-_.]/);
+  const tokens = req.body.tokens || domain.toLowerCase().replace(/^(www\.)/, "").replace(/\..*$/, "").split(/[-_.]/);
   const context = req.body.context || {};
   logger.info(`Processing domain: ${domain}`);
 
@@ -89,7 +89,7 @@ module.exports = async (req, res) => {
     // Step 2: OpenAI Fallback if no direct match
     if (!primaryBrand) {
       const knownBrands = context.knownBrands || CAR_BRANDS;
-      const prompt = `Given the domain ${domain}, identify the primary car brand sold by the dealership. Check the domain for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(', ')}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
+      const prompt = `Given the domain ${domain}, identify the primary car brand sold by the dealership. Check the domain for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(", ")}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
       const openAIResult = await callOpenAI(prompt, {
         model: "gpt-4-turbo",
         max_tokens: 10,
@@ -112,7 +112,7 @@ module.exports = async (req, res) => {
       } else {
         for (const [key, mappedBrand] of Object.entries(BRAND_MAPPING)) {
           if (brand === key) {
-            primaryBrand = key;
+            primaryBrand = mappedBrand; // Use the mapped brand name (e.g., "Chevrolet" for "chev")
             confidence = 85;
             break;
           }
