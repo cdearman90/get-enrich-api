@@ -48,7 +48,7 @@ const BRAND_MAPPING = {
   "volks": "Volkswagen", "vw": "Volkswagen", "vwof": "Volkswagen", "volvo": "Volvo", "vol": "Volvo",
   "vinfast": "VinFast", "fisker": "Fisker", "mopar": "Chrysler", "byd": "BYD", "stellantis": "Chrysler",
   "bmwof": "BMW", "fordof": "Ford", "audiof": "Audi"
-};
+];
 
 // Winston logger setup
 const logger = winston.createLogger({
@@ -63,6 +63,7 @@ const logger = winston.createLogger({
 });
 
 export default async function handler(req, res) {
+  logger.info("Endpoint /api/getcarbrands hit successfully");
   if (req.method !== "POST" || !req.body.domain) {
     logger.error(`Invalid request: Method=${req.method}, Domain=${req.body.domain}`);
     return res.status(400).json({ error: "Invalid request: POST method with domain in body required" });
@@ -72,6 +73,7 @@ export default async function handler(req, res) {
   const tokens = req.body.tokens || domain.toLowerCase().replace(/^(www\.)/, '').replace(/\..*$/, '').split(/[-_.]/);
   const context = req.body.context || {};
   logger.info(`Processing domain: ${domain}`);
+  logger.info(`Domain tokens: ${JSON.stringify(tokens)}`);
 
   try {
     // Step 1: Check domain tokens for direct brand match (local fallback)
@@ -86,10 +88,29 @@ export default async function handler(req, res) {
       }
     }
 
+    // Secondary fallback: Known dealership patterns
+    if (!primaryBrand) {
+      const knownDealerships = {
+        "unionpark": "Honda",
+        "penskeautomotive": "Chevrolet",
+        "miamilakesautomall": "Jeep",
+        "ricart": "Ford"
+        // Add more known mappings as needed
+      };
+      for (const [dealership, brand] of Object.entries(knownDealerships)) {
+        if (tokens.some(token => token.includes(dealership))) {
+          primaryBrand = brand.toLowerCase();
+          confidence = 75;
+          logger.info(`Local fallback (dealership pattern) for domain ${domain}: ${primaryBrand} (Confidence: ${confidence}%)`);
+          break;
+        }
+      }
+    }
+
     // Step 2: OpenAI Fallback if no direct match
     if (!primaryBrand) {
       const knownBrands = context.knownBrands || CAR_BRANDS;
-      const prompt = `Given the domain ${domain}, identify the primary car brand sold by the dealership. Check the domain for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(', ')}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
+      const prompt = `Given the domain ${domain} with tokens [${tokens.join(', ')}], identify the primary car brand sold by the dealership. Check the domain tokens for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). If no brand is clear from the domain, use web data or dealership knowledge to identify the brand (e.g., "unionpark.com" is a known Honda dealership). Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(', ')}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
       const openAIResult = await callOpenAI(prompt, {
         model: "gpt-4-turbo",
         max_tokens: 10,
@@ -103,6 +124,7 @@ export default async function handler(req, res) {
         throw new Error(`OpenAI error: ${openAIResult.error}`);
       }
 
+      logger.info(`OpenAI result: ${JSON.stringify(openAIResult)}`);
       const brand = openAIResult.output.toLowerCase();
       logger.info(`OpenAI response for domain ${domain}: ${brand}`);
 
