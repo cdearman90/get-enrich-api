@@ -94,8 +94,8 @@ export default async function handler(req, res) {
         "unionpark": "Honda",
         "penskeautomotive": "Chevrolet",
         "miamilakesautomall": "Jeep",
-        "ricart": "Ford"
-        // Add more known mappings as needed
+        "ricart": "Ford",
+        "malouf": "Ford"
       };
       for (const [dealership, brand] of Object.entries(knownDealerships)) {
         if (tokens.some(token => token.includes(dealership))) {
@@ -110,7 +110,7 @@ export default async function handler(req, res) {
     // Step 2: OpenAI Fallback if no direct match
     if (!primaryBrand) {
       const knownBrands = context.knownBrands || CAR_BRANDS;
-      const prompt = `Given the domain ${domain} with tokens [${tokens.join(', ')}], identify the primary car brand sold by the dealership. Check the domain tokens for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). If no brand is clear from the domain, use web data or dealership knowledge to identify the brand (e.g., "unionpark.com" is a known Honda dealership). Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(', ')}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
+      const prompt = `Given the domain ${domain} with tokens [${tokens.join(', ')}], identify the primary car brand sold by the dealership. Check the domain tokens for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). If no brand is clear from the domain, use web data or dealership knowledge to identify the brand (e.g., "unionpark.com" is a known Honda dealership, "malouf.com" is a known Ford dealership in New Jersey). Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(', ')}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
       const openAIResult = await callOpenAI(prompt, {
         model: "gpt-4-turbo",
         max_tokens: 10,
