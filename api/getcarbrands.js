@@ -1,4 +1,3 @@
-// /api/getcarbrands.js
 import { callOpenAI } from "./lib/openai.js";
 import winston from 'winston';
 
@@ -101,7 +100,8 @@ export default async function handler(req, res) {
         "frankleta": "Honda",
         "towneauto": "Ford",
         "lauraautogroup": "Chrysler",
-        "leblancauto": "Toyota"
+        "leblancauto": "Toyota",
+        "kennedyauto": "Ford" // Corrected to Ford
       };
       for (const [dealership, brand] of Object.entries(knownDealerships)) {
         if (tokens.some(token => token.includes(dealership))) {
@@ -125,14 +125,14 @@ export default async function handler(req, res) {
     // Step 4: OpenAI Fallback if no direct match
     if (!primaryBrand) {
       const knownBrands = context.knownBrands || CAR_BRANDS;
-      const prompt = `Given the domain ${domain} with tokens [${tokens.join(', ')}], identify the primary car brand sold by the dealership. Check the domain tokens for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). If no brand is clear from the domain, use web data or dealership knowledge to identify the brand (e.g., "unionpark.com" is a known Honda dealership, "malouf.com" is a known Ford dealership in New Jersey, "westherr.com" is a known Ford dealership, "sheehy.com" is a known Ford dealership, "frankleta.com" is a known Honda dealership, "towneauto.com" is a known Ford dealership, "lauraautogroup.com" is a known Chrysler dealership, "leblancauto.com" is a known Toyota dealership). Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(', ')}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
+      const prompt = `Given the domain ${domain} with tokens [${tokens.join(', ')}], identify the primary car brand sold by the dealership. Check the domain tokens for brand names or patterns (e.g., "honda" in "unionparkhonda.com" indicates Honda). If no brand is clear from the domain, use web data or dealership knowledge to identify the brand (e.g., "unionpark.com" is a known Honda dealership, "malouf.com" is a known Ford dealership in New Jersey, "westherr.com" is a known Ford dealership, "sheehy.com" is a known Ford dealership, "frankleta.com" is a known Honda dealership, "towneauto.com" is a known Ford dealership, "lauraautogroup.com" is a known Chrysler dealership, "leblancauto.com" is a known Toyota dealership, "kennedyauto.com" is a known Ford dealership). Negative examples: "lafontaine.com" → unknown, "troncalli.com" → unknown. Respond with only the brand name (e.g., Toyota), nothing else. Prioritize these known brands: ${knownBrands.join(', ')}. If multiple brands are sold, choose the most prominent one from the known brands. If the domain does not represent a car dealership or you are unsure, return "unknown".`;
       const openAIResult = await callOpenAI(prompt, {
         model: "gpt-4-turbo",
         max_tokens: 10,
         temperature: 0.3,
         systemMessage: "Respond with only the car brand name or 'unknown', nothing else.",
         retries: 2,
-        timeoutMs: 9000
+        timeoutMs: 12000 // Increased from 9000ms
       });
 
       if (openAIResult.error) {
@@ -146,11 +146,11 @@ export default async function handler(req, res) {
 
       if (CAR_BRANDS.includes(brand)) {
         primaryBrand = brand;
-        confidence = brand === "unknown" ? 50 : 95; // Adjusted: Boost non-"unknown" to 95%, penalize "unknown" to 50%
+        confidence = brand === "unknown" ? 50 : 95;
       } else {
         for (const [key, mappedBrand] of Object.entries(BRAND_MAPPING)) {
           if (brand === key) {
-            primaryBrand = mappedBrand.toLowerCase(); // Use the mapped brand name (e.g., "Chevrolet" for "chev")
+            primaryBrand = mappedBrand.toLowerCase();
             confidence = 95;
             break;
           }
@@ -174,7 +174,7 @@ export default async function handler(req, res) {
     }
 
     // Finalize response
-    if (primaryBrand && confidence >= 50) { // Adjusted threshold to align with confidence scoring
+    if (primaryBrand && confidence >= 50) {
       const standardizedBrand = BRAND_MAPPING[primaryBrand] || primaryBrand.charAt(0).toUpperCase() + primaryBrand.slice(1).toLowerCase();
       logger.info(`Brand match found for domain ${domain}: ${standardizedBrand} (Confidence: ${confidence}%)`, { timestamp: new Date().toISOString() });
       return res.status(200).json({ brand: standardizedBrand, confidence });
