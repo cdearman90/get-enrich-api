@@ -205,39 +205,38 @@ module.exports = async (req, res) => {
       }
     }
 
-    // Step 2: OpenAI Fallback using callOpenAI
-    const prompt = `What car brand does the company at ${domain} sell? Answer with just the brand name (e.g., Toyota). If there are multiple car brands sold by any given company, only return one of them.`;
-    const openAIResult = await callOpenAI(prompt, {
-      model: "gpt-4-turbo",
-      max_tokens: 10,
-      temperature: 0.3,
-      systemMessage: "You are a helpful assistant.",
-      retries: 2,
-      timeoutMs: 9000
-    });
+// Step 2: OpenAI Fallback using callOpenAI
+const prompt = `What car brand does the company at ${domain} sell? Respond with only the car brand name (e.g., Toyota), nothing else. If the company sells multiple car brands, return the primary or most prominent brand. If the company is not a car dealership or you are unsure, return "unknown".`;
+const openAIResult = await callOpenAI(prompt, {
+  model: "gpt-4-turbo",
+  max_tokens: 10,
+  temperature: 0.3,
+  systemMessage: "You are a helpful assistant. Respond with only the car brand name, nothing else. If unsure, respond with 'unknown'.",
+  retries: 2,
+  timeoutMs: 9000
+});
 
-    if (openAIResult.error) {
-      throw new Error(`OpenAI error: ${openAIResult.error}`);
-    }
+if (openAIResult.error) {
+  throw new Error(`OpenAI error: ${openAIResult.error}`);
+}
 
-    const brand = openAIResult.output.toLowerCase();
-    // Check for direct match in CAR_BRANDS
-    if (CAR_BRANDS.includes(brand)) {
-      const standardizedBrand = BRAND_MAPPING[brand] || brand;
-      return res.status(200).json({ brand: standardizedBrand });
-    }
+const brand = openAIResult.output.toLowerCase();
+// Check for direct match in CAR_BRANDS
+if (CAR_BRANDS.includes(brand)) {
+  const standardizedBrand = BRAND_MAPPING[brand] || brand;
+  return res.status(200).json({ brand: standardizedBrand });
+}
 
-    // Check for match in BRAND_MAPPING keys
-    for (const [key, value] of Object.entries(BRAND_MAPPING)) {
-      if (brand === key) {
-        return res.status(200).json({ brand: value });
-      }
-    }
-
-    // If both fallbacks fail, return an empty result
-    return res.status(200).json({ brand: "" });
-  } catch (error) {
-    console.error(`Error processing domain ${domain}:`, error.message);
-    return res.status(500).json({ error: `Failed to process domain: ${error.message}` });
+// Check for match in BRAND_MAPPING keys
+for (const [key, value] of Object.entries(BRAND_MAPPING)) {
+  if (brand === key) {
+    return res.status(200).json({ brand: value });
   }
-};
+}
+
+// If both fallbacks fail, return an empty result
+return res.status(200).json({ brand: "" });
+} catch (error) {
+  console.error(`Error processing domain ${domain}:`, error.message);
+  return res.status(500).json({ error: `Failed to process domain: ${error.message}` });
+}
