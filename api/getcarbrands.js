@@ -1,5 +1,4 @@
 // /api/getcarbrands.js
-const axios = require("axios");
 const { callOpenAI } = require("./lib/openai");
 const winston = require('winston');
 
@@ -111,7 +110,7 @@ module.exports = async (req, res) => {
         primaryBrand = brand;
         confidence = brand === "unknown" ? 65 : 85; // Vercel confidence (boost to 95% post-deployment)
       } else {
-        for (const [key, value] of Object.entries(BRAND_MAPPING)) {
+        for (const [key, mappedBrand] of Object.entries(BRAND_MAPPING)) {
           if (brand === key) {
             primaryBrand = key;
             confidence = 85;
