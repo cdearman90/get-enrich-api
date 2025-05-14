@@ -1,17 +1,17 @@
-//\ /api/getcarbrands.js
+// /api/getcarbrands.js
 const axios = require("axios");
 const { callOpenAI } = require("./lib/openai");
 
 // List of car brands (same as CAR_BRANDS in constants.gs)
 const CAR_BRANDS = [
-  'acura', 'alfa romeo', 'amc', 'aston martin', 'audi', 'bentley', 'bmw', 'bugatti', 'buick',
-  'cadillac', 'carmax', 'cdj', 'cdjrf', 'cdjr', 'chev', 'chevvy', 'chevrolet', 'chrysler', 'cjd', 'daewoo',
-  'dodge', 'eagle', 'ferrari', 'fiat', 'ford', 'genesis', 'gmc', 'honda', 'hummer', 'hyundai', 'inf', 'infiniti',
-  'isuzu', 'jaguar', 'jeep', 'jlr', 'kia', 'lamborghini', 'land rover', 'landrover', 'lexus', 'lincoln', 'lucid',
-  'maserati', 'maz', 'mazda', 'mb', 'merc', 'mercedes', 'mercedes-benz', 'mercedesbenz', 'merk', 'mini',
-  'mitsubishi', 'nissan', 'oldsmobile', 'plymouth', 'polestar', 'pontiac', 'porsche', 'ram', 'rivian',
-  'rolls-royce', 'saab', 'saturn', 'scion', 'smart', 'subaru', 'subie', 'suzuki', 'tesla', 'toyota',
-  'volkswagen', 'volvo', 'vw', 'chevy', 'honda'
+  "acura", "alfa romeo", "amc", "aston martin", "audi", "bentley", "bmw", "bugatti", "buick",
+  "cadillac", "carmax", "cdj", "cdjrf", "cdjr", "chev", "chevvy", "chevrolet", "chrysler", "cjd", "daewoo",
+  "dodge", "eagle", "ferrari", "fiat", "ford", "genesis", "gmc", "honda", "hummer", "hyundai", "inf", "infiniti",
+  "isuzu", "jaguar", "jeep", "jlr", "kia", "lamborghini", "land rover", "landrover", "lexus", "lincoln", "lucid",
+  "maserati", "maz", "mazda", "mb", "merc", "mercedes", "mercedes-benz", "mercedesbenz", "merk", "mini",
+  "mitsubishi", "nissan", "oldsmobile", "plymouth", "polestar", "pontiac", "porsche", "ram", "rivian",
+  "rolls-royce", "saab", "saturn", "scion", "smart", "subaru", "subie", "suzuki", "tesla", "toyota",
+  "volkswagen", "volvo", "vw", "chevy", "honda"
 ];
 
   const BRAND_MAPPING = {

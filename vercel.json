@@ -4,6 +4,10 @@
     {
       "src": "api/**/*.js",
       "use": "@vercel/node"
+    },
+    {
+      "src": "getcarbrands.js",
+      "use": "@vercel/node"
     }
   ],
   "routes": [
@@ -22,6 +26,10 @@
     {
       "src": "/public-api/batch-clean-titles-and-locations",
       "dest": "api/batch-clean-titles-and-locations.js"
+    },
+    {
+      "src": "/api/getcarbrands",
+      "dest": "getcarbrands.js"
     }
   ]
 }
