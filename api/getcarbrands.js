@@ -48,7 +48,7 @@ const BRAND_MAPPING = {
   "volks": "Volkswagen", "vw": "Volkswagen", "vwof": "Volkswagen", "volvo": "Volvo", "vol": "Volvo",
   "vinfast": "VinFast", "fisker": "Fisker", "mopar": "Chrysler", "byd": "BYD", "stellantis": "Chrysler",
   "bmwof": "BMW", "fordof": "Ford", "audiof": "Audi"
-];
+};
 
 // Winston logger setup
 const logger = winston.createLogger({
