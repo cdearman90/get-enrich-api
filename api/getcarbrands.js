@@ -625,8 +625,9 @@ export default async function handler(req, res) {
 
 Respond with only the verified brand name (e.g., Toyota, Chevy) or "unknown". Shorten "Chevrolet" to "Chevy". Ensure the brand is in: ${CAR_BRANDS.join(", ")}. Use exact capitalization (e.g., "Honda", not "honda").`;
 
-      // Log prompt for debugging
+      // Log prompt and options for debugging
       logger.info(`Prompt for OpenAI: ${prompt.substring(0, 500)}...`, { timestamp: new Date().toISOString() });
+      logger.info(`OpenAI options: ${JSON.stringify({ model: "gpt-4-turbo", max_tokens: 10, temperature: 0.3, systemMessage: "Respond with only the car brand name or 'unknown', nothing else.", retries: 3, timeoutMs: 45000, backoffMs: 2000 })}`, { timestamp: new Date().toISOString() });
 
       // Validate prompt
       if (typeof prompt !== "string") {
@@ -641,8 +642,8 @@ Respond with only the verified brand name (e.g., Toyota, Chevy) or "unknown". Sh
         temperature: 0.3,
         systemMessage: "Respond with only the car brand name or 'unknown', nothing else.",
         retries: 3,
-        timeoutMs: 45000, // Increased to 45 seconds
-        backoffMs: 2000 // Exponential backoff starting at 2 seconds
+        timeoutMs: 45000,
+        backoffMs: 2000
       });
 
       if (openAIResult.error) {

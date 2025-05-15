@@ -1,5 +1,3 @@
-// api/lib/openai.js v1.0.4
-
 import winston from "winston";
 
 const isProd = process.env.NODE_ENV === "production";
@@ -24,7 +22,6 @@ const logger = winston.createLogger({
       ]
 });
 
-
 /**
  * Logs messages with Winston
  * @param {string} level - Log level
@@ -37,25 +34,43 @@ function log(level, message, context = {}) {
 
 /**
  * Calls the OpenAI API with retries and timeout
- * @param {string} prompt - The prompt to send to OpenAI
- * @param {Object} options - Options for the API call
+ * @param {Object} params - Parameters for the API call
+ * @param {string} params.prompt - The prompt to send to OpenAI
+ * @param {string} [params.model="gpt-4-turbo"] - The model to use
+ * @param {number} [params.max_tokens=50] - Maximum tokens
+ * @param {number} [params.temperature=0.3] - Temperature
+ * @param {string} [params.systemMessage="You are a helpful assistant."] - System message
+ * @param {number} [params.retries=3] - Number of retries
+ * @param {number} [params.timeoutMs=45000] - Timeout in milliseconds
+ * @param {number} [params.backoffMs=2000] - Base backoff delay in milliseconds
  * @returns {Object} - Response object with output, tokens, confidence, source, and error (if any)
  */
-export async function callOpenAI(prompt, options = {}) {
+export async function callOpenAI({
+  prompt,
+  model = "gpt-4-turbo",
+  max_tokens = 50,
+  temperature = 0.3,
+  systemMessage = "You are a helpful assistant.",
+  retries = 3,
+  timeoutMs = 45000,
+  backoffMs = 2000
+}) {
   const apiKey = process.env.OPENAI_API_KEY;
 
-  const defaults = {
-    model: "gpt-4-turbo",
-    max_tokens: 50,
-    temperature: 0.3,
-    systemMessage: "You are a helpful assistant.",
-    retries: 2,
-    timeoutMs: 9000
-  };
-  const opts = { ...defaults, ...options };
+  // Validate prompt
+  if (typeof prompt !== "string") {
+    log("error", `Invalid prompt type: ${typeof prompt}, value: ${JSON.stringify(prompt)}`, {});
+    return {
+      output: JSON.stringify({ isReadable: true, isConfident: false }),
+      tokens: 0,
+      confidence: "low",
+      source: "GPT",
+      error: `Invalid prompt type: ${typeof prompt}`
+    };
+  }
 
   if (!apiKey) {
-    log("warn", "OPENAI_API_KEY is not set — returning default response", { prompt });
+    log("warn", "OPENAI_API_KEY is not set — returning default response", { prompt: prompt.slice(0, 80) });
     return {
       output: JSON.stringify({ isReadable: true, isConfident: false }),
       tokens: 0,
@@ -67,14 +82,14 @@ export async function callOpenAI(prompt, options = {}) {
 
   const controller = new AbortController();
   const timeoutId = setTimeout(() => {
-    log("warn", "OpenAI API timeout triggered", { prompt });
+    log("warn", "OpenAI API timeout triggered", { prompt: prompt.slice(0, 80) });
     controller.abort();
-  }, opts.timeoutMs);
+  }, timeoutMs);
 
   let attempt = 0;
-  while (attempt <= opts.retries) {
+  while (attempt <= retries) {
     try {
-      log("warn", `OpenAI [Attempt ${attempt + 1}]: ${prompt.slice(0, 80)}...`, { prompt });
+      log("info", `OpenAI [Attempt ${attempt + 1}]: ${prompt.slice(0, 80)}...`, { prompt: prompt.slice(0, 500) });
 
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -83,13 +98,13 @@ export async function callOpenAI(prompt, options = {}) {
           "Content-Type": "application/json"
         },
         body: JSON.stringify({
-          model: opts.model,
+          model,
           messages: [
-            { role: "system", content: opts.systemMessage },
+            { role: "system", content: systemMessage },
             { role: "user", content: prompt }
           ],
-          max_tokens: opts.max_tokens,
-          temperature: opts.temperature
+          max_tokens,
+          temperature
         }),
         signal: controller.signal
       });
@@ -98,7 +113,7 @@ export async function callOpenAI(prompt, options = {}) {
       const raw = await response.text();
 
       if (!response.ok) {
-        log("error", `OpenAI HTTP error: ${response.status}`, { prompt, raw });
+        log("error", `OpenAI HTTP error: ${response.status}`, { prompt: prompt.slice(0, 80), raw });
         await logToGPTErrorTab(prompt, raw, `HTTP ${response.status}`);
         if (response.status >= 500 || response.status === 429) throw new Error("Retryable error");
         throw new Error(`OpenAI Error: ${raw}`);
@@ -108,7 +123,7 @@ export async function callOpenAI(prompt, options = {}) {
       try {
         json = JSON.parse(raw);
       } catch (err) {
-        log("error", `JSON parse error: ${err.message}`, { prompt, raw });
+        log("error", `JSON parse error: ${err.message}`, { prompt: prompt.slice(0, 80), raw });
         await logToGPTErrorTab(prompt, raw, "Invalid JSON");
         throw new Error("Malformed OpenAI JSON");
       }
@@ -118,14 +133,25 @@ export async function callOpenAI(prompt, options = {}) {
 
       return {
         output: content,
-        tokens: json.usage?.total_tokens || opts.max_tokens,
+        tokens: json.usage?.total_tokens || max_tokens,
         confidence: content.length > 10 ? "high" : "low",
         source: "GPT"
       };
     } catch (err) {
+      clearTimeout(timeoutId);
       attempt++;
-      if (attempt > opts.retries) throw err;
-      await new Promise((r) => setTimeout(r, 1000 * attempt));
+      if (attempt > retries) {
+        log("error", `OpenAI failed after ${retries + 1} attempts: ${err.message}`, { prompt: prompt.slice(0, 80) });
+        return {
+          output: JSON.stringify({ isReadable: true, isConfident: false }),
+          tokens: 0,
+          confidence: "low",
+          source: "GPT",
+          error: err.message
+        };
+      }
+      // Exponential backoff: 2s, 4s, 8s
+      await new Promise(resolve => setTimeout(resolve, backoffMs * Math.pow(2, attempt - 1)));
     }
   }
 
@@ -148,7 +174,7 @@ async function logToGPTErrorTab(prompt, errorMsg, errorType) {
   const secret = process.env.GAS_SECRET;
 
   if (!secret) {
-    log("warn", "GAS_SECRET not set — skipping GPT log", { prompt });
+    log("warn", "GAS_SECRET not set — skipping GPT log", { prompt: prompt.slice(0, 80) });
     return;
   }
 
@@ -165,6 +191,6 @@ async function logToGPTErrorTab(prompt, errorMsg, errorType) {
       })
     });
   } catch (err) {
-    log("error", "Failed to log GPT error", { prompt, error: err.message });
+    log("error", "Failed to log GPT error", { prompt: prompt.slice(0, 80), error: err.message });
   }
 }
