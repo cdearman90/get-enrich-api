@@ -9,10 +9,9 @@ import {
   BRAND_MAPPING,
   PROPER_NOUNS_CACHE,
   KNOWN_LAST_NAMES_CACHE,
-  KNOWN_CITIES_SET_CACHE // Added
+  KNOWN_CITIES_SET_CACHE,
+  BRAND_ONLY_DOMAINS
 } from "./batch-enrich-company-name-fallback.js";
-
-import { fallbackName, clearOpenAICache, BRAND_ONLY_DOMAINS } from "./batch-enrich-company-name-fallback.js";
 
 import winston from "winston";
 import path from "path";
