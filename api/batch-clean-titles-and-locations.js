@@ -14,12 +14,11 @@ const logger = winston.createLogger({
 
 export const config = {
   api: {
-    bodyParser: false // Required for raw body parsing
+    bodyParser: false
   }
 };
 
 export default async function handler(req, res) {
-  // Verify the endpoint path
   const path = req.url.split('?')[0];
   if (path !== '/public-api/batch-clean-titles-and-locations') {
     return res.status(404).json({ error: "Endpoint not found" });
@@ -33,7 +32,6 @@ export default async function handler(req, res) {
       const raw = Buffer.concat(buffers).toString("utf-8");
       const parsed = JSON.parse(raw);
       leads = parsed.leads || [];
-      // Validate batchId presence
       if (!parsed.batchId) {
         return res.status(400).json({ error: "Missing batchId" });
       }
@@ -78,40 +76,55 @@ export default async function handler(req, res) {
     }
   };
 
-  const cleanTitlesAndLocations = async (lead) => {
-    const { title, city, state, rowNum } = lead;
-    if (!title && (!city || !state)) {
-      return { title, city, state, rowNum, error: "Missing title and city/state" };
-    }
-
+  const cleanTitlesAndLocations = async (leadsBatch) => {
     const prompt = `
-Given the following lead data:
-- Job Title: ${title || "N/A"}
-- City: ${city || "N/A"}
-- State: ${state || "N/A"}
+Clean and standardize the following leads data:
+${leadsBatch.map((lead, idx) => `
+Lead ${idx + 1}:
+- Job Title: ${lead.title || "N/A"}
+- City: ${lead.city || "N/A"}
+- State: ${lead.state || "N/A"}
+`).join('\n')}
 
-Clean and standardize the data:
+For each lead:
 - Job Title: Map to "General Sales Manager", "Sales Manager", or "General Manager". Use "gsm" → "General Sales Manager", "gm" → "General Manager", "manager" → "Sales Manager". Return as-is if no match.
 - City: Standardize (e.g., "new york" → "New York"). Infer from state if missing (e.g., "NY" → "New York"). Use "Unknown" if unresolvable.
 - State: Convert to 2-letter code (e.g., "New York" → "NY"). Infer from city if missing. Use "Unknown" if unresolvable.
 
-Return: {"title": "Cleaned Title", "city": "Cleaned City", "state": "Cleaned State"}
+Return a JSON array of objects: [{"title": "Cleaned Title", "city": "Cleaned City", "state": "Cleaned State"}, ...]
 `.trim();
 
     try {
       const response = await callOpenAI(prompt);
       const cleaned = JSON.parse(response);
-      return { title: cleaned.title, city: cleaned.city, state: cleaned.state, rowNum, modelUsed: "gpt-4" };
+      return leadsBatch.map((lead, idx) => ({
+        title: cleaned[idx]?.title || lead.title,
+        city: cleaned[idx]?.city || lead.city,
+        state: cleaned[idx]?.state || lead.state,
+        rowNum: lead.rowNum,
+        modelUsed: "gpt-4",
+        ...(cleaned[idx] ? {} : { error: "Failed to clean lead" })
+      }));
     } catch (err) {
-      return { title, city, state, rowNum, error: err.message, modelUsed: "gpt-4" };
+      return leadsBatch.map(lead => ({
+        title: lead.title,
+        city: lead.city,
+        state: lead.state,
+        rowNum: lead.rowNum,
+        error: err.message,
+        modelUsed: "gpt-4"
+      }));
     }
   };
 
   try {
+    // Process leads in smaller batches (e.g., 10 leads per OpenAI call)
+    const batchSize = 10;
     const results = [];
-    for (const lead of leads) {
-      const cleaned = await cleanTitlesAndLocations(lead);
-      results.push(cleaned);
+    for (let i = 0; i < leads.length; i += batchSize) {
+      const batch = leads.slice(i, i + batchSize);
+      const cleanedBatch = await cleanTitlesAndLocations(batch);
+      results.push(...cleanedBatch);
     }
     return res.status(200).json({ results });
   } catch (err) {
