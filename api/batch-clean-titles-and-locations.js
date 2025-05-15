@@ -51,8 +51,10 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Missing OpenAI API key" });
   }
 
-  const callOpenAI = async (prompt, model = "gpt-4") => {
+  const callOpenAI = async (prompt, model = "gpt-4o-mini") => {
     try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 8000); // 8-second timeout
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -63,8 +65,10 @@ export default async function handler(req, res) {
           model,
           messages: [{ role: "user", content: prompt }],
           temperature: 0.3
-        })
+        }),
+        signal: controller.signal
       });
+      clearTimeout(timeoutId);
 
       const json = await response.json();
       if (!json.choices?.[0]?.message?.content) {
@@ -78,26 +82,19 @@ export default async function handler(req, res) {
 
   const cleanTitlesAndLocations = async (leads) => {
     const prompt = `
-You are a data cleaning assistant. Clean and standardize the following leads data:
-${leads.map((lead, idx) => `
-Lead ${idx + 1}:
-- Job Title: ${lead.title || "N/A"}
-- City: ${lead.city || "N/A"}
-- State: ${lead.state || "N/A"}
-`).join('\n')}
+Clean the following leads data:
+${leads.map((lead, idx) => `Lead ${idx + 1}: Title="${lead.title || "N/A"}", City="${lead.city || "N/A"}", State="${lead.state || "N/A"}"`).join('; ')}
 
 For each lead:
-- Job Title: Map to "General Sales Manager", "Sales Manager", or "General Manager". Use "gsm" → "General Sales Manager", "gm" → "General Manager", "manager" → "Sales Manager". Return as-is if no match.
-- City: Standardize capitalization (e.g., "new york" → "New York"). Infer from state if missing and possible (e.g., "New York" state → "New York" city). Use "Unknown" if unresolvable.
-- State: Return the full state name with proper capitalization (e.g., "Pennsylvania", not "PA"). Do not use 2-letter codes under any circumstances. Infer from city if missing and possible (e.g., "Pittsburgh" → "Pennsylvania"). Use "Unknown" if unresolvable.
+- Title: Map "gsm" to "General Sales Manager", "gm" to "General Manager", "manager" to "Sales Manager". Keep as-is if no match.
+- City: Capitalize (e.g., "new york" to "New York"). Infer from state if possible. Use "Unknown" if unresolvable.
+- State: Use full name (e.g., "Pennsylvania", not "PA"). Capitalize properly. Infer from city if possible. Use "Unknown" if unresolvable.
 
-Return ONLY a valid JSON array of objects, with no additional text or explanations. Example:
-[{"title":"Sales Manager","city":"Pittsburgh","state":"Pennsylvania"},...]
+Return ONLY a JSON array of objects: [{"title":"...","city":"...","state":"..."},...]
 `.trim();
 
     try {
       let response = await callOpenAI(prompt);
-      // Attempt to extract JSON if wrapped in text
       const jsonMatch = response.match(/\[.*\]/s);
       if (jsonMatch) {
         response = jsonMatch[0];
@@ -111,7 +108,7 @@ Return ONLY a valid JSON array of objects, with no additional text or explanatio
         city: cleaned[idx]?.city || lead.city,
         state: cleaned[idx]?.state || lead.state,
         rowNum: lead.rowNum,
-        modelUsed: "gpt-4",
+        modelUsed: "gpt-4o-mini",
         ...(cleaned[idx] ? {} : { error: "Failed to clean lead" })
       }));
     } catch (err) {
@@ -121,7 +118,7 @@ Return ONLY a valid JSON array of objects, with no additional text or explanatio
         state: lead.state,
         rowNum: lead.rowNum,
         error: err.message,
-        modelUsed: "gpt-4"
+        modelUsed: "gpt-4o-mini"
       }));
     }
   };
