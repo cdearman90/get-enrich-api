@@ -625,7 +625,10 @@ export default async function handler(req, res) {
 
 Respond with only the verified brand name (e.g., Toyota, Chevy) or "unknown". Shorten "Chevrolet" to "Chevy". Ensure the brand is in: ${CAR_BRANDS.join(", ")}. Use exact capitalization (e.g., "Honda", not "honda").`;
 
-      // Validate prompt to prevent "prompt.slice is not a function"
+      // Log prompt for debugging
+      logger.info(`Prompt for OpenAI: ${prompt.substring(0, 500)}...`, { timestamp: new Date().toISOString() });
+
+      // Validate prompt
       if (typeof prompt !== "string") {
         logger.error(`Invalid prompt type for domain ${domain}: ${typeof prompt}, value: ${JSON.stringify(prompt)}`, { timestamp: new Date().toISOString() });
         return res.status(500).json({ error: "Invalid prompt format" });
@@ -638,7 +641,8 @@ Respond with only the verified brand name (e.g., Toyota, Chevy) or "unknown". Sh
         temperature: 0.3,
         systemMessage: "Respond with only the car brand name or 'unknown', nothing else.",
         retries: 3,
-        timeoutMs: 30000 // Increased to 30 seconds for stability
+        timeoutMs: 45000, // Increased to 45 seconds
+        backoffMs: 2000 // Exponential backoff starting at 2 seconds
       });
 
       if (openAIResult.error) {
@@ -660,7 +664,7 @@ Respond with only the verified brand name (e.g., Toyota, Chevy) or "unknown". Sh
 
     // Finalize response
     if (primaryBrand && confidence >= 50 && primaryBrand !== "unknown") {
-      const standardizedBrand = CAR_BRANDS.find(b => b.toLowerCase() === primaryBrand) ||
+      const standardizedBrand = CAR_BRANDS.find(b => b.toLowerCase() === primaryBrand) || 
         primaryBrand.charAt(0).toUpperCase() + primaryBrand.slice(1).toLowerCase();
       logger.info(`Brand match found for domain ${domain}: ${standardizedBrand} (Confidence: ${confidence}%)`, { timestamp: new Date().toISOString() });
       return res.status(200).json({ brand: standardizedBrand, confidence });
