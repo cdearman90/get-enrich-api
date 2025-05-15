@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Missing OpenAI API key" });
   }
 
-  const callOpenAI = async (prompt, model = "gpt-4") => {
+  const callOpenAI = async (prompt, model = "gpt-4o-mini") => {
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -76,10 +76,10 @@ export default async function handler(req, res) {
     }
   };
 
-  const cleanTitlesAndLocations = async (leadsBatch) => {
+  const cleanTitlesAndLocations = async (leads) => {
     const prompt = `
 Clean and standardize the following leads data:
-${leadsBatch.map((lead, idx) => `
+${leads.map((lead, idx) => `
 Lead ${idx + 1}:
 - Job Title: ${lead.title || "N/A"}
 - City: ${lead.city || "N/A"}
@@ -88,8 +88,8 @@ Lead ${idx + 1}:
 
 For each lead:
 - Job Title: Map to "General Sales Manager", "Sales Manager", or "General Manager". Use "gsm" → "General Sales Manager", "gm" → "General Manager", "manager" → "Sales Manager". Return as-is if no match.
-- City: Standardize (e.g., "new york" → "New York"). Infer from state if missing (e.g., "NY" → "New York"). Use "Unknown" if unresolvable.
-- State: Convert to 2-letter code (e.g., "New York" → "NY"). Infer from city if missing. Use "Unknown" if unresolvable.
+- City: Standardize (e.g., "new york" → "New York"). Infer from state if missing (e.g., "New York" → "New York"). Use "Unknown" if unresolvable.
+- State: Return the full state name (e.g., "Pennsylvania" instead of "PA"). Standardize capitalization (e.g., "new york" → "New York"). Infer from city if missing. Use "Unknown" if unresolvable.
 
 Return a JSON array of objects: [{"title": "Cleaned Title", "city": "Cleaned City", "state": "Cleaned State"}, ...]
 `.trim();
@@ -97,35 +97,28 @@ Return a JSON array of objects: [{"title": "Cleaned Title", "city": "Cleaned Cit
     try {
       const response = await callOpenAI(prompt);
       const cleaned = JSON.parse(response);
-      return leadsBatch.map((lead, idx) => ({
+      return leads.map((lead, idx) => ({
         title: cleaned[idx]?.title || lead.title,
         city: cleaned[idx]?.city || lead.city,
         state: cleaned[idx]?.state || lead.state,
         rowNum: lead.rowNum,
-        modelUsed: "gpt-4",
+        modelUsed: "gpt-4o-mini",
         ...(cleaned[idx] ? {} : { error: "Failed to clean lead" })
       }));
     } catch (err) {
-      return leadsBatch.map(lead => ({
+      return leads.map(lead => ({
         title: lead.title,
         city: lead.city,
         state: lead.state,
         rowNum: lead.rowNum,
         error: err.message,
-        modelUsed: "gpt-4"
+        modelUsed: "gpt-4o-mini"
       }));
     }
   };
 
   try {
-    // Process leads in smaller batches (e.g., 10 leads per OpenAI call)
-    const batchSize = 10;
-    const results = [];
-    for (let i = 0; i < leads.length; i += batchSize) {
-      const batch = leads.slice(i, i + batchSize);
-      const cleanedBatch = await cleanTitlesAndLocations(batch);
-      results.push(...cleanedBatch);
-    }
+    const results = await cleanTitlesAndLocations(leads);
     return res.status(200).json({ results });
   } catch (err) {
     return res.status(500).json({ error: "Processing failed", details: err.message });
