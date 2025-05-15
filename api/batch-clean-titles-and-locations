@@ -1,3 +1,16 @@
+import { callOpenAI } from "./lib/openai.js";
+import winston from "winston";
+
+// Configure Winston logger
+const logger = winston.createLogger({
+  level: "info",
+  format: winston.format.combine(
+    winston.format.timestamp(),
+    winston.format.json()
+  ),
+  transports: [new winston.transports.Console()]
+});
+
 export const config = {
   api: {
     bodyParser: false // required to support binary uploads
@@ -75,136 +88,16 @@ Return: {"title": "Cleaned Title", "city": "Cleaned City", "state": "Cleaned Sta
     }
   };
 
-  // Clean Company Names
-  const cleanCompanyName = async (lead) => {
-    const { domain } = lead;
-    if (!domain) {
-      return { name: "", error: "Missing domain" };
-    }
-
-    const prompt = `
-Given the domain: ${domain}
-Return a cleaned company name:
-- Remove "www.", ".com", etc.
-- Standardize to title case (e.g., "duvalford" → "Duval Ford").
-- Return the cleaned name in: {"name": "Cleaned Name"}
-`.trim();
-
-    try {
-      const response = await callOpenAI(prompt);
-      const cleaned = JSON.parse(response);
-      return { name: cleaned.name, modelUsed: "gpt-4" };
-    } catch (err) {
-      return { name: "", error: err.message, modelUsed: "gpt-4" };
-    }
-  };
-
-  // Full Cleanup (Titles, Locations, Company Name)
-  const cleanAllFields = async (lead) => {
-    const { title, city, state, domain } = lead;
-    if (!title && (!city || !state) && !domain) {
-      return { title, city, state, name: "", error: "Missing all key fields" };
-    }
-
-    const prompt = `
-Given the lead data:
-- Job Title: ${title || "N/A"}
-- City: ${city || "N/A"}
-- State: ${state || "N/A"}
-- Domain: ${domain || "N/A"}
-
-Clean and standardize:
-- Job Title: Map to "General Sales Manager", "Sales Manager", or "General Manager". Use "gsm" → "General Sales Manager", "gm" → "General Manager", "manager" → "Sales Manager". Return as-is if no match.
-- City: Standardize (e.g., "new york" → "New York"). Infer from state if missing. Use "Unknown" if unresolvable.
-- State: Convert to 2-letter code (e.g., "New York" → "NY"). Infer from city if missing. Use "Unknown" if unresolvable.
-- Company Name: Clean domain to title case (e.g., "duvalford.com" → "Duval Ford").
-
-Return: {"title": "Cleaned Title", "city": "Cleaned City", "state": "Cleaned State", "name": "Cleaned Name"}
-`.trim();
-
-    try {
-      const response = await callOpenAI(prompt);
-      const cleaned = JSON.parse(response);
-      return { title: cleaned.title, city: cleaned.city, state: cleaned.state, name: cleaned.name, modelUsed: "gpt-4" };
-    } catch (err) {
-      return { title, city, state, name: "", error: err.message, modelUsed: "gpt-4" };
-    }
-  };
-
-  // Enrichment (Buyer Score, Franchise Group, Reference Client)
-  const enrichLead = async (lead) => {
-    const { email, firstName, lastName, jobTitle, domain, mobilePhone, leadLinkedIn, engagedContact } = lead;
-    if (!email || !domain) {
-      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: "Missing email or domain" };
-    }
-
-    const prompt = `
-Given the lead data:
-- Email: ${email}
-- First Name: ${firstName || "N/A"}
-- Last Name: ${lastName || "N/A"}
-- Job Title: ${jobTitle || "N/A"}
-- Domain: ${domain}
-- Mobile Phone: ${mobilePhone || "N/A"}
-- Lead LinkedIn: ${leadLinkedIn || "N/A"}
-- Engaged Contact: ${engagedContact || "N/A"}
-
-Enrich the lead:
-- Franchise Group: Identify if the domain belongs to a known auto franchise (e.g., "duvalford.com" → "Duval Ford"). Use "Independent" if unknown.
-- Buyer Score: Calculate a score (0-100):
-  - Base: 50
-  - +20 if Mobile Phone present
-  - +15 if Lead LinkedIn present
-  - +10 if Email present (always true here)
-  - +5 if Engaged Contact present
-- Reference Client: If Engaged Contact is provided, return "${firstName || "Lead"} ${lastName || ""}"; otherwise, "".
-
-Return: {"franchiseGroup": "Group Name", "buyerScore": Number, "referenceClient": "Name"}
-`.trim();
-
-    try {
-      const response = await callOpenAI(prompt);
-      const enriched = JSON.parse(response);
-      return { franchiseGroup: enriched.franchiseGroup, buyerScore: enriched.buyerScore, referenceClient: enriched.referenceClient, modelUsed: "gpt-4" };
-    } catch (err) {
-      return { franchiseGroup: "", buyerScore: 0, referenceClient: "", error: err.message, modelUsed: "gpt-4" };
-    }
-  };
-
   try {
-    const path = req.url.split('?')[0]; // Extract endpoint from URL
-    let results = [];
+    const path = req.url.split('?')[0];
+    if (path !== '/public-api/batch-clean-titles-and-locations') {
+      return res.status(404).json({ error: "Endpoint not found" });
+    }
 
-    switch (path) {
-      case '/api/batch-clean-titles-and-locations':
-        for (const lead of leads) {
-          const cleaned = await cleanTitlesAndLocations(lead);
-          results.push(cleaned);
-        }
-        break;
-
-      case '/api/batch-enrich':
-        // Handle both company name cleaning and full enrichment based on input
-        for (const lead of leads) {
-          if (lead.domain && !lead.email) { // Company name cleaning
-            const cleaned = await cleanCompanyName(lead);
-            results.push(cleaned);
-          } else { // Full enrichment
-            const enriched = await enrichLead(lead);
-            results.push(enriched);
-          }
-        }
-        break;
-
-      case '/api/batch-clean-all':
-        for (const lead of leads) {
-          const cleaned = await cleanAllFields(lead);
-          results.push(cleaned);
-        }
-        break;
-
-      default:
-        return res.status(404).json({ error: "Endpoint not found" });
+    const results = [];
+    for (const lead of leads) {
+      const cleaned = await cleanTitlesAndLocations(lead);
+      results.push(cleaned);
     }
 
     return res.status(200).json({ results });
