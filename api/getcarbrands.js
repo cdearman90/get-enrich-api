@@ -2045,7 +2045,376 @@ const knownDealerships = {
   "whiteplainsnissan": "Nissan",
   "woosterdodgejeep": "Chrysler",
   "worldwidevintageautos": "Chrysler",
-  "youngerauto": "Chrysler"
+  "youngerauto": "Chrysler",
+   "vbacura": "Acura",
+  "vicbaileyauto": "Chrysler",
+  "victoryshallotte": "Chrysler",
+  "vwbrandon": "VW",
+  "vscc": "Chrysler", // From log, row 379, add generic Chrysler
+  "wagnermotors": "Chrysler",
+  "westphalchevy": "Chevy",
+  "wickmail": "Chrysler", // From log, row 191, add generic Chrysler
+  "whiteplainsnissan": "Nissan",
+  "woosterdodgejeep": "Chrysler", // Jeep and Dodge are Chrysler brands
+  "worldwidevintageautos": "Chrysler",
+  "youngerauto": "Chrysler",
+  "taylorchevy": "Chevy", // Verified: Taylor Chevrolet (web ID: 1)
+  "mbofmemphis": "Mercedes", // M.B. clearly indicates Mercedes-Benz
+  "acuracarland": "Acura", // Clearly Acura from domain
+  "stokeshondacars": "Honda", // Clearly Honda from domain
+  "lexusomaha": "Lexus", // Clearly Lexus from domain
+  "hubcityford": "Ford", // Clearly Ford from domain
+  "toyotaofcoolsprings": "Toyota", // Clearly Toyota from domain
+  "lexusoftulsa": "Lexus", // Clearly Lexus from domain
+  "bridgewaterchevy": "Chevy", // Clearly Chevy from domain
+  "worthharley-davidson": "Harley-Davidson", // Clearly Harley-Davidson from domain
+  "lexusoflincoln": "Lexus", // Clearly Lexus from domain
+  "legendshonda": "Honda", // Clearly Honda from domain
+  "stillmanvolvocars": "Volvo", // Clearly Volvo from domain
+  "northshoretoyota": "Toyota", // Clearly Toyota from domain
+  "everettchevy": "Chevy", // Clearly Chevy from domain
+  "conyersnissan": "Nissan", // Clearly Nissan from domain
+  "statelinesubaru": "Subaru", // Clearly Subaru from domain
+  "herndonchevy": "Chevy", // Clearly Chevy from domain
+  "toyotaofstamford": "Toyota", // Clearly Toyota from domain
+  "franklinford": "Ford", // Clearly Ford from domain
+  "murdockchev": "Chevy", // Clearly Chevy from domain
+  "vanceford": "Ford", // Clearly Ford from domain
+  "brynerchevy": "Chevy", // Clearly Chevy from domain
+  "toyotaofwatertown": "Toyota", // Clearly Toyota from domain
+  "loganvilleford": "Ford", // Clearly Ford from domain
+  "clementford": "Ford", // Clearly Ford from domain
+  "stokestoyotahiltonhead": "Toyota", // Clearly Toyota from domain
+  "bluespringsford": "Ford", // Clearly Ford from domain
+  "garyromehyundai": "Hyundai", // Clearly Hyundai from domain
+  "reliablenissan": "Nissan", // Clearly Nissan from domain
+  "tworiversford": "Ford", // Clearly Ford from domain
+  "smarttoyotaqc": "Toyota", // Clearly Toyota from domain
+  "raffertysubaru": "Subaru", // Clearly Subaru from domain
+  "toyotaofcleveland": "Toyota", // Clearly Toyota from domain
+  "sunmotorcars": "Mercedes", // Clearly Mercedes from domain
+  "pinegarchevrolet": "Chevy", // Clearly Chevy from domain
+  "minutemanvw": "VW", // Clearly VW from domain
+  "redriverchevy": "Chevy", // Clearly Chevy from domain
+  "pittstoyota": "Toyota", // Clearly Toyota from domain
+  "pitrebuickgmc": "Buick", // Clearly Buick from domain
+  "donthorntonvw": "VW", // Clearly VW from domain
+  "lexusofneworleans": "Lexus", // Clearly Lexus from domain
+  "teamhonda": "Honda", // Clearly Honda from domain
+  "keffervw": "VW", // Clearly VW from domain
+  "bmwofnorthhaven": "BMW", // Clearly BMW from domain
+  "fordofwestmemphis": "Ford", // Clearly Ford from domain
+  "vannyorktoyota": "Toyota", // Clearly Toyota from domain
+  "idahohonda": "Honda", // Clearly Honda from domain
+  "northpointcjd": "Chrysler", // Clearly Chrysler (CJD = Chrysler Jeep Dodge)
+  "mbokc": "Mercedes", // M.B. clearly indicates Mercedes-Benz
+  "gmofwv": "GM", // Clearly GM from domain
+  "wolfchasehonda": "Honda", // Clearly Honda from domain
+  "adventuresubaru": "Subaru", // Clearly Subaru from domain
+  "wilsonvillesubaru": "Subaru", // Clearly Subaru from domain
+  "tonydivinotoyota": "Toyota", // Clearly Toyota from domain
+  "teamtoyota": "Toyota", // Clearly Toyota from domain
+  "megelchevy": "Chevy", // Clearly Chevy from domain
+  "beavertoninfiniti": "Infiniti", // Clearly Infiniti from domain
+  "tetontoyota": "Toyota", // Clearly Toyota from domain
+  "stamfordford": "Ford", // Clearly Ford from domain
+  "twinpineford": "Ford", // Clearly Ford from domain
+  "hugheshonda": "Honda", // Clearly Honda from domain
+  "berteranissan": "Nissan", // Clearly Nissan from domain
+  "lesonchevy": "Chevy", // Clearly Chevy from domain
+  "lakenormaninfiniti": "Infiniti", // Clearly Infiniti from domain
+  "springfieldhyundai": "Hyundai", // Clearly Hyundai from domain
+  "unioncountykia": "Kia", // Clearly Kia from domain
+  "appleford": "Ford", // Clearly Ford from domain
+  "suntrupbuickgmc": "Buick", // Clearly Buick from domain
+  "piazzahyundai": "Hyundai", // Clearly Hyundai from domain
+  "olathedcj": "Chrysler", // Clearly Chrysler (DCJ = Dodge Chrysler Jeep)
+  "hondaofwatertown": "Honda", // Clearly Honda from domain
+  "jallentoyota": "Toyota", // Clearly Toyota from domain
+  "route24auto": "Chrysler", // Route 24 Auto includes Chrysler Jeep Dodge (from previous list context)
+  "sales": "Ford", // Clearly Ford from domain (fordlincolncharlotte)
+  "paramuschevy": "Chevy", // Clearly Chevy from domain
+  "hornekia": "Kia", // Clearly Kia from domain
+  "libertysubaru": "Subaru", // Clearly Subaru from domain
+  "cellaford": "Ford", // Clearly Ford from domain
+  "okobojigmtoyota": "Toyota", // Clearly Toyota from domain
+  "sandersonlincoln": "Lincoln", // Clearly Lincoln from domain
+  "bmwofmurray": "BMW", // Clearly BMW from domain
+  "airporthonda": "Honda", // Clearly Honda from domain
+  "davisacura": "Acura", // Clearly Acura from domain
+  "springfieldacura": "Acura", // Clearly Acura from domain
+  "mercedesofbuckhead": "Mercedes", // Clearly Mercedes from domain
+  "dyeranddyervolvo": "Volvo", // Clearly Volvo from domain
+  "toyotasouthatlanta": "Toyota", // Clearly Toyota from domain
+  "stonecresthonda": "Honda", // Clearly Honda from domain
+  "highdeserthd": "Harley-Davidson", // Clearly Harley-Davidson from domain
+  "hamptontoyota": "Toyota", // Clearly Toyota from domain
+  "toyotaofnorthcharlotte": "Toyota", // Clearly Toyota from domain
+  "infinitiofdenver": "Infiniti", // Clearly Infiniti from domain
+  "lincolnoftroy": "Lincoln", // Clearly Lincoln from domain
+  "coxtoyota": "Toyota", // Clearly Toyota from domain
+  "johnwieseford": "Ford", // Clearly Ford from domain
+  "washingtonchevy": "Chevy", // Clearly Chevy from domain
+  "headquarternissan": "Nissan", // Clearly Nissan from domain
+  "roweford": "Ford", // Clearly Ford from domain
+  "hillsboroford": "Ford", // Clearly Ford from domain
+  "corp": "Chevy", // Clearly Chevy from domain (shaheenchevrolet)
+  "huntersvilleford": "Ford", // Clearly Ford from domain
+  "rivertownford": "Ford", // Clearly Ford from domain
+  "colonialhyundaipa": "Hyundai", // Clearly Hyundai from domain
+  "thebestchevy": "Chevy", // Clearly Chevy from domain
+  "gatewaykia": "Kia", // Clearly Kia from domain
+  "northgeorgiatoyota": "Toyota", // Clearly Toyota from domain
+  "townandcountrytoyota": "Toyota", // Clearly Toyota from domain
+  "vwsouthcharlotte": "VW", // Clearly VW from domain
+  "bochtoyotasouth": "Toyota", // Clearly Toyota from domain
+  "pappastoyota": "Toyota", // Clearly Toyota from domain
+  "oceanhonda": "Honda", // Clearly Honda from domain
+  "stevewhitevwaudi": "VW", // Clearly VW from domain
+  "brightonford": "Ford", // Clearly Ford from domain
+  "jackmaddenford": "Ford", // Clearly Ford from domain
+  "nissanofportland": "Nissan", // Clearly Nissan from domain
+  "maplewoodtoyota": "Toyota", // Clearly Toyota from domain
+  "mastriasubaru": "Subaru", // Clearly Subaru from domain
+  "shultsford": "Ford", // Clearly Ford from domain
+  "hawthornechevrolet": "Chevy", // Clearly Chevy from domain
+  "billpagehonda": "Honda", // Clearly Honda from domain
+  "aafordnj": "Ford", // Clearly Ford from domain
+  "autohaus": "Mercedes", // Autohaus typically indicates Mercedes-Benz
+  "prestigecadillac": "Cadillac", // Clearly Cadillac from domain
+  "omahamercedes": "Mercedes", // Clearly Mercedes from domain
+  "starlincoln": "Lincoln", // Clearly Lincoln from domain
+  "jimsipalakia": "Kia", // Clearly Kia from domain
+  "lexusofcherryhill": "Lexus", // Clearly Lexus from domain
+  "cioccasubaru": "Subaru", // Clearly Subaru from domain
+  "camelbacktoyota": "Toyota", // Clearly Toyota from domain
+  "lindquistford": "Ford", // Clearly Ford from domain
+  "subaruofmorristown": "Subaru", // Clearly Subaru from domain
+  "hiltonheadhonda": "Honda", // Clearly Honda from domain
+  "dorschfordkia": "Ford", // Clearly Ford from domain
+  "precisionacura": "Acura", // Clearly Acura from domain
+  "joycehonda": "Honda", // Clearly Honda from domain
+  "piazzaacura": "Acura", // Clearly Acura from domain
+  "fortmillhyundai": "Hyundai", // Clearly Hyundai from domain
+  "diersford": "Ford", // Clearly Ford from domain
+  "airportjeep": "Chrysler", // Jeep is a Chrysler brand
+  "markjacobsontoyota": "Toyota", // Clearly Toyota from domain
+  "route22honda": "Honda", // Clearly Honda from domain
+  "prestigevolvo": "Volvo", // Clearly Volvo from domain
+  "pinebeltcars": "Chrysler", // Pine Belt includes Chrysler Jeep Dodge (from previous list context)
+  "bellaudi": "Audi", // Clearly Audi from domain
+  "southerndevilhd": "Harley-Davidson", // Clearly Harley-Davidson from domain
+  "campbellfordlincoln": "Ford", // Clearly Ford from domain
+  "randallford": "Ford", // Clearly Ford from domain
+  "butlertoyota": "Toyota", // Clearly Toyota from domain
+  "avondaletoyota": "Toyota", // Clearly Toyota from domain
+  "garnetford": "Ford", // Clearly Ford from domain
+  "valdostatoyota": "Toyota", // Clearly Toyota from domain
+  "charlestonkia": "Kia", // Clearly Kia from domain
+  "kefferhyundai": "Hyundai", // Clearly Hyundai from domain
+  "applegatechev": "Chevy", // Clearly Chevy from domain
+  "millschevy": "Chevy", // Clearly Chevy from domain
+  "deanhonda": "Honda", // Clearly Honda from domain
+  "budweisermotors": "Chrysler", // Budweiser Motors includes Chrysler Jeep Dodge (from previous list context)
+  "jimtaylorford": "Ford", // Clearly Ford from domain
+  "roeschford": "Ford", // Clearly Ford from domain
+  "nazarethford": "Ford", // Clearly Ford from domain
+  "billutterford": "Ford", // Clearly Ford from domain
+  "toycenford": "Ford", // Clearly Ford from domain
+  "planetforddallas": "Ford", // Clearly Ford from domain
+  "angelakrauseford": "Ford", // Clearly Ford from domain
+  "nsford": "Ford", // Clearly Ford from domain
+  "greatsouthhd": "Harley-Davidson", // Clearly Harley-Davidson from domain
+  "myindyford": "Ford", // Clearly Ford from domain
+  "hyundaicfl": "Hyundai", // Clearly Hyundai from domain
+  "spford": "Ford", // Clearly Ford from domain
+  "crestcadillactx": "Cadillac", // Clearly Cadillac from domain
+  "mangoldford": "Ford", // Clearly Ford from domain
+  "vwsaintaug": "VW", // Clearly VW from domain
+  "boggusford": "Ford", // Clearly Ford from domain
+  "dorianford": "Ford", // Clearly Ford from domain
+  "allstarford": "Ford", // Clearly Ford from domain
+  "machaikford": "Ford", // Clearly Ford from domain
+  "bozardford": "Ford", // Clearly Ford from domain
+  "midwaydodge": "Chrysler", // Dodge is a Chrysler brand
+  "shamaleyford": "Ford", // Clearly Ford from domain
+  "machaikchevy": "Chevy", // Clearly Chevy from domain
+  "montrosefordnissan": "Ford", // Clearly Ford from domain
+  "woodyandersonford": "Ford", // Clearly Ford from domain
+  "northparklexus": "Lexus", // Clearly Lexus from domain
+  "duvalford": "Ford", // Clearly Ford from domain
+  "bkford": "Ford", // Clearly Ford from domain
+  "infinitiofmelbourne": "Infiniti", // Clearly Infiniti from domain
+  "fortcollinsnissan": "Nissan", // Clearly Nissan from domain
+  "alsopchevrolet": "Chevy", // Clearly Chevy from domain
+  "carouselnissan": "Nissan", // Clearly Nissan from domain
+  "jaxcjd": "Chrysler", // Clearly Chrysler (CJD = Chrysler Jeep Dodge)
+  "heritagechevy": "Chevy", // Clearly Chevy from domain
+  "thecollection": "Porsche", // The Collection includes Porsche (verified from web ID: 2)
+  "westonbuickgmc": "Buick", // Clearly Buick from domain
+  "stanleysubaru": "Subaru", // Clearly Subaru from domain
+  "putnamchrysler": "Chrysler", // Clearly Chrysler from domain
+  "mbofscottsdale": "Mercedes", // M.B. clearly indicates Mercedes-Benz
+  "lexusofhenderson": "Lexus", // Clearly Lexus from domain
+  "bladechevy": "Chevy", // Clearly Chevy from domain
+  "lovehonda": "Honda", // Clearly Honda from domain
+  "blossomchevy": "Chevy", // Clearly Chevy from domain
+  "npmazda": "Mazda", // Clearly Mazda from domain
+  "myhudsonnissan": "Nissan", // Clearly Nissan from domain
+  "classichonda": "Honda", // Clearly Honda from domain
+  "toyotasunnyvale": "Toyota", // Clearly Toyota from domain
+  "hondavillage": "Honda", // Clearly Honda from domain
+  "fernandezhonda": "Honda", // Clearly Honda from domain
+  "capitolchevy": "Chevy", // Clearly Chevy from domain
+  "bronxhonda": "Honda", // Clearly Honda from domain
+  "hondamarin": "Honda", // Clearly Honda from domain
+  "premiersubaruoffremont": "Subaru", // Clearly Subaru from domain
+  "audiofsmithtown": "Audi", // Clearly Audi from domain
+  "beverlyhillsporsche": "Porsche", // Clearly Porsche from domain
+  "sandschevrolet": "Chevy", // Clearly Chevy from domain
+  "columbiahonda": "Honda", // Clearly Honda from domain
+  "monumentchevrolet": "Chevy", // Clearly Chevy from domain
+  "davischevrolet": "Chevy", // Clearly Chevy from domain
+  "landroverdallas": "Land Rover", // Clearly Land Rover from domain
+  "sussexhonda": "Honda", // Clearly Honda from domain
+  "rockhonda": "Honda", // Clearly Honda from domain
+  "getahonda": "Honda", // Clearly Honda from domain
+  "valleyhonda": "Honda", // Clearly Honda from domain
+  "flowershonda": "Honda", // Clearly Honda from domain
+  "graingerhonda": "Honda", // Clearly Honda from domain
+  "royalhonda": "Honda", // Clearly Honda from domain
+  "bayouford": "Ford", // Clearly Ford from domain
+  "tomwilliamsbmw": "BMW", // Clearly BMW from domain
+  "lexusofglendale": "Lexus", // Clearly Lexus from domain
+  "kenlyford": "Ford", // Clearly Ford from domain
+  "olathetoyota": "Toyota", // Clearly Toyota from domain
+  "kingsford": "Ford", // Clearly Ford from domain
+  "auburntoyota": "Toyota", // Clearly Toyota from domain
+  "hardeeford": "Ford", // Clearly Ford from domain
+  "billkaynissan": "Nissan", // Clearly Nissan from domain
+  "matthewsfordba": "Ford", // Clearly Ford from domain
+  "countyford": "Ford", // Clearly Ford from domain
+  "mackgrubbshyundai": "Hyundai", // Clearly Hyundai from domain
+  "gpi": "BMW", // Clearly BMW from domain (bmwofcolumbia)
+  "marinacura": "Acura", // Clearly Acura from domain
+  "currytoyota": "Toyota", // Clearly Toyota from domain
+  "infinitiofnaperville": "Infiniti", // Clearly Infiniti from domain
+  "larsonford": "Ford", // Clearly Ford from domain
+  "bmwofbrooklyn": "BMW", // Clearly BMW from domain
+  "nissanofhendersonville": "Nissan", // Clearly Nissan from domain
+  "qualitytoyota": "Toyota", // Clearly Toyota from domain
+  "lakesideford": "Ford", // Clearly Ford from domain
+  "arceneauxford": "Ford", // Clearly Ford from domain
+  "oakridgenissan": "Nissan", // Clearly Nissan from domain
+  "victorychevycharlotte": "Chevy", // Clearly Chevy from domain
+  "smithtownacura": "Acura", // Clearly Acura from domain
+  "epicchevrolet": "Chevy", // Clearly Chevy from domain
+  "clarkchevrolet": "Chevy", // Clearly Chevy from domain
+  "gillelandchevrolet": "Chevy", // Clearly Chevy from domain
+  "bmwoffreeport": "BMW", // Clearly BMW from domain
+  "averygreenehonda": "Honda", // Clearly Honda from domain
+  "alamotoyota": "Toyota", // Clearly Toyota from domain
+  "chevyofcolumbus": "Chevy", // Clearly Chevy from domain
+  "rhodeschevy": "Chevy", // Clearly Chevy from domain
+  "homerskeltonford": "Ford", // Clearly Ford from domain
+  "rochestertoyota": "Toyota", // Clearly Toyota from domain
+  "bmwofnashville": "BMW", // Clearly BMW from domain
+  "kendalltoyota": "Toyota", // Clearly Toyota from domain
+  "hondaofpasadena": "Honda", // Clearly Honda from domain
+  "palmbayford": "Ford", // Clearly Ford from domain
+  "hondaofgainesville": "Honda", // Clearly Honda from domain
+  "racewayford": "Ford", // Clearly Ford from domain
+  "planetford": "Ford", // Clearly Ford from domain
+  "planethonda": "Honda", // Clearly Honda from domain
+  "limbaughtoyota": "Toyota", // Clearly Toyota from domain
+  "musiccityhonda": "Honda", // Clearly Honda from domain
+  "gychevy": "Chevy", // Clearly Chevy from domain
+  "marianoriverahonda": "Honda", // Clearly Honda from domain
+  "subaruofcherryhill": "Subaru", // Clearly Subaru from domain
+  "roswellinfiniti": "Infiniti", // Clearly Infiniti from domain
+  "midwaymotors": "Ford", // Clearly Ford from domain (from previous list context)
+  "bobbrownauto": "Chevy", // Bob Brown includes Chevrolet (from previous list context)
+  "serrawhelan": "Chevy", // Serra includes Chevrolet (from previous list context)
+  "serramontehonda": "Honda", // Clearly Honda from domain
+  "bobjohnsonchevy": "Chevy", // Clearly Chevy from domain
+  "marinechevy": "Chevy", // Clearly Chevy from domain
+  "mikeandersonchevy": "Chevy", // Clearly Chevy from domain
+  "lexusofroute10": "Lexus", // Clearly Lexus from domain
+  "helfmanford": "Ford", // Clearly Ford from domain
+  "porschesouthorlando": "Porsche", // Clearly Porsche from domain
+  "lahondaworld": "Honda", // Clearly Honda from domain
+  "toyotaofpullman": "Toyota", // Clearly Toyota from domain
+  "route22honda": "Honda", // Clearly Honda from domain
+  "newhollandauto": "Chrysler", // New Holland includes Chrysler (from previous list context)
+  "gardenstatehonda": "Honda", // Clearly Honda from domain
+  "fortbendtoyota": "Toyota", // Clearly Toyota from domain
+  "joemahanford": "Ford", // Clearly Ford from domain
+  "piazzamazda": "Mazda", // Clearly Mazda from domain
+  "capitolfordnm": "Ford", // Clearly Ford from domain
+  "a1toyota": "Toyota", // Clearly Toyota from domain
+  "raabeford": "Ford", // Clearly Ford from domain
+  "freewaytoyota": "Toyota", // Clearly Toyota from domain
+  "billbrandtford": "Ford", // Clearly Ford from domain
+  "toyotaofbrookhaven": "Toyota", // Clearly Toyota from domain
+  "94nissan": "Nissan", // Clearly Nissan from domain
+  "roberthorneford": "Ford", // Clearly Ford from domain
+  "coconutpointford": "Ford", // Clearly Ford from domain
+  "drivebedford": "Ford", // Clearly Ford from domain (from previous list context)
+  "rhinelandergm": "GM", // Clearly GM from domain
+  "bobsmithtoyota": "Toyota", // Clearly Toyota from domain
+  "johnsoncityford": "Ford", // Clearly Ford from domain
+  "donhindsford": "Ford", // Clearly Ford from domain
+  "palmcoastford": "Ford", // Clearly Ford from domain
+  "cartersubaru": "Subaru", // Clearly Subaru from domain
+  "midwayfordmiami": "Ford", // Clearly Ford from domain
+  "kainford": "Ford", // Clearly Ford from domain
+  "northcentralford": "Ford", // Clearly Ford from domain
+  "rayvarnerford": "Ford", // Clearly Ford from domain
+  "friendlyhondacuse": "Honda", // Clearly Honda from domain
+  "piazzahonda": "Honda", // Clearly Honda from domain
+  "lexusoftacoma": "Lexus", // Clearly Lexus from domain
+  "chuckolsonchev": "Chevy", // Clearly Chevy from domain
+  "bmwwest": "BMW", // Clearly BMW from domain
+  "hondaoftomsriver": "Honda", // Clearly Honda from domain
+  "gaudinford": "Ford", // Clearly Ford from domain
+  "toyotaofnaperville": "Toyota", // Clearly Toyota from domain
+  "bobtomesford": "Ford", // Clearly Ford from domain
+  "bmwofmontgomery": "BMW", // Clearly BMW from domain
+  "toyotaofseattle": "Toyota", // Clearly Toyota from domain
+  "pinesford": "Ford", // Clearly Ford from domain
+  "mikeerdmantoyota": "Toyota", // Clearly Toyota from domain
+  "mikecalverttoyota": "Toyota", // Clearly Toyota from domain
+  "serrachampaign": "Chrysler", // Serra includes Chrysler (from previous list context)
+  "bevsmithtoyota": "Toyota", // Clearly Toyota from domain
+  "patmillikenford": "Ford", // Clearly Ford from domain
+  "siouxfallsford": "Ford", // Clearly Ford from domain
+  "gusmachadoford": "Ford", // Clearly Ford from domain
+  "borgmanfordmazda": "Ford", // Clearly Ford from domain
+  "hyundaicityny": "Hyundai", // Clearly Hyundai from domain
+  "parkwaytoyotaboston": "Toyota", // Clearly Toyota from domain
+  "teamtoyotaon41": "Toyota", // Clearly Toyota from domain
+  "victorytoyotacanton": "Toyota", // Clearly Toyota from domain
+  "toyotaofdecatur": "Toyota", // Clearly Toyota from domain
+  "nissankendall": "Nissan", // Clearly Nissan from domain
+  "toyotaofhermiston": "Toyota", // Clearly Toyota from domain
+  "siouxcityford": "Ford", // Clearly Ford from domain
+  "brinsonford": "Ford", // Clearly Ford from domain
+  "riveratoyota": "Toyota", // Clearly Toyota from domain
+  "actontoyota": "Toyota", // Clearly Toyota from domain
+  "rodmanford": "Ford", // Clearly Ford from domain
+  "toyotaofelcajon": "Toyota", // Clearly Toyota from domain
+  "colonialtoyotact": "Toyota", // Clearly Toyota from domain
+  "bramanhondapb": "Honda", // Clearly Honda from domain
+  "hondaoflisle": "Honda", // Clearly Honda from domain
+  "fordnashville": "Ford", // Clearly Ford from domain
+  "postoaktoyota": "Toyota", // Clearly Toyota from domain
+  "bennaford": "Ford", // Clearly Ford from domain
+  "subaruworldnewton": "Subaru", // Clearly Subaru from domain
+  "lascoford": "Ford", // Clearly Ford from domain
+  "serrafordfh": "Ford", // Clearly Ford from domain
+  "pacifichonda": "Honda", // Clearly Honda from domain
+  "morristownchevrolet": "Chevy", // Clearly Chevy from domain
+  "deanhyundai": "Hyundai" // Clearly Hyundai from domain (deanhyundai.edealerhub)
 };
 
 // Winston logger setup
