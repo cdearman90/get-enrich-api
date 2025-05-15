@@ -1,5 +1,5 @@
 import { callOpenAI } from "./lib/openai.js";
-import winston from 'winston';
+import winston from "winston";
 
 // List of car brands (aligned with GAS Constants.gs)
 const CAR_BRANDS = [
@@ -510,7 +510,7 @@ const knownDealerships = {
 
 // Winston logger setup
 const logger = winston.createLogger({
-  level: 'info',
+  level: "info",
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.json()
@@ -522,8 +522,11 @@ const logger = winston.createLogger({
 
 // Robust tokenization function
 function tokenizeDomain(domain) {
-  if (!domain) return ['none'];
-  const tokens = domain.toLowerCase().replace(/\..*$/, '').split(/[^a-z0-9]/);
+  if (!domain) {
+    logger.warn("Domain is undefined or empty", { timestamp: new Date().toISOString() });
+    return ["none"];
+  }
+  const tokens = domain.toLowerCase().replace(/\..*$/, "").split(/[^a-z0-9]/);
   const brandTokens = [];
   for (const token of tokens) {
     for (const [brand, aliases] of Object.entries(brandAliases)) {
@@ -532,20 +535,23 @@ function tokenizeDomain(domain) {
       }
     }
   }
-  return brandTokens.length > 0 ? brandTokens : tokens.filter(t => !['auto', 'cars', 'deal', 'group', 'metro'].includes(t)) || ['none'];
+  return brandTokens.length > 0 ? brandTokens : tokens.filter(t => !["auto", "cars", "deal", "group", "metro"].includes(t)) || ["none"];
 }
 
 export default async function handler(req, res) {
   logger.info("Endpoint /api/getcarbrands hit successfully", { timestamp: new Date().toISOString() });
+
+  // Validate request
   if (req.method !== "POST" || !req.body.domain) {
-    logger.error(`Invalid request: Method=${req.method}, Domain=${req.body.domain || 'missing'}`, { timestamp: new Date().toISOString() });
+    logger.error(`Invalid request: Method=${req.method}, Domain=${req.body.domain || "missing"}`, { timestamp: new Date().toISOString() });
     return res.status(400).json({ error: "Invalid request: POST method with domain in body required" });
   }
 
+  // Extract and sanitize inputs
   const domain = req.body.domain.toLowerCase().trim();
-  const tokens = req.body.tokens ? req.body.tokens : tokenizeDomain(domain);
-  const companyName = req.body.context?.companyName || req.body.companyName || 'unknown';
-  const context = req.body.context || {};
+  const tokens = req.body.tokens && Array.isArray(req.body.tokens) ? req.body.tokens : tokenizeDomain(domain);
+  const companyName = req.body.companyName || "unknown"; // Use companyName from GAS payload
+
   logger.info(`Processing domain: ${domain}`, { timestamp: new Date().toISOString() });
   logger.info(`Domain tokens: ${JSON.stringify(tokens)}`, { timestamp: new Date().toISOString() });
   logger.info(`Company name: ${companyName}`, { timestamp: new Date().toISOString() });
@@ -568,7 +574,7 @@ export default async function handler(req, res) {
 
     // Step 2: Known Dealerships Lookup
     if (!primaryBrand) {
-      const dealership = domain.replace(/\..*$/, '');
+      const dealership = domain.replace(/\..*$/, "");
       if (knownDealerships[dealership]) {
         primaryBrand = knownDealerships[dealership].toLowerCase();
         confidence = 95;
@@ -576,33 +582,54 @@ export default async function handler(req, res) {
       }
     }
 
-    // Step 3: OpenAI Fallback if no direct match
+    // Step 3: Company Name Analysis
+    if (!primaryBrand && companyName !== "unknown") {
+      const companyLower = companyName.toLowerCase();
+      for (const brand of CAR_BRANDS) {
+        if (companyLower.includes(brand.toLowerCase())) {
+          primaryBrand = brand.toLowerCase();
+          confidence = 85;
+          logger.info(`Company name match for domain ${domain}: ${primaryBrand} (Confidence: ${confidence}%)`, { timestamp: new Date().toISOString() });
+          break;
+        }
+      }
+    }
+
+    // Step 4: OpenAI Fallback if no direct match
     if (!primaryBrand) {
-      const prompt = `Identify the primary car brand sold by the dealership for the domain "${domain}" with tokens [${tokens.join(', ')}] and company name "${companyName}". Follow these steps to ensure accuracy, exhaust all public sources, and avoid incorrect brand assignments:
+      const prompt = `Identify the primary car brand sold by the dealership for the domain "${domain}" with tokens [${tokens.join(", ")}] and company name "${companyName}". Follow these steps to ensure accuracy, exhaust all public sources, and avoid incorrect brand assignments:
 
 1. **Token Analysis**: Check tokens for explicit brand names or aliases (e.g., "honda" in "unionparkhonda.com" → Honda, "chevy" in "gychevy.com" → Chevy). Use brand aliases: ${JSON.stringify(brandAliases)}. Prioritize exact or alias matches. Ignore generic terms like "auto," "cars," "deal," "group," "metro."
 
 2. **Known Dealerships Lookup**: Check the knownDealerships mapping: ${JSON.stringify(knownDealerships)}. For example, "tedbritt.com" → Ford, "masano.com" → Toyota, "westherr.com" → Ford, "sheehy.com" → Ford, "frankleta.com" → Honda.
 
-3. **Public Source Verification**: If no match in tokens or knownDealerships, exhaustively check public sources to identify the primary brand:
+3. **Company Name Analysis**: If no match in tokens or knownDealerships, check the company name "${companyName}" for explicit brand names or aliases (e.g., "Masano Toyota" → Toyota). Prioritize exact or alias matches.
+
+4. **Public Source Verification**: If no match in tokens, knownDealerships, or company name, exhaustively check public sources to identify the primary brand:
    - Visit the dealership's website using variations (e.g., "https://${domain}", "https://www.${domain}", "http://${domain}") and analyze the homepage, inventory, "About Us," or branding for the most prominent brand.
-   - Search recent X posts mentioning the dealership or company name (e.g., "@${domain.replace(/\..*$/, '')}", "${companyName}") for brand references.
+   - Search recent X posts mentioning the dealership or company name (e.g., "@${domain.replace(/\..*$/, "")}", "${companyName}") for brand references.
    - Query industry listings and review sites (e.g., Cars.com, DealerRater, Edmunds, AutoTrader) for the dealership’s primary brand, cross-referencing "${companyName}" (e.g., "Masano Auto" → Toyota).
    - If initial website attempts fail, retry with alternative URLs or search for the dealership via Google (e.g., "${companyName} car dealership").
 
-4. **Multi-Brand Dealerships**: If multiple brands are sold, select the primary brand based on:
+5. **Multi-Brand Dealerships**: If multiple brands are sold, select the primary brand based on:
    - Prominence on the website (e.g., logo, main inventory, URL emphasis).
    - Frequency and context in X posts or industry listings.
    - Explicit association with the company name (e.g., "Ted Britt" → Ford for prominence).
    Examples: "penskeautomotive.com" → Chevy, "mclartydaniel.com" → Chrysler, "tedbritt.com" → Ford.
 
-5. **Non-Dealership Check**: If the domain is not a car dealership (e.g., real estate, media, equipment), return "unknown". Examples: "exprealty.com" → unknown (real estate), "wickmail.com" → unknown (email service), "centurytrucks.com" → unknown (truck equipment).
+6. **Non-Dealership Check**: If the domain is not a car dealership (e.g., real estate, media, equipment), return "unknown". Examples: "exprealty.com" → unknown (real estate), "wickmail.com" → unknown (email service), "centurytrucks.com" → unknown (truck equipment).
 
-6. **Accuracy and Exhaustion**: Only assign a brand if explicitly verified through tokens, knownDealerships, or public sources. Do not guess or assume brands (e.g., do not assign "Chevy" to Buick/GMC dealers unless Chevrolet is confirmed primary). If no clear primary brand is found after exhausting all sources, return "unknown". Log verification challenges (e.g., inaccessible website, ambiguous branding) for review.
+7. **Accuracy and Exhaustion**: Only assign a brand if explicitly verified through tokens, knownDealerships, company name, or public sources. Do not guess or assume brands (e.g., do not assign "Chevy" to Buick/GMC dealers unless Chevrolet is confirmed primary). If no clear primary brand is found after exhausting all sources, return "unknown". Log verification challenges (e.g., inaccessible website, ambiguous branding) for review.
 
-7. **Error Handling**: If inputs are missing (e.g., undefined tokens, empty companyName), proceed to public source verification. If API errors occur (e.g., rate limits, timeouts), suggest retrying after a delay. Do not fail silently.
+8. **Error Handling**: If inputs are missing (e.g., undefined tokens, empty companyName), proceed to public source verification. If API errors occur (e.g., rate limits, timeouts), suggest retrying after a delay. Do not fail silently.
 
-Respond with only the verified brand name (e.g., Toyota, Chevy) or "unknown". Shorten "Chevrolet" to "Chevy". Ensure the brand is in: ${CAR_BRANDS.join(', ')}. Use exact capitalization (e.g., "Honda", not "honda").`;
+Respond with only the verified brand name (e.g., Toyota, Chevy) or "unknown". Shorten "Chevrolet" to "Chevy". Ensure the brand is in: ${CAR_BRANDS.join(", ")}. Use exact capitalization (e.g., "Honda", not "honda").`;
+
+      // Validate prompt to prevent "prompt.slice is not a function"
+      if (typeof prompt !== "string") {
+        logger.error(`Invalid prompt type for domain ${domain}: ${typeof prompt}, value: ${JSON.stringify(prompt)}`, { timestamp: new Date().toISOString() });
+        return res.status(500).json({ error: "Invalid prompt format" });
+      }
 
       const openAIResult = await callOpenAI({
         prompt,
@@ -611,35 +638,36 @@ Respond with only the verified brand name (e.g., Toyota, Chevy) or "unknown". Sh
         temperature: 0.3,
         systemMessage: "Respond with only the car brand name or 'unknown', nothing else.",
         retries: 3,
-        timeoutMs: 15000 // Increased for stability
+        timeoutMs: 30000 // Increased to 30 seconds for stability
       });
 
       if (openAIResult.error) {
         logger.error(`OpenAI error for domain ${domain}: ${openAIResult.error}`, { timestamp: new Date().toISOString() });
-        primaryBrand = knownDealerships[domain.replace(/\..*$/, '')] || 'unknown';
-        confidence = primaryBrand === 'unknown' ? 50 : 95;
+        primaryBrand = knownDealerships[domain.replace(/\..*$/, "")] || "unknown";
+        confidence = primaryBrand === "unknown" ? 50 : 95;
       } else {
         const brand = openAIResult.output.trim().toLowerCase();
         logger.info(`OpenAI response for domain ${domain}: ${brand}`, { timestamp: new Date().toISOString() });
         if (CAR_BRANDS.map(b => b.toLowerCase()).includes(brand)) {
           primaryBrand = brand;
-          confidence = brand === 'unknown' ? 50 : 95;
+          confidence = brand === "unknown" ? 50 : 95;
         } else {
-          primaryBrand = BRAND_MAPPING[brand] ? BRAND_MAPPING[brand].toLowerCase() : 'unknown';
-          confidence = primaryBrand === 'unknown' ? 50 : 95;
+          primaryBrand = BRAND_MAPPING[brand] ? BRAND_MAPPING[brand].toLowerCase() : "unknown";
+          confidence = primaryBrand === "unknown" ? 50 : 95;
         }
       }
     }
 
-    // Finalize response (aligned with GAS)
-    if (primaryBrand && confidence >= 50 && primaryBrand !== 'unknown') {
-      const standardizedBrand = CAR_BRANDS.find(b => b.toLowerCase() === primaryBrand) || primaryBrand.charAt(0).toUpperCase() + primaryBrand.slice(1).toLowerCase();
+    // Finalize response
+    if (primaryBrand && confidence >= 50 && primaryBrand !== "unknown") {
+      const standardizedBrand = CAR_BRANDS.find(b => b.toLowerCase() === primaryBrand) ||
+        primaryBrand.charAt(0).toUpperCase() + primaryBrand.slice(1).toLowerCase();
       logger.info(`Brand match found for domain ${domain}: ${standardizedBrand} (Confidence: ${confidence}%)`, { timestamp: new Date().toISOString() });
       return res.status(200).json({ brand: standardizedBrand, confidence });
     }
 
     logger.info(`No brand match for domain ${domain} (Confidence: ${confidence}%)`, { timestamp: new Date().toISOString() });
-    return res.status(200).json({ brand: "", confidence });
+    return res.status(200).json({ brand: "unknown", confidence });
   } catch (error) {
     logger.error(`Error processing domain ${domain}: ${error.message}`, { timestamp: new Date().toISOString() });
     return res.status(500).json({ error: `Failed to process domain: ${error.message}` });
