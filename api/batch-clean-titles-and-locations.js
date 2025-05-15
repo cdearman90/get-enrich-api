@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     return res.status(500).json({ error: "Missing OpenAI API key" });
   }
 
-  const callOpenAI = async (prompt, model = "gpt-4o-mini") => {
+  const callOpenAI = async (prompt, model = "gpt-4") => {
     try {
       const response = await fetch("https://api.openai.com/v1/chat/completions", {
         method: "POST",
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
 
   const cleanTitlesAndLocations = async (leads) => {
     const prompt = `
-Clean and standardize the following leads data:
+You are a data cleaning assistant. Clean and standardize the following leads data:
 ${leads.map((lead, idx) => `
 Lead ${idx + 1}:
 - Job Title: ${lead.title || "N/A"}
@@ -88,21 +88,30 @@ Lead ${idx + 1}:
 
 For each lead:
 - Job Title: Map to "General Sales Manager", "Sales Manager", or "General Manager". Use "gsm" → "General Sales Manager", "gm" → "General Manager", "manager" → "Sales Manager". Return as-is if no match.
-- City: Standardize (e.g., "new york" → "New York"). Infer from state if missing (e.g., "New York" → "New York"). Use "Unknown" if unresolvable.
-- State: Return the full state name (e.g., "Pennsylvania" instead of "PA"). Standardize capitalization (e.g., "new york" → "New York"). Infer from city if missing. Use "Unknown" if unresolvable.
+- City: Standardize capitalization (e.g., "new york" → "New York"). Infer from state if missing and possible (e.g., "New York" state → "New York" city). Use "Unknown" if unresolvable.
+- State: Return the full state name with proper capitalization (e.g., "Pennsylvania", not "PA"). Do not use 2-letter codes under any circumstances. Infer from city if missing and possible (e.g., "Pittsburgh" → "Pennsylvania"). Use "Unknown" if unresolvable.
 
-Return a JSON array of objects: [{"title": "Cleaned Title", "city": "Cleaned City", "state": "Cleaned State"}, ...]
+Return ONLY a valid JSON array of objects, with no additional text or explanations. Example:
+[{"title":"Sales Manager","city":"Pittsburgh","state":"Pennsylvania"},...]
 `.trim();
 
     try {
-      const response = await callOpenAI(prompt);
+      let response = await callOpenAI(prompt);
+      // Attempt to extract JSON if wrapped in text
+      const jsonMatch = response.match(/\[.*\]/s);
+      if (jsonMatch) {
+        response = jsonMatch[0];
+      }
       const cleaned = JSON.parse(response);
+      if (!Array.isArray(cleaned)) {
+        throw new Error("Response is not a JSON array");
+      }
       return leads.map((lead, idx) => ({
         title: cleaned[idx]?.title || lead.title,
         city: cleaned[idx]?.city || lead.city,
         state: cleaned[idx]?.state || lead.state,
         rowNum: lead.rowNum,
-        modelUsed: "gpt-4o-mini",
+        modelUsed: "gpt-4",
         ...(cleaned[idx] ? {} : { error: "Failed to clean lead" })
       }));
     } catch (err) {
@@ -112,7 +121,7 @@ Return a JSON array of objects: [{"title": "Cleaned Title", "city": "Cleaned Cit
         state: lead.state,
         rowNum: lead.rowNum,
         error: err.message,
-        modelUsed: "gpt-4o-mini"
+        modelUsed: "gpt-4"
       }));
     }
   };
